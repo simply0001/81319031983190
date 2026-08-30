@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/ariankordi/mii-creator.git",
+    "branch": "renderer-ffl.js-prototype",
+    "commit": "1cd6b7d1d09e75fffd5c116a10e3e162647ecb78"
+  },
+  "toolchain": {
+    "bunVersion": "1.3.14",
+    "buildArguments": [
+      "build",
+      "src/pocketpass/renderer.ts",
+      "--outfile",
+      "renderer.js",
+      "--target",
+      "browser"
+    ]
+  },
+  "pocketPassSources": [
+    {
+      "path": "src/renderer.ts",
+      "sha256": "6418531c8b5caefbe6d1e98b00089e96a2008cddc371fb99d85c3b2b0cc6b164"
+    },
+    {
+      "path": "src/RendererFFL.ts",
+      "sha256": "2eaabc183c741f484968a31b2403d24581bac99cab2a3c331be7ff26a4f02e16"
+    },
+    {
+      "path": "src/RendererSettings.ts",
+      "sha256": "5542656969dab68da1f6b57722382e27eb9231a14b7d3f230690e851e3858cc9"
+    },
+    {
+      "path": "src/RendererTypes.ts",
+      "sha256": "64b2fea4f3208b699b66054e347faffd6ba4cc2b6f2aae6948a3b8a534d37f12"
+    },
+    {
+      "path": "patches/pocketpass-renderer.patch",
+      "sha256": "6ceda09c7ca6f9cac0603c1722a59c1b88ae4c6d79232d1a03a1cfc62a0740bb"
+    }
+  ],
+  "bundle": {
+    "path": "app/src/main/assets/mii_renderer/dist/renderer.js",
+    "sha256": "ec02b636f5aabdd2dc5a417e5856d3e8991badc6d4e3b39ab0e919233096eaf1"
+  },
+  "upstreamRuntimeAssets": [
+    {
+      "upstreamPath": "public/cube_map.png",
+      "packagedPath": "app/src/main/assets/mii_renderer/cube_map.png",
+      "sha256": "db10406556d3bdcd15084fa9e0601c9378bf810dad2e8d5e33c4208f77898d9a"
+    },
+    {
+      "upstreamPath": "public/dist/three.js",
+      "packagedPath": "app/src/main/assets/mii_renderer/dist/three.js",
+      "sha256": "938d7520cbe89e8ef5c6c96e3cba38445db22a62390b7f77622de9d506debf0a"
+    },
+    {
+      "upstreamPath": "public/dist/ffl-emscripten.wasm",
+      "packagedPath": "app/src/main/assets/mii_renderer/dist/ffl-emscripten.wasm",
+      "sha256": "1feffe6d722f7e23d2e5910a73100e4dc9fa03478f86340de021478a176cade6"
+    },
+    {
+      "upstreamPath": "public/assets/models/miiBodyM_wiiu.glb",
+      "packagedPath": "app/src/main/assets/mii_renderer/assets/models/miiBodyM_wiiu.glb",
+      "sha256": "b1e266bd263767423f2533bec293b8a4296b5c77070a45b53ab3f215f6e5ddae"
+    },
+    {
+      "upstreamPath": "public/assets/models/miiBodyF_wiiu.glb",
+      "packagedPath": "app/src/main/assets/mii_renderer/assets/models/miiBodyF_wiiu.glb",
+      "sha256": "7112118fe80ad29e5c8de6eb445eca92503b60bfc366b236ecf2aaeec179bce0"
+    },
+    {
+      "upstreamPath": "public/assets/images/mii_clothes_textures_bundle.zip",
+      "packagedPath": "app/src/main/assets/mii_renderer/assets/images/mii_clothes_textures_bundle.zip",
+      "sha256": "e3e947b51176526d995b41c23bc2fff256d71107f387be204aac6f775dd9feed"
+    }
+  ],
+  "pocketPassRuntimeAssets": [
+    {
+      "packagedPath": "app/src/main/assets/mii_renderer/assets/models/hat_models_bundle.zip",
+      "sha256": "c2b9f13bd67eda495ed977c832cac9543bba1ed87fbddd9019c124cff384c286",
+      "derivedFrom": {
+        "upstreamPath": "public/assets/models/hat_models_bundle.zip",
+        "sha256": "fd4f8ce7900fca476e6158090c7870de0ab8ea5ae2a884003cc58574609fc717"
+      },
+      "additions": [
+        "hat_10.glb"
+      ]
+    }
+  ],
+  "fflResource": {
+    "archiveName": "asset_model_character_mii_AFLResHigh_2_3_dat.zip",
+    "sourceUrl": "https://web.archive.org/web/20180502054513/http://download-cdn.miitomo.com/native/20180125111639/android/v2/asset_model_character_mii_AFLResHigh_2_3_dat.zip",
+    "archiveSha256": "42c106511e8d520583dd4f43360386aa77a5080e4ca8574e7e3d2288e2786d43",
+    "extractedName": "AFLResHigh_2_3.dat",
+    "packagedPath": "app/src/main/assets/mii_renderer/FFLResHigh.dat",
+    "sha256": "4a4be71d75162c20b48720ef89cd3d4e6cd4e8e21bcbc2aed63ee08d96de7722"
+  }
+}

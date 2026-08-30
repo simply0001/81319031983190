@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PocketPass</string>
+    <string name="nearby_service_channel">Nearby Encounters</string>
+    <string name="nearby_service_channel_description">Keeps PocketPass available for nearby encrypted exchanges.</string>
+    <string name="nearby_alert_channel">Encounter alerts</string>
+    <string name="nearby_alert_channel_description">Nearby encounter and permission alerts.</string>
+    <string name="nearby_service_title">Nearby Encounters is on</string>
+    <string name="nearby_service_text">PocketPass can exchange anonymous encrypted passes in the background.</string>
+    <string name="nearby_repair_title">Nearby Encounters needs attention</string>
+    <string name="nearby_repair_text">Open PocketPass to restore its Bluetooth permissions.</string>
+    <string name="nearby_repair_action">Fix</string>
+    <string name="nearby_encounter_title">Nearby encounter</string>
+    <string name="nearby_encounter_text">%1$s passed nearby</string>
+    <string name="nearby_encounter_action">Open PocketPass</string>
+    <string name="update_channel">App updates</string>
+    <string name="update_channel_description">Alerts when a new PocketPass version is ready.</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_text">PocketPass %1$s is ready to install.</string>
+    <string name="update_available_action">View</string>
+</resources>

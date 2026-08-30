@@ -1,0 +1,59 @@
+package com.pocketpass.app.status
+
+import android.os.BatteryManager
+import java.time.LocalTime
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class StatusFormatterTest {
+    @Test
+    fun clockUsesThorTwentyFourHourFixtureFormat() {
+        assertEquals("02:07", StatusFormatter.time(LocalTime.of(2, 7)))
+        assertEquals("12:46", StatusFormatter.time(LocalTime.of(12, 46)))
+    }
+
+    @Test
+    fun batteryIsClampedAndSuffixed() {
+        assertEquals("0%", StatusFormatter.battery(-1))
+        assertEquals("99%", StatusFormatter.battery(99))
+        assertEquals("100%", StatusFormatter.battery(101))
+    }
+
+    @Test
+    fun batteryLevelUsesScaleAndFallsBackWhenUnavailable() {
+        assertEquals(50, StatusFormatter.batteryPercent(25, 50, 81))
+        assertEquals(81, StatusFormatter.batteryPercent(-1, 100, 81))
+        assertEquals(81, StatusFormatter.batteryPercent(25, 0, 81))
+    }
+
+    @Test
+    fun batteryFillFractionIsClamped() {
+        assertEquals(0f, StatusFormatter.batteryFillFraction(-1))
+        assertEquals(0.45f, StatusFormatter.batteryFillFraction(45))
+        assertEquals(1f, StatusFormatter.batteryFillFraction(101))
+    }
+
+    @Test
+    fun chargingIncludesChargingAndFullBatteryStates() {
+        assertTrue(
+            StatusFormatter.batteryIsCharging(BatteryManager.BATTERY_STATUS_CHARGING),
+        )
+        assertTrue(
+            StatusFormatter.batteryIsCharging(BatteryManager.BATTERY_STATUS_FULL),
+        )
+        assertFalse(
+            StatusFormatter.batteryIsCharging(BatteryManager.BATTERY_STATUS_DISCHARGING),
+        )
+    }
+
+    @Test
+    fun wifiSignalMapsToFigmaArcLevels() {
+        assertEquals(-1, StatusFormatter.wifiSignalLevel(false, -40))
+        assertEquals(0, StatusFormatter.wifiSignalLevel(true, -80))
+        assertEquals(1, StatusFormatter.wifiSignalLevel(true, -70))
+        assertEquals(2, StatusFormatter.wifiSignalLevel(true, -45))
+        assertEquals(2, StatusFormatter.wifiSignalLevel(true, Int.MIN_VALUE))
+    }
+}

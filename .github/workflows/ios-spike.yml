@@ -1,0 +1,97 @@
+name: iOS spike
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios-spike/**'
+      - '.github/workflows/ios-spike.yml'
+
+concurrency:
+  group: ios-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared:
+    name: Shared code (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile the desktop target
+        run: ./gradlew -p ios-spike :probe:compileKotlinDesktop --console=plain
+      - name: Type-check commonMain against every target
+        run: ./gradlew -p ios-spike :probe:compileCommonMainKotlinMetadata --console=plain
+      - name: Render the probe screen
+        run: ./gradlew -p ios-spike :probe:run --args="--render build/probe-renders" --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-renders
+          path: ios-spike/probe/build/probe-renders/*.png
+
+  framework:
+    name: Kotlin/Native framework (macOS)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache the Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('ios-spike/gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Link the debug framework (simulator)
+        run: ./gradlew -p ios-spike :probe:linkDebugFrameworkIosSimulatorArm64 --console=plain
+      - name: Link the release framework (device)
+        run: ./gradlew -p ios-spike :probe:linkReleaseFrameworkIosArm64 --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-frameworks
+          path: ios-spike/probe/build/bin/*/**/Probe.framework
+
+  app:
+    name: Simulator app (macOS)
+    needs: framework
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache the Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('ios-spike/gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios-spike/iosApp
+        run: xcodegen generate
+      - name: Build for the simulator
+        working-directory: ios-spike/iosApp
+        run: |
+          xcodebuild \
+            -project PocketPassProbe.xcodeproj \
+            -scheme PocketPassProbe \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            build

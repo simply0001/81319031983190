@@ -1,0 +1,188 @@
+package com.pocketpass.app.nearby
+
+import android.util.Base64
+import com.pocketpass.app.data.local.dao.NearbyEncounterDao
+import com.pocketpass.app.data.local.entity.NearbyCredentialEntity
+import com.pocketpass.app.data.repository.remote.EncounterRemoteDataSource
+import com.pocketpass.app.domain.model.UserId
+import com.pocketpass.app.domain.state.RepositoryResult
+import com.pocketpass.app.security.SecureStringStore
+import java.nio.ByteBuffer
+import kotlin.time.Clock
+import kotlin.time.Instant
+import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+class NearbyCredentialPool(
+    private val dao: NearbyEncounterDao,
+    private val remote: EncounterRemoteDataSource,
+    private val secureStore: SecureStringStore,
+    private val clock: Clock = Clock.System,
+) {
+    private val mutex = Mutex()
+
+    suspend fun acquire(accountId: UserId): RepositoryResult<NearbyCredential> =
+        mutex.withLock {
+            val refillFailure = when (val refill = refillLocked(accountId)) {
+                is RepositoryResult.Failure -> refill
+                is RepositoryResult.Success -> null
+            }
+            repeat(MAX_ACQUIRE_ATTEMPTS) {
+                val now = clock.now()
+                val row = dao.getAvailableCredential(
+                    accountId = accountId.value,
+                    nowEpochMillis = now.toEpochMilliseconds(),
+                ) ?: return@withLock refillFailure ?: unavailable()
+                val encoded = secureStore.get(row.secureEntryKey)
+                if (encoded == null) {
+                    dao.claimCredential(
+                        accountId.value,
+                        row.tokenHash,
+                        now.toEpochMilliseconds(),
+                    )
+                    return@repeat
+                }
+                if (
+                    dao.claimCredential(
+                        accountId = accountId.value,
+                        tokenHash = row.tokenHash,
+                        claimedAtEpochMillis = now.toEpochMilliseconds(),
+                    ) != 1
+                ) {
+                    return@repeat
+                }
+                return@withLock RepositoryResult.Success(decodeCredential(encoded))
+            }
+            refillFailure ?: unavailable()
+        }
+
+    suspend fun refill(accountId: UserId): RepositoryResult<Unit> =
+        mutex.withLock { refillLocked(accountId) }
+
+    private suspend fun refillLocked(accountId: UserId): RepositoryResult<Unit> {
+        val now = clock.now()
+        dao.getExpiredOrClaimedCredentials(
+            accountId.value,
+            now.toEpochMilliseconds(),
+        ).forEach { credential ->
+            secureStore.remove(credential.secureEntryKey)
+        }
+        dao.deleteExpiredOrClaimed(accountId.value, now.toEpochMilliseconds())
+        val available = dao.availableCredentialCount(accountId.value, now.toEpochMilliseconds())
+        if (available >= REFILL_THRESHOLD) return RepositoryResult.Success(Unit)
+
+        val requested = (TARGET_POOL_SIZE - available).coerceIn(1, MAX_ISSUE_BATCH)
+        val keyPairs = List(requested) { NearbyCrypto.generateSigningKeyPair() }
+        val publicKeys = keyPairs.map { pair -> encode(pair.public.encoded) }
+        val issued = when (
+            val result = remote.issueCredentials(accountId, publicKeys)
+        ) {
+            is RepositoryResult.Failure ->
+                return cachedCredentialFallback(available, result)
+            is RepositoryResult.Success -> result.value
+        }
+        if (issued.size != keyPairs.size) return unavailable()
+
+        val keyByPublic = keyPairs.associateBy { pair -> encode(pair.public.encoded) }
+        val rows = mutableListOf<NearbyCredentialEntity>()
+        issued.forEach { credential ->
+            val pair = keyByPublic[credential.signingPublicKey] ?: return unavailable()
+            val tokenBytes = uuidToBytes(UUID.fromString(credential.token))
+            val tokenHash = encode(NearbyCrypto.sha256(tokenBytes))
+            val secureEntryKey = secureEntryKey(accountId, tokenHash)
+            secureStore.put(
+                secureEntryKey,
+                encodeCredential(
+                    NearbyCredential(
+                        token = tokenBytes,
+                        signingPublicKey = pair.public.encoded,
+                        signingPrivateKey = pair.private.encoded,
+                        expiresAt = credential.expiresAt,
+                    ),
+                ),
+            )
+            rows += NearbyCredentialEntity(
+                accountId = accountId.value,
+                tokenHash = tokenHash,
+                secureEntryKey = secureEntryKey,
+                expiresAtEpochMillis = credential.expiresAt.toEpochMilliseconds(),
+                claimedAtEpochMillis = null,
+            )
+        }
+        dao.upsertCredentials(rows)
+        return RepositoryResult.Success(Unit)
+    }
+
+    private fun encodeCredential(credential: NearbyCredential): String =
+        listOf(
+            CREDENTIAL_VERSION,
+            encode(credential.token),
+            encode(credential.signingPublicKey),
+            encode(credential.signingPrivateKey),
+            credential.expiresAt.toEpochMilliseconds().toString(),
+        ).joinToString(CREDENTIAL_SEPARATOR)
+
+    private fun decodeCredential(value: String): NearbyCredential {
+        val parts = value.split(CREDENTIAL_SEPARATOR)
+        require(parts.size == 5 && parts[0] == CREDENTIAL_VERSION)
+        return NearbyCredential(
+            token = decode(parts[1]),
+            signingPublicKey = decode(parts[2]),
+            signingPrivateKey = decode(parts[3]),
+            expiresAt = Instant.fromEpochMilliseconds(parts[4].toLong()),
+        )
+    }
+
+    private fun secureEntryKey(accountId: UserId, tokenHash: String): String =
+        "nearby.${encode(NearbyCrypto.sha256(accountId.value.toByteArray())).take(22)}." +
+            tokenHash.take(43)
+
+    private fun unavailable(): RepositoryResult.Failure = RepositoryResult.Failure(
+        com.pocketpass.app.domain.state.RepositoryFailure(
+            kind = com.pocketpass.app.domain.state.RepositoryFailureKind.Unavailable,
+            message = "No anonymous encounter passes are available",
+        ),
+    )
+
+    companion object {
+        fun uuidToBytes(uuid: UUID): ByteArray =
+            ByteBuffer.allocate(16)
+                .putLong(uuid.mostSignificantBits)
+                .putLong(uuid.leastSignificantBits)
+                .array()
+
+        fun bytesToUuid(bytes: ByteArray): UUID {
+            require(bytes.size == 16)
+            val buffer = ByteBuffer.wrap(bytes)
+            return UUID(buffer.long, buffer.long)
+        }
+
+        fun encode(bytes: ByteArray): String =
+            Base64.encodeToString(
+                bytes,
+                Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE,
+            )
+
+        fun decode(value: String): ByteArray =
+            Base64.decode(
+                value,
+                Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE,
+            )
+
+        private const val CREDENTIAL_VERSION = "1"
+        private const val CREDENTIAL_SEPARATOR = "|"
+        private const val REFILL_THRESHOLD = 8
+        private const val TARGET_POOL_SIZE = 24
+        private const val MAX_ISSUE_BATCH = 32
+        private const val MAX_ACQUIRE_ATTEMPTS = 3
+    }
+}
+
+internal fun cachedCredentialFallback(
+    available: Int,
+    failure: RepositoryResult.Failure,
+): RepositoryResult<Unit> {
+    require(available >= 0)
+    return if (available > 0) RepositoryResult.Success(Unit) else failure
+}

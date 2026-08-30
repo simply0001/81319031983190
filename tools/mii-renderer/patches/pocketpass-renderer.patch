@@ -1,0 +1,129 @@
+diff --git a/src/class/3DScene.ts b/src/class/3DScene.ts
+index ba40628..a60325f 100644
+--- a/src/class/3DScene.ts
++++ b/src/class/3DScene.ts
+@@ -21,9 +21,11 @@ import {
+   cPantsColorRed,
+   MiiFavoriteFFLColorLookupTable
+ } from "./3d/shader/fflShaderConst";
+-import { BodyUpdateType, MiiEditor, RenderPart } from "./MiiEditor";
++import {
++  PocketPassBodyUpdate as BodyUpdateType,
++  PocketPassRenderPart as RenderPart
++} from "../pocketpass/RendererTypes";
+ import { Config } from "../config";
+-import { getSoundManager } from "./audio/SoundManager";
+ import { SparkleParticle } from "./3d/effect/SparkleParticle";
+ import {
+   ClothesType,
+@@ -40,7 +42,7 @@ import {
+   traverseAddShader,
+   traverseMesh
+ } from "./3d/shader/ShaderUtils";
+-import { getSetting } from "../util/SettingsHelper";
++import { getPocketPassSetting as getSetting } from "../pocketpass/RendererSettings";
+ import { ShaderType } from "../constants/BodyShaderTypes";
+ import { getHeadModel, getMaskTex, type ModelFlag } from "../util/MiiRendering";
+ import {
+@@ -98,7 +100,12 @@ export class Mii3DScene {
+   simpleShaderLegacyColors!: boolean;
+   hatModels!: GLTF[];
+   clothingTextures!: Record<string, THREE.Texture>;
+-  editor?: MiiEditor;
++  editor?: unknown;
++  resizeSizeProvider?: () => {
++    width: number;
++    height: number;
++    widescreen?: boolean;
++  };
+   camSetup!: () => void;
+   texResolution: number;
+ 
+@@ -113,7 +120,7 @@ export class Mii3DScene {
+     initCallback?: (renderer: THREE.WebGLRenderer) => any,
+     // shaderOverride uses MeshStandardMaterial
+     shaderOverride: boolean = false,
+-    editor?: MiiEditor
++    editor?: unknown
+   ) {
+     this.animations = new Map();
+     this.animators = new Map();
+@@ -147,7 +154,8 @@ export class Mii3DScene {
+     } else {
+       this.#renderer = new THREE.WebGLRenderer({
+         alpha: true,
+-        antialias: true
++        antialias: true,
++        preserveDrawingBuffer: true
+         // powerPreference: "high-performance",
+         // stencil: false,
+         // depth: false
+@@ -475,17 +483,21 @@ export class Mii3DScene {
+     const type = this.mii.gender == 0 ? "m" : "f";
+     this.animators.delete(`animation-${type}`);
+     this.swapAnimation("Finish");
+-    getSoundManager().playSound("finish");
+   }
+   resize(
+     width: number = this.#parent.offsetWidth,
+     height: number = this.#parent.offsetHeight
+   ) {
++    const providedSize = this.resizeSizeProvider?.();
++    if (providedSize) {
++      width = providedSize.width;
++      height = providedSize.height;
++    }
+     this.resizeRendererToDisplaySize(width, height);
+ 
+     // adjust ui depending on screen size
+     let zoomValue = 1,
+-      widescreen = window.innerWidth > 960,
++      widescreen = providedSize?.widescreen ?? window.innerWidth > 960,
+       is2DMode = !this.cameraPan;
+     switch (this.currentPosition) {
+       case CameraPosition.MiiHead:
+@@ -555,13 +567,6 @@ export class Mii3DScene {
+       setTimeout(() => {
+         this.resize();
+       }, 0);
+-    } else {
+-      // weird hacky fix to correct the camera position at startup
+-      this.resize();
+-      setTimeout(() => {
+-        this.resize();
+-        this.focusCamera(CameraPosition.MiiHead, true, false);
+-      }, 500);
+     }
+ 
+     // this.#scene.fog = new THREE.FogExp2(0xff0000, 1);
+@@ -786,7 +791,7 @@ export class Mii3DScene {
+     }
+     return cPantsColorGray;
+   }
+-  async updateBody(updateType: BodyUpdateType = BodyUpdateType.None) {
++  async updateBody(updateType: number = BodyUpdateType.None) {
+     if (!this.ready) return;
+     this.resize();
+ 
+@@ -1102,7 +1107,7 @@ export class Mii3DScene {
+       this.getRendererElement().style.opacity = "1";
+     }
+   }
+-  async updateMiiHead(renderPart: RenderPart = RenderPart.Head) {
++  async updateMiiHead(renderPart: number = RenderPart.Head) {
+     if (!this.ready) {
+       console.log("first time loading head");
+     }
+diff --git a/src/util/MiiRendering.ts b/src/util/MiiRendering.ts
+index bc31501..87fe999 100644
+--- a/src/util/MiiRendering.ts
++++ b/src/util/MiiRendering.ts
+@@ -20,7 +20,7 @@ import {
+   isShaderMaterial,
+   getShaderMaterialFromShaderType
+ } from "../class/3d/shader/ShaderUtils";
+-import { getFFL } from "./FFLLoader";
++import { getPocketPassFFL as getFFL } from "../pocketpass/RendererFFL";
+ import { renderTargetToDataTexture } from "./rendertarget";
+ import FFLShaderMaterial from "../external/ffl.js/FFLShaderMaterial";
+ 

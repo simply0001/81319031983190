@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - 'infra/**'
+      - '**/*.md'
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android + shared
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Type-check shared against every target
+        run: ./gradlew :shared:compileCommonMainKotlinMetadata --console=plain
+      - name: Build the Android app
+        run: ./gradlew :app:assembleDebug --console=plain
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest :shared:allTests --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: '**/test-results/**/*.xml'
+
+  ios:
+    name: shared for iOS
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache the Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Link the simulator framework
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --console=plain
+      - name: Link the device framework
+        run: ./gradlew :shared:linkReleaseFrameworkIosArm64 --console=plain
+      - name: iOS unit tests
+        run: ./gradlew :shared:iosSimulatorArm64Test --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-test-results
+          path: '**/test-results/**/*.xml'

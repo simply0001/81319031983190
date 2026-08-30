@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob:; worker-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <style>
+      :root,
+      html,
+      body,
+      #mii-render-root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: transparent !important;
+      }
+
+      body {
+        position: fixed;
+        inset: 0;
+        touch-action: none;
+        overscroll-behavior: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #mii-render-root {
+        position: absolute;
+        inset: 0;
+      }
+
+      #mii-render-root canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        opacity: 1 !important;
+        background: transparent !important;
+        touch-action: none;
+        pointer-events: none;
+      }
+
+      #mii-render-root canvas.interactive {
+        pointer-events: auto;
+        cursor: grab;
+      }
+
+      #mii-render-root canvas.interactive:active {
+        cursor: grabbing;
+      }
+    </style>
+    <title>PocketPass Mii Renderer</title>
+  </head>
+  <body>
+    <div id="mii-render-root" aria-hidden="true"></div>
+    <script type="module" src="/dist/renderer.js"></script>
+  </body>
+</html>
