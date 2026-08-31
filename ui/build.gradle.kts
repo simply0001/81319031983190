@@ -46,6 +46,10 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
+        androidMain.dependencies {
+            // The back-gesture seam delegates to activity-compose's BackHandler.
+            implementation(libs.androidx.activity.compose)
+        }
     }
 }
 

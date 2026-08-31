@@ -2,6 +2,7 @@ package com.pocketpass.app.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.Density
 import kotlin.time.Instant
 
@@ -33,6 +34,15 @@ expect fun displayCountryName(code: String): String
 
 // True when a regular file exists at the given absolute path.
 expect fun fileExists(path: String): Boolean
+
+// Runs the callback for the platform back gesture while enabled. iOS has no system-wide
+// back button, so it is inert there until the iOS shell wires its own gesture.
+@Composable
+expect fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit)
+
+// Platform-specific text tuning applied app-wide: Android turns off font padding so text
+// sits where the design system expects it.
+expect fun pocketPlatformTextStyle(): PlatformTextStyle?
 
 // The application's version name, provided by each platform's entry point.
 val LocalAppVersionName = staticCompositionLocalOf { "" }

@@ -1,6 +1,7 @@
 package com.pocketpass.app.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.Density
 import kotlin.time.Instant
 import platform.Foundation.NSDate
@@ -35,6 +36,11 @@ actual fun isoCountryCodes(): List<String> =
 
 actual fun fileExists(path: String): Boolean =
     NSFileManager.defaultManager.fileExistsAtPath(path)
+
+@Composable
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit
+
+actual fun pocketPlatformTextStyle(): PlatformTextStyle? = null
 
 actual fun displayCountryName(code: String): String =
     NSLocale("en_US")

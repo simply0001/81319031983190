@@ -1,8 +1,6 @@
 package com.pocketpass.app.ui.phone
 
 import com.pocketpass.app.ui.PocketAsset
-import android.animation.ValueAnimator
-import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -35,7 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
+import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,14 +66,16 @@ import com.pocketpass.app.feature.AccountSetupEvent
 import com.pocketpass.app.feature.AccountSetupStep
 import com.pocketpass.app.feature.AccountSetupUiState
 import com.pocketpass.app.mii.MiiEditorEvent
-import com.pocketpass.app.mii.renderer.MiiEditorRenderSurface
 import com.pocketpass.app.model.BIO_MAX_LENGTH
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.nearby.NearbyPermissionUiState
-import com.pocketpass.app.state.PocketPassViewModel
+import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.ui.Assets
+import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
+import com.pocketpass.app.ui.platformAnimationsEnabled
+import com.pocketpass.app.ui.requiresLegacyLocationPermission
 import com.pocketpass.app.ui.BOTTOM_DESIGN_HEIGHT
 import com.pocketpass.app.ui.BOTTOM_DESIGN_WIDTH
 import com.pocketpass.app.ui.DesignMetrics
@@ -384,7 +384,7 @@ private fun ColumnScope.AuthOtp(metrics: DesignMetrics, state: AuthUiState, send
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     val shake = remember { Animatable(0f) }
     LaunchedEffect(state.errorShakeNonce) {
-        if (state.errorShakeNonce == 0 || !ValueAnimator.areAnimatorsEnabled()) return@LaunchedEffect
+        if (state.errorShakeNonce == 0 || !platformAnimationsEnabled()) return@LaunchedEffect
         listOf(-11f, 9f, -6f, 4f, 0f).forEach { shake.animateTo(it, tween(48)) }
     }
     AuthHeading(metrics, "Check your email", "Enter the 6-digit code sent to")
@@ -699,7 +699,7 @@ internal fun PhoneNearbyPermissionScreen(
     state: NearbyPermissionUiState,
     onContinue: () -> Unit,
 ) {
-    val legacyLocation = Build.VERSION.SDK_INT <= 30
+    val legacyLocation = requiresLegacyLocationPermission()
     PhoneOnboarding(metrics) {
         AuthCard(metrics) {
             Text(
@@ -830,10 +830,15 @@ internal fun PhoneForceUpdateScreen(
 }
 
 @Composable
-internal fun PhoneMiiGate(metrics: DesignMetrics, state: PocketPassUiState, viewModel: PocketPassViewModel) {
-    val controller = viewModel.miiEditorController
+internal fun PhoneMiiGate(
+    metrics: DesignMetrics,
+    state: PocketPassUiState,
+    controller: MiiEditorController?,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
     val savedCanonical by rememberUpdatedState(state.miiEditor.savedCanonicalBase64)
-    val onEvent: (MiiEditorEvent) -> Unit = { viewModel.dispatch(PocketPassEvent.Mii(it)) }
+    val onEvent: (MiiEditorEvent) -> Unit = { dispatch(PocketPassEvent.Mii(it)) }
+    val renderSurface = LocalMiiRenderSurface.current
     val insets = LocalPhoneInsets.current
     val frame = Modifier
         .fillMaxSize()
@@ -852,12 +857,8 @@ internal fun PhoneMiiGate(metrics: DesignMetrics, state: PocketPassUiState, view
             modifier = Modifier.fillMaxSize(),
             saveOnly = true,
         ) {
-            if (state.miiEditor.isEditorVisible) {
-                MiiEditorRenderSurface(
-                    editorController = controller,
-                    modifier = Modifier.fillMaxSize(),
-                    initialCanonicalBase64 = savedCanonical,
-                )
+            if (state.miiEditor.isEditorVisible && controller != null) {
+                renderSurface?.invoke(controller, savedCanonical, Modifier.fillMaxSize())
             }
         }
     }

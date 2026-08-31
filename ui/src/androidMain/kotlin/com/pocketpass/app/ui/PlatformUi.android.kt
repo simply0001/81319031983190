@@ -2,6 +2,8 @@ package com.pocketpass.app.ui
 
 import android.animation.ValueAnimator
 import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -32,6 +34,14 @@ actual fun formatInstant(instant: Instant, pattern: String): String =
 actual fun isoCountryCodes(): List<String> = Locale.getISOCountries().toList()
 
 actual fun fileExists(path: String): Boolean = java.io.File(path).isFile
+
+@Composable
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
+    BackHandler(enabled = enabled, onBack = onBack)
+}
+
+actual fun pocketPlatformTextStyle(): PlatformTextStyle? =
+    PlatformTextStyle(includeFontPadding = false)
 
 actual fun displayCountryName(code: String): String =
     Locale.Builder()
