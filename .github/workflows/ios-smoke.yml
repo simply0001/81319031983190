@@ -1,0 +1,90 @@
+name: iOS smoke
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  launch:
+    name: Simulator launch check (macOS)
+    # Actions minutes are only free on the public mirror; the private repo would bill them.
+    if: github.repository == 'simply0001/81319031983190'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache the Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios-app
+        run: xcodegen generate
+      - name: Build for the simulator
+        working-directory: ios-app
+        run: |
+          xcodebuild \
+            -project PocketPass.xcodeproj \
+            -scheme PocketPass \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+      - name: Launch and watch for a crash
+        working-directory: ios-app
+        run: |
+          set -x
+          DEVICE_TYPE=$(xcrun simctl list devicetypes | grep -oE 'iPhone 1[56][^(]*\(com[^)]*\)' | tail -1 | grep -oE 'com[^)]*')
+          RUNTIME=$(xcrun simctl list runtimes | grep -oE 'com.apple.CoreSimulator.SimRuntime.iOS[^ )]*' | tail -1)
+          UDID=$(xcrun simctl create smoke "$DEVICE_TYPE" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          APP=build/DerivedData/Build/Products/Debug-iphonesimulator/PocketPass.app
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch --console-pty "$UDID" xyz.pocketpass.PocketPass > launch-console.txt 2>&1 &
+          CONSOLE_PID=$!
+          sleep 30
+          kill "$CONSOLE_PID" 2>/dev/null || true
+          echo "=== console tail ==="
+          tail -n 150 launch-console.txt || true
+          mkdir -p crash-reports
+          cp ~/Library/Logs/DiagnosticReports/PocketPass* crash-reports/ 2>/dev/null || true
+          ls -la crash-reports || true
+          ALIVE=$(xcrun simctl spawn "$UDID" launchctl list | grep -c "xyz.pocketpass.PocketPass" || true)
+          echo "alive-entries: $ALIVE"
+          if [ -n "$(ls -A crash-reports 2>/dev/null)" ] || grep -q "Uncaught Kotlin exception" launch-console.txt; then
+            echo "::error::PocketPass crashed at launch on the simulator"
+            for f in crash-reports/*; do
+              echo "=== $f (head) ==="
+              head -c 20000 "$f" || true
+            done
+            exit 1
+          fi
+          if [ "$ALIVE" = "0" ]; then
+            echo "::error::PocketPass is not running after 30s and left no crash report"
+            exit 1
+          fi
+          echo "PocketPass is alive on the simulator."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-launch-logs
+          path: |
+            ios-app/launch-console.txt
+            ios-app/crash-reports/
+          if-no-files-found: ignore
