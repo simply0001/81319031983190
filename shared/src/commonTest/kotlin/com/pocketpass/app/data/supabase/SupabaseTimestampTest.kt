@@ -1,8 +1,8 @@
 package com.pocketpass.app.data.supabase
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.time.Instant
-import org.junit.Assert.assertEquals
-import org.junit.Test
 
 class SupabaseTimestampTest {
     @Test
@@ -16,7 +16,7 @@ class SupabaseTimestampTest {
             "2026-07-29T01:02:13.355968+00",
             "2026-07-29 01:02:13.355968+00:00",
         ).forEach { timestamp ->
-            assertEquals(timestamp, expected, parseSupabaseInstant(timestamp))
+            assertEquals(expected, parseSupabaseInstant(timestamp), timestamp)
         }
     }
 

@@ -7,7 +7,7 @@ import com.pocketpass.app.domain.repository.ConnectedAppsSource
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
-import java.net.URI
+import io.ktor.http.Url
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -237,15 +237,21 @@ class ConnectedAppsStateHolder(
     companion object {
         private val CUSTOM_SCHEME = Regex("^[a-z][a-z0-9+.-]*$")
         private val BLOCKED_SCHEMES = setOf("javascript", "data", "blob", "vbscript", "file", "about", "http", "intent", "content", "android-app")
-        private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "[::1]")
+        private val LOOPBACK_HOSTS = setOf("localhost", "127.0.0.1", "[::1]", "::1")
 
         fun safeRedirect(value: String): String? {
             val trimmed = value.trim()
-            val uri = runCatching { URI(trimmed) }.getOrNull() ?: return null
-            val scheme = uri.scheme?.lowercase() ?: return null
-            if (scheme == "http" && uri.host?.lowercase() in LOOPBACK_HOSTS) return trimmed
+            if (trimmed.isEmpty()) return null
+            if (trimmed.any { it.isWhitespace() || it.code < 0x20 || it.code == 0x7F }) return null
+            val separator = trimmed.indexOf(':')
+            if (separator <= 0) return null
+            val scheme = trimmed.substring(0, separator).lowercase()
+            if (!CUSTOM_SCHEME.matches(scheme)) return null
+            if (scheme == "http") {
+                val url = runCatching { Url(trimmed) }.getOrNull() ?: return null
+                return if (url.host.lowercase() in LOOPBACK_HOSTS) trimmed else null
+            }
             if (scheme in BLOCKED_SCHEMES) return null
-            if (scheme != "https" && !CUSTOM_SCHEME.matches(scheme)) return null
             return trimmed
         }
     }

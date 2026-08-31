@@ -4,8 +4,9 @@ import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.model.ConversationMemberRole
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Instant
 
 class DatabaseDtoMapperTest {
@@ -64,10 +65,10 @@ class DatabaseDtoMapperTest {
         assertEquals(Instant.parse("2026-08-29T10:00:00Z"), member.joinedAt)
         assertEquals(ConversationMemberRole.Member, unknown.role)
         assertEquals("Member", unknown.displayName)
-        assertEquals(null, unknown.avatar)
+        assertNull(unknown.avatar)
     }
 
-    companion object {
+    private companion object {
         private const val USER_ID = "2de26930-cf7b-4a09-b85e-19df68d42f93"
     }
 }

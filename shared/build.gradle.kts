@@ -30,6 +30,7 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
             api(libs.kotlinx.serialization.core)
             api(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.serialization.protobuf)
             api(project.dependencies.platform(libs.supabase.bom))
             api(libs.supabase.auth)
             api(libs.supabase.postgrest)

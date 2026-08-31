@@ -70,7 +70,7 @@ data class NearbyHello(
     }
 }
 
-internal data class NearbyHelloPacket(
+data class NearbyHelloPacket(
     val hello: NearbyHello,
     val bytes: ByteArray,
 )
@@ -89,7 +89,7 @@ internal data class NearbySignature(
 }
 
 @Serializable
-internal data class NearbyConfirmation(
+data class NearbyConfirmation(
     @ProtoNumber(1) val ownToken: ByteArray,
     @ProtoNumber(2) val peerToken: ByteArray,
     @ProtoNumber(3) val occurredAtEpochMillis: Long,
@@ -125,7 +125,7 @@ data class NearbyEncounterProof(
 }
 
 @Serializable
-internal data class NearbyEncryptedPacket(
+data class NearbyEncryptedPacket(
     @ProtoNumber(1) val iv: ByteArray,
     @ProtoNumber(2) val ciphertext: ByteArray,
 ) {

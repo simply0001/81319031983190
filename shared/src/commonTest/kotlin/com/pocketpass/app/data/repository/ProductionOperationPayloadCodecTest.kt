@@ -12,10 +12,10 @@ import com.pocketpass.app.domain.model.RespondToFriendRequestCommand
 import com.pocketpass.app.domain.model.UpdateProfileCommand
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
+import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import org.junit.Assert.assertEquals
-import org.junit.Test
 
 class ProductionOperationPayloadCodecTest {
     @Test

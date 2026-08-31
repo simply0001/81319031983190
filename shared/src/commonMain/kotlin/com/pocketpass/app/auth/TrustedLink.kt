@@ -14,9 +14,8 @@ internal sealed interface TrustedLink {
     data object UntrustedOrigin : TrustedLink
 }
 
-// Ktor's Url never rejects input: it invents a scheme and a host ("https:///a" parses with host "a"),
-// so every structural guard runs on the raw string before the parse is allowed to mean anything. The
-// query is split off by hand and never handed to Ktor, which rejects the whole URL over one bad escape.
+// Ktor's Url invents a scheme and host rather than failing ("https:///a" parses with host "a"), and
+// discards a whole URL over one bad escape: guard the raw string, and keep the query away from it.
 internal fun trustedLinkOrigin(rawUri: String): TrustedLink {
     if (rawUri.length > MAX_LINK_URI_LENGTH || rawUri.hasUnsafeCharacters()) {
         return TrustedLink.Malformed

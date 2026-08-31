@@ -1,10 +1,10 @@
 package com.pocketpass.app.data.supabase
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
-import org.junit.Test
-import java.nio.charset.StandardCharsets
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 
 class SupabaseBackendConfigTest {
     @Test
@@ -19,7 +19,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsNonHttpsBaseUrl() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "http://api.pocketpass.xyz",
                 publishableKey = "sb_publishable_example",
@@ -29,7 +29,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsCallbackOnWrongPath() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
                 publishableKey = "sb_publishable_example",
@@ -40,7 +40,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsObviousServiceRoleKey() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
                 publishableKey = "service_role_do_not_ship",
@@ -53,7 +53,7 @@ class SupabaseBackendConfigTest {
         val header = encodeUrl("""{"alg":"HS256","typ":"JWT"}""")
         val payload = encodeUrl("""{"role":"service_role","iss":"supabase"}""")
 
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
                 publishableKey = "$header.$payload.fake-signature",
@@ -63,7 +63,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsBaseUrlWithUserInfo() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "https://attacker@api.pocketpass.xyz",
                 publishableKey = "sb_publishable_example",
@@ -73,7 +73,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsBaseUrlWithFragment() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "https://api.pocketpass.xyz#fragment",
                 publishableKey = "sb_publishable_example",
@@ -83,7 +83,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsBaseUrlWithQuery() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "https://api.pocketpass.xyz?apikey=leak",
                 publishableKey = "sb_publishable_example",
@@ -93,7 +93,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsBaseUrlWithPath() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "https://api.pocketpass.xyz/rest/v1",
                 publishableKey = "sb_publishable_example",
@@ -103,7 +103,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsBaseUrlWithoutHost() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "https:///nowhere",
                 publishableKey = "sb_publishable_example",
@@ -113,7 +113,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsMalformedBaseUrl() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = "not a url at all",
                 publishableKey = "sb_publishable_example",
@@ -123,7 +123,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsCallbackOnWrongHost() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
                 publishableKey = "sb_publishable_example",
@@ -138,7 +138,7 @@ class SupabaseBackendConfigTest {
             "https://links.pocketpass.xyz/auth/callback?next=evil",
             "https://links.pocketpass.xyz/auth/callback#token",
         ).forEach { callback ->
-            assertThrows(IllegalArgumentException::class.java) {
+            assertFailsWith<IllegalArgumentException> {
                 SupabaseBackendConfig(
                     baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
                     publishableKey = "sb_publishable_example",
@@ -150,7 +150,7 @@ class SupabaseBackendConfigTest {
 
     @Test
     fun rejectsBlankPublishableKey() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(
                 baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
                 publishableKey = "   ",
@@ -179,11 +179,10 @@ class SupabaseBackendConfigTest {
             publishableKey = "sb_publishable_secret_value",
         ).toString()
 
-        assertEquals(false, rendered.contains("sb_publishable_secret_value"))
+        assertFalse(rendered.contains("sb_publishable_secret_value"))
     }
 
     private fun encodeUrl(value: String): String =
-        Base64.getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(value.toByteArray(StandardCharsets.UTF_8))
+        Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
+            .encode(value.encodeToByteArray())
 }

@@ -14,6 +14,8 @@ concurrency:
 jobs:
   shared:
     name: Shared code (Linux)
+    # Actions minutes are only free on the public mirror; the private repo would bill them.
+    if: github.repository == 'simply0001/81319031983190'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -36,6 +38,7 @@ jobs:
 
   framework:
     name: Kotlin/Native framework (macOS)
+    if: github.repository == 'simply0001/81319031983190'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -62,6 +65,7 @@ jobs:
 
   app:
     name: Simulator app (macOS)
+    if: github.repository == 'simply0001/81319031983190'
     needs: framework
     runs-on: macos-15
     timeout-minutes: 45

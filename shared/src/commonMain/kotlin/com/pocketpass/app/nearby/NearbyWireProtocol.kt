@@ -2,26 +2,23 @@
 
 package com.pocketpass.app.nearby
 
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.DataInputStream
-import java.io.DataOutputStream
-import java.nio.ByteBuffer
 import kotlin.time.Instant
+import kotlinx.io.Buffer
+import kotlinx.io.readByteArray
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.protobuf.ProtoBuf
 
-internal object NearbyWireProtocol {
+object NearbyWireProtocol {
     const val VERSION: Int = 2
     const val MAX_PACKET_BYTES: Int = 4_096
 
     fun packetType(packet: ByteArray): Int {
         require(packet.size >= HEADER_BYTES)
-        val header = ByteBuffer.wrap(packet)
-        require(header.int == MAGIC)
-        require(header.get().toInt() and 0xFF == VERSION)
-        return header.get().toInt() and 0xFF
+        val header = Buffer().apply { write(packet, 0, HEADER_BYTES) }
+        require(header.readInt() == MAGIC)
+        require(header.readByte().toInt() and 0xFF == VERSION)
+        return header.readByte().toInt() and 0xFF
     }
 
     fun helloPacket(hello: NearbyHello): NearbyHelloPacket =
@@ -73,12 +70,12 @@ internal object NearbyWireProtocol {
         value: T,
     ): ByteArray {
         val body = ProtoBuf.encodeToByteArray(serializer, value)
-        val packet = ByteBuffer.allocate(HEADER_BYTES + body.size)
-            .putInt(MAGIC)
-            .put(VERSION.toByte())
-            .put(type.value.toByte())
-            .put(body)
-            .array()
+        val packet = Buffer().apply {
+            writeInt(MAGIC)
+            writeByte(VERSION.toByte())
+            writeByte(type.value.toByte())
+            write(body)
+        }.readByteArray()
         require(packet.size <= MAX_PACKET_BYTES)
         return packet
     }
@@ -89,10 +86,10 @@ internal object NearbyWireProtocol {
         serializer: KSerializer<T>,
     ): T {
         require(packet.size in HEADER_BYTES..MAX_PACKET_BYTES)
-        val header = ByteBuffer.wrap(packet)
-        require(header.int == MAGIC) { "Invalid PocketPass packet" }
-        require(header.get().toInt() and 0xFF == VERSION) { "Unsupported protocol version" }
-        require(header.get().toInt() and 0xFF == expectedType.value) {
+        val header = Buffer().apply { write(packet, 0, HEADER_BYTES) }
+        require(header.readInt() == MAGIC) { "Invalid PocketPass packet" }
+        require(header.readByte().toInt() and 0xFF == VERSION) { "Unsupported protocol version" }
+        require(header.readByte().toInt() and 0xFF == expectedType.value) {
             "Unexpected PocketPass packet type"
         }
         return ProtoBuf.decodeFromByteArray(
@@ -112,7 +109,7 @@ internal object NearbyWireProtocol {
     private const val HEADER_BYTES = 6
 }
 
-internal object NearbyBleFraming {
+object NearbyBleFraming {
     const val HEADER_BYTES = 8
     const val DEFAULT_ATT_PAYLOAD_BYTES = 20
 
@@ -130,16 +127,13 @@ internal object NearbyBleFraming {
         return List(count) { index ->
             val start = index * bodyBytes
             val end = minOf(packet.size, start + bodyBytes)
-            ByteArrayOutputStream().use { buffer ->
-                DataOutputStream(buffer).use { output ->
-                    output.writeShort(messageId)
-                    output.writeShort(index)
-                    output.writeShort(count)
-                    output.writeShort(packet.size)
-                    output.write(packet, start, end - start)
-                }
-                buffer.toByteArray()
-            }
+            Buffer().apply {
+                writeShort(messageId.toShort())
+                writeShort(index.toShort())
+                writeShort(count.toShort())
+                writeShort(packet.size.toShort())
+                write(packet, start, end)
+            }.readByteArray()
         }
     }
 
@@ -151,11 +145,11 @@ internal object NearbyBleFraming {
 
         fun accept(fragment: ByteArray): ByteArray? {
             require(fragment.size > HEADER_BYTES)
-            val input = DataInputStream(ByteArrayInputStream(fragment))
-            val incomingMessageId = input.readUnsignedShort()
-            val index = input.readUnsignedShort()
-            val incomingCount = input.readUnsignedShort()
-            val incomingSize = input.readUnsignedShort()
+            val input = Buffer().apply { write(fragment) }
+            val incomingMessageId = input.readShort().toInt() and 0xFFFF
+            val index = input.readShort().toInt() and 0xFFFF
+            val incomingCount = input.readShort().toInt() and 0xFFFF
+            val incomingSize = input.readShort().toInt() and 0xFFFF
             require(incomingCount > 0 && index < incomingCount)
             require(incomingSize in 1..NearbyWireProtocol.MAX_PACKET_BYTES)
 
@@ -166,15 +160,15 @@ internal object NearbyBleFraming {
                 packetSize = incomingSize
             }
             require(fragmentCount == incomingCount && packetSize == incomingSize)
-            fragments.putIfAbsent(index, input.readBytes())
+            val body = input.readByteArray()
+            if (index !in fragments) fragments[index] = body
             if (fragments.size != fragmentCount) return null
 
-            val result = ByteArrayOutputStream(packetSize).use { output ->
+            val result = Buffer().apply {
                 repeat(fragmentCount) { fragmentIndex ->
-                    output.write(requireNotNull(fragments[fragmentIndex]))
+                    write(requireNotNull(fragments[fragmentIndex]))
                 }
-                output.toByteArray()
-            }
+            }.readByteArray()
             require(result.size == packetSize)
             reset()
             return result
