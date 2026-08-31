@@ -68,6 +68,7 @@ fun PhoneApp(
     val state by viewModel.state.collectAsStateWithLifecycle()
     androidx.compose.runtime.CompositionLocalProvider(
         com.pocketpass.app.audio.LocalSoundEffects provides viewModel.soundEffects,
+        com.pocketpass.app.ui.LocalAppVersionName provides com.pocketpass.app.BuildConfig.VERSION_NAME,
     ) {
         PocketPassTheme(state.themeMode) {
             PhoneSystemBars()
