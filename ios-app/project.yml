@@ -32,6 +32,10 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: PocketPass
+        # Required by Compose Multiplatform: its PlistSanityCheck aborts the
+        # process at launch when this entry is absent, and high-refresh iPhones
+        # render at 60Hz without it.
+        CADisableMinimumFrameDurationOnPhone: true
         UILaunchScreen: {}
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations:
