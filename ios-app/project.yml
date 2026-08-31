@@ -20,6 +20,10 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Resources/audio
+        name: audio
+        type: folder
+        buildPhase: resources
     info:
       path: Sources/Info.plist
       properties:

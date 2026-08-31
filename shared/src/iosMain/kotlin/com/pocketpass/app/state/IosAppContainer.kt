@@ -1,7 +1,8 @@
 package com.pocketpass.app.state
 
 import com.pocketpass.app.PocketPassRepositoryGraph
-import com.pocketpass.app.audio.NoSoundEffects
+import com.pocketpass.app.audio.IosBackgroundMusicPlayer
+import com.pocketpass.app.audio.IosSoundEffectPlayer
 import com.pocketpass.app.auth.AuthStateHolder
 import com.pocketpass.app.data.SettingsRepository
 import com.pocketpass.app.data.UserDefaultsSettingsRepository
@@ -75,7 +76,8 @@ class IosAppContainer(
     override val activeAccountId: StateFlow<UserId?> =
         MutableStateFlow(FixtureData.CurrentUserId)
 
-    override val soundEffects = NoSoundEffects
+    override val soundEffects = IosSoundEffectPlayer()
+    val backgroundMusic = IosBackgroundMusicPlayer()
     override val miiEditor = InactiveMiiEditorController
     override val integrityCompromised = false
     override val miiEditorEnabled = false
@@ -179,6 +181,9 @@ class IosAppContainer(
     init {
         applicationScope.launch {
             repositories.session.initialize()
+        }
+        applicationScope.launch {
+            settingsRepository.settings.collect { soundEffects.volume = it.sfxLevel }
         }
     }
 

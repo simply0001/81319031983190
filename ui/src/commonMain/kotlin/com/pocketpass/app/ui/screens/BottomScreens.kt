@@ -68,6 +68,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1802,6 +1803,38 @@ private fun HorizontalCards(
     onCard: (String) -> Unit,
 ) {
     val scroll = rememberScrollState()
+    val focus = LocalControllerFocus.current
+    val density = LocalDensity.current
+    val cardIds = remember(people) { people.map { "card_${it.id}" } }
+    if (focus != null) {
+        // Follow the controller focus explicitly: the generic bring-into-view reveal has
+        // proven unreliable for this row, which strands the highlight on off-screen cards.
+        LaunchedEffect(focus, scroll, cardIds, metrics, density) {
+            snapshotFlow { focus.focusId.takeUnless { focus.hidden } }
+                .collect { focusId ->
+                    val index = cardIds.indexOf(focusId)
+                    if (index < 0) return@collect
+                    val cardLeft = with(density) { metrics.dp(50f + index * 502.303f).toPx() }
+                    val cardRight = with(density) { metrics.dp(50f + index * 502.303f + 452.303f).toPx() }
+                    val viewport = scroll.viewportSize
+                        .takeIf { it > 0 }
+                        ?.toFloat()
+                        ?: with(density) { metrics.dp(1240f).toPx() }
+                    val margin = with(density) { metrics.dp(50f).toPx() }
+                    val target = when {
+                        cardLeft - margin < scroll.value -> cardLeft - margin
+                        cardRight + margin > scroll.value + viewport -> cardRight + margin - viewport
+                        else -> return@collect
+                    }.roundToInt().coerceIn(0, scroll.maxValue)
+                    if (target == scroll.value) return@collect
+                    if (platformAnimationsEnabled()) {
+                        scroll.animateScrollTo(target)
+                    } else {
+                        scroll.scrollTo(target)
+                    }
+                }
+        }
+    }
     Box(
         modifier = Modifier
             .designBounds(metrics, 0f, 419f, 1240f, 661f)
