@@ -1,6 +1,6 @@
 package com.pocketpass.app.data.supabase
 
-import android.util.Log
+import com.pocketpass.app.logPlatformWarning
 import com.pocketpass.app.data.repository.remote.AchievementsRemoteDataSource
 import com.pocketpass.app.data.repository.remote.BingoRemoteDataSource
 import com.pocketpass.app.data.repository.remote.FriendsRemoteDataSource
@@ -131,16 +131,17 @@ import com.pocketpass.app.domain.model.OAuthConsentScope
 import com.pocketpass.app.domain.repository.ConnectedAppsSource
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
-import java.net.URI
-import java.net.URLEncoder
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import io.ktor.client.HttpClient
+import io.ktor.client.request.header
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpMethod
+import io.ktor.http.Url
+import io.ktor.http.encodeURLParameter
+import io.ktor.http.isSuccess
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
@@ -149,12 +150,15 @@ import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.storage.storage
 import io.ktor.http.ContentType
-import java.io.File
-import java.io.IOException
+import io.ktor.http.contentType
+import kotlin.io.encoding.Base64
 import kotlin.time.Instant
-import java.util.Base64
-import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.io.IOException
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.readByteArray
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -200,10 +204,8 @@ class SupabaseProductionRemoteDataSources(
 
     private fun requireActiveSession(accountId: UserId) {
         val sessionUserId = client.auth.currentSessionOrNull()?.user?.id
-        val normalizedSession = sessionUserId
-            ?.let { runCatching { UUID.fromString(it).toString() }.getOrNull() }
-        val normalizedAccount = runCatching { UUID.fromString(accountId.value).toString() }
-            .getOrNull()
+        val normalizedSession = sessionUserId?.let(::canonicalUuidOrNull)
+        val normalizedAccount = canonicalUuidOrNull(accountId.value)
         check(normalizedSession != null && normalizedSession == normalizedAccount) {
             "Session-scoped fetch refused: the active session does not match the requested account"
         }
@@ -467,9 +469,7 @@ class SupabaseProductionRemoteDataSources(
                     schemaVersion = command.appearance.schemaVersion,
                     appearance = appearance,
                     avatarPath = avatarPath,
-                    canonicalMiicBase64 = command.canonicalMiic?.let {
-                        Base64.getEncoder().encodeToString(it)
-                    },
+                    canonicalMiicBase64 = command.canonicalMiic?.let(Base64.Default::encode),
                     slot = command.slot,
                 ),
             ).decodeSingle<MiiProfilePublicationDto>()
@@ -478,7 +478,7 @@ class SupabaseProductionRemoteDataSources(
             throw error
         }
 
-        require(publication.userId == UUID.fromString(command.accountId.value).toString()) {
+        require(publication.userId == canonicalUuid(command.accountId.value)) {
             "Mii publication returned another account"
         }
         require(publication.revision == command.revision) {
@@ -616,7 +616,7 @@ class SupabaseProductionRemoteDataSources(
                 clientOperationId = clientOperationId.value,
             ),
         ).decodeAs<String>()
-        ConversationId(UUID.fromString(conversationId).toString())
+        ConversationId(canonicalUuid(conversationId))
     }
 
     override suspend fun deleteAccount(
@@ -722,43 +722,49 @@ class SupabaseProductionRemoteDataSources(
         result.redirectUrl?.takeIf { it.isNotBlank() } ?: error("The consent response carried no redirect_url")
     }
 
-    private suspend fun oauthServerRequest(method: String, path: String, body: String?): String =
-        withContext(Dispatchers.IO) {
-            val accessToken = client.auth.currentAccessTokenOrNull()
-                ?: throw OAuthServerException(401, "Session required")
-            val request = Request.Builder()
-                .url(client.supabaseHttpUrl + path)
-                .header("apikey", client.supabaseKey)
-                .header("Authorization", "Bearer $accessToken")
-                .header("Accept", "application/json")
-                .method(method, body?.toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-            oauthHttpClient.newCall(request).execute().use { response ->
-                val text = response.body.string()
-                if (!response.isSuccessful) {
-                    throw OAuthServerException(response.code, text.take(300))
-                }
-                text
+    private suspend fun oauthServerRequest(method: String, path: String, body: String?): String {
+        val accessToken = client.auth.currentAccessTokenOrNull()
+            ?: throw OAuthServerException(401, "Session required")
+        val response = oauthHttpClient.request(client.supabaseHttpUrl + path) {
+            this.method = HttpMethod.parse(method)
+            header("apikey", client.supabaseKey)
+            header("Authorization", "Bearer $accessToken")
+            header("Accept", "application/json")
+            if (body != null) {
+                contentType(ContentType.Application.Json)
+                setBody(body)
             }
         }
+        val text = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw OAuthServerException(response.status.value, text.take(300))
+        }
+        return text
+    }
 
-    private val oauthHttpClient: OkHttpClient by lazy { OkHttpClient() }
+    private val oauthHttpClient: HttpClient by lazy { HttpClient() }
 
-    private fun encodePathSegment(value: String): String =
-        URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+    private fun encodePathSegment(value: String): String = value.encodeURLParameter()
 
+    // Ktor's Url invents a scheme and host rather than failing, so the https prefix and the
+    // authority are checked on the raw string before the parse is trusted.
     private fun httpsOnly(value: String?): String? {
         val trimmed = value?.trim().orEmpty()
         if (trimmed.isEmpty()) return null
-        val uri = runCatching { URI(trimmed) }.getOrNull() ?: return null
-        return if (uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()) trimmed else null
+        if (!trimmed.startsWith("https://", ignoreCase = true)) return null
+        val authority = trimmed.substring("https://".length)
+        if (authority.isEmpty() || authority.startsWith('/')) return null
+        val url = runCatching { Url(trimmed) }.getOrNull() ?: return null
+        return if (url.host.isNotBlank()) trimmed else null
     }
 
     private fun returnHost(value: String?): String {
         val trimmed = value?.trim().orEmpty()
         if (trimmed.isEmpty()) return "the app"
-        val uri = runCatching { URI(trimmed) }.getOrNull() ?: return "the app"
-        return uri.host?.takeIf { it.isNotBlank() } ?: uri.scheme?.let { "$it://" } ?: "the app"
+        val url = runCatching { Url(trimmed) }.getOrNull() ?: return "the app"
+        return url.host.takeIf { it.isNotBlank() }
+            ?: url.protocol.name.takeIf { it.isNotBlank() }?.let { "$it://" }
+            ?: "the app"
     }
 
     override suspend fun setActiveMiiSlot(
@@ -774,7 +780,7 @@ class SupabaseProductionRemoteDataSources(
             ),
         ).decodeSingle<ActiveMiiSlotDto>()
 
-        require(activation.userId == UUID.fromString(accountId.value).toString()) {
+        require(activation.userId == canonicalUuid(accountId.value)) {
             "Mii slot activation returned another account"
         }
         require(activation.slot == slot) {
@@ -1019,7 +1025,7 @@ class SupabaseProductionRemoteDataSources(
                 clientOperationId = command.clientOperationId.value,
             ),
         ).decodeAs<ConversationDto>()
-        ConversationId(UUID.fromString(conversation.id).toString())
+        ConversationId(canonicalUuid(conversation.id))
     }
 
     override suspend fun addGroupMembers(
@@ -1105,7 +1111,9 @@ class SupabaseProductionRemoteDataSources(
             )
             client.storage.from(MESSAGE_MEDIA_BUCKET).upload(
                 path = path,
-                data = File(attachment.localPath).readBytes(),
+                data = SystemFileSystem.source(Path(attachment.localPath))
+                    .buffered()
+                    .use { source -> source.readByteArray() },
             ) {
                 upsert = true
                 contentType = ContentType.parse(attachment.mimeType)
@@ -1336,8 +1344,8 @@ internal fun miiAvatarPath(
     clientOperationId: String,
 ): String {
     require(revision > 0L) { "Mii revision must be positive" }
-    val canonicalAccountId = UUID.fromString(accountId.value).toString()
-    val canonicalOperationId = UUID.fromString(clientOperationId).toString()
+    val canonicalAccountId = canonicalUuid(accountId.value)
+    val canonicalOperationId = canonicalUuid(clientOperationId)
     require(accountId.value.equals(canonicalAccountId, ignoreCase = true)) {
         "Mii account id must be a canonical UUID"
     }
@@ -1354,9 +1362,9 @@ internal fun messageMediaPath(
     messageId: MessageId,
     mimeType: String,
 ): String {
-    val account = UUID.fromString(accountId.value).toString()
-    val conversation = UUID.fromString(conversationId.value).toString()
-    val message = UUID.fromString(messageId.value).toString()
+    val account = canonicalUuid(accountId.value)
+    val conversation = canonicalUuid(conversationId.value)
+    val message = canonicalUuid(messageId.value)
     val extension = when (mimeType.lowercase()) {
         "image/png" -> "png"
         "image/webp" -> "webp"
@@ -1583,10 +1591,10 @@ private suspend fun <T> remoteResult(
 } catch (cancelled: CancellationException) {
     throw cancelled
 } catch (error: Throwable) {
-    Log.w(
+    logPlatformWarning(
         "PocketPassRemote",
-        "Remote adapter failure: ${error::class.java.name}; " +
-            "cause=${error.cause?.let { it::class.java.name } ?: "none"}",
+        "Remote adapter failure: ${error::class.qualifiedName ?: "unknown"}; " +
+            "cause=${error.cause?.let { it::class.qualifiedName } ?: "none"}",
     )
     RepositoryResult.Failure(error.toRemoteFailure())
 }
@@ -1616,7 +1624,11 @@ private const val APP_SUSPENDED_HINT = "APP_SUSPENDED"
 
 private val UUID_PATTERN = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
-private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+private fun canonicalUuidOrNull(value: String): String? =
+    value.trim().lowercase().takeIf(UUID_PATTERN::matches)
+
+private fun canonicalUuid(value: String): String =
+    requireNotNull(canonicalUuidOrNull(value)) { "Malformed UUID" }
 
 private val OAuthJson = Json {
     ignoreUnknownKeys = true

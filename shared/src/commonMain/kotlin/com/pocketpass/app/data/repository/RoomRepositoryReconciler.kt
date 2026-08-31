@@ -1,7 +1,8 @@
 package com.pocketpass.app.data.repository
 
-import androidx.room.withTransaction
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.PooledConnection
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.local.entity.LocalConversationKinds
 import com.pocketpass.app.data.local.entity.LocalOperationKinds
@@ -51,19 +52,19 @@ class RoomRepositoryReconciler(
         require(remoteProfile == null || remoteProfile.userId == userId) {
             "Remote profile id does not match the requested profile"
         }
-        database.withTransaction {
-            val hasPendingUpdate = database.openHelper.writableDatabase
-                .activeAggregateIds(
+        database.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val hasPendingUpdate = activeAggregateIds(
                     accountId = userId.value,
                     kinds = setOf(ProductionOperationKinds.UPDATE_PROFILE),
-                )
-                .contains(userId.value)
-            if (hasPendingUpdate) return@withTransaction
+                ).contains(userId.value)
+                if (hasPendingUpdate) return@immediateTransaction
 
-            if (remoteProfile == null) {
-                database.profileDao().delete(userId.value)
-            } else {
-                database.profileDao().upsert(remoteProfile.toEntity())
+                if (remoteProfile == null) {
+                    database.profileDao().delete(userId.value)
+                } else {
+                    database.profileDao().upsert(remoteProfile.toEntity())
+                }
             }
         }
     }
@@ -78,16 +79,18 @@ class RoomRepositoryReconciler(
         balance: Int?,
         purchasedAt: Instant?,
     ) {
-        database.withTransaction {
-            database.shopDao().markOwnedItemSynced(
-                accountId = accountId.value,
-                itemId = itemId,
-                purchasedAtEpochMillis = purchasedAt?.toEpochMilliseconds(),
-            )
-            if (balance != null) {
-                database.shopDao().upsertBalance(
-                    TokenBalanceEntity(accountId = accountId.value, balance = balance),
+        database.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                database.shopDao().markOwnedItemSynced(
+                    accountId = accountId.value,
+                    itemId = itemId,
+                    purchasedAtEpochMillis = purchasedAt?.toEpochMilliseconds(),
                 )
+                if (balance != null) {
+                    database.shopDao().upsertBalance(
+                        TokenBalanceEntity(accountId = accountId.value, balance = balance),
+                    )
+                }
             }
         }
     }
@@ -112,26 +115,27 @@ class RoomRepositoryReconciler(
             "Every remote friend must belong to the requested account"
         }
         val canonicalById = remoteFriends.associateBy { it.profile.userId.value }
-        database.withTransaction {
-            val writableDatabase = database.openHelper.writableDatabase
-            val protectedIds = writableDatabase.activeAggregateIds(
-                accountId = accountId.value,
-                kinds = FRIEND_MUTATION_KINDS,
-            )
+        database.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val protectedIds = activeAggregateIds(
+                    accountId = accountId.value,
+                    kinds = FRIEND_MUTATION_KINDS,
+                )
 
-            val safeCanonicalRows = canonicalById
-                .filterKeys { it !in protectedIds }
-                .values
-                .map(Friend::toEntity)
-            if (safeCanonicalRows.isNotEmpty()) {
-                database.friendDao().upsertAll(safeCanonicalRows)
+                val safeCanonicalRows = canonicalById
+                    .filterKeys { it !in protectedIds }
+                    .values
+                    .map(Friend::toEntity)
+                if (safeCanonicalRows.isNotEmpty()) {
+                    database.friendDao().upsertAll(safeCanonicalRows)
+                }
+
+                val retainedIds = canonicalById.keys + protectedIds
+                deleteFriendsMissingFromSnapshot(
+                    ownerId = accountId.value,
+                    retainedIds = retainedIds,
+                )
             }
-
-            val retainedIds = canonicalById.keys + protectedIds
-            writableDatabase.deleteFriendsMissingFromSnapshot(
-                ownerId = accountId.value,
-                retainedIds = retainedIds,
-            )
         }
     }
 
@@ -142,22 +146,24 @@ class RoomRepositoryReconciler(
         require(conversations.map { it.id }.distinct().size == conversations.size) {
             "Remote conversation ids must be unique"
         }
-        database.withTransaction {
-            val retainedIds = conversations.map { it.id.value }
-            if (conversations.isNotEmpty()) {
-                database.conversationDao().upsertAll(
-                    conversations.map { it.toEntity(accountId) },
-                )
+        database.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val retainedIds = conversations.map { it.id.value }
+                if (conversations.isNotEmpty()) {
+                    database.conversationDao().upsertAll(
+                        conversations.map { it.toEntity(accountId) },
+                    )
+                }
+                database.conversationMemberDao().deleteForAccount(accountId.value)
+                val members = conversations.flatMap { conversation ->
+                    conversation.members.map { it.toEntity(accountId, conversation.id) }
+                }
+                if (members.isNotEmpty()) {
+                    database.conversationMemberDao().upsertAll(members)
+                }
+                database.conversationDao().deleteExcept(accountId.value, retainedIds)
+                database.messageDao().deleteExceptConversations(accountId.value, retainedIds)
             }
-            database.conversationMemberDao().deleteForAccount(accountId.value)
-            val members = conversations.flatMap { conversation ->
-                conversation.members.map { it.toEntity(accountId, conversation.id) }
-            }
-            if (members.isNotEmpty()) {
-                database.conversationMemberDao().upsertAll(members)
-            }
-            database.conversationDao().deleteExcept(accountId.value, retainedIds)
-            database.messageDao().deleteExceptConversations(accountId.value, retainedIds)
         }
     }
 
@@ -170,50 +176,52 @@ class RoomRepositoryReconciler(
             "Remote message ids must be unique"
         }
         if (messages.isEmpty()) return
-        database.withTransaction {
-            val writableDatabase = database.openHelper.writableDatabase
-            messages.forEach { message ->
-                val clientOperationId = message.clientOperationId?.value
-                    ?: return@forEach
-                writableDatabase.delete(
-                    "messages",
-                    """
-                    accountId = ? AND clientOperationId = ? AND messageId <> ?
-                    """.trimIndent(),
-                    arrayOf(accountId.value, clientOperationId, message.id.value),
-                )
-            }
-            val protectedIds = if (authoritative) {
-                emptySet()
-            } else {
-                writableDatabase.activeAggregateIds(
-                    accountId = accountId.value,
-                    kinds = MESSAGE_MUTATION_KINDS,
-                )
-            }
-            val localById = messages
-                .map { it.conversationId.value }
-                .distinct()
-                .flatMap { conversationId ->
-                    database.messageDao().getAllForConversation(accountId.value, conversationId)
-                }
-                .associateBy(MessageEntity::messageId)
-            database.messageDao().upsertAll(
-                messages.map { message ->
-                    val remote = message.toEntity(accountId)
-                    val local = localById[remote.messageId]
-                    if (local == null || remote.messageId !in protectedIds) {
-                        remote
-                    } else {
-                        remote.copy(
-                            body = local.body,
-                            editedAtEpochMillis = local.editedAtEpochMillis,
-                            deletedAtEpochMillis = local.deletedAtEpochMillis
-                                ?: remote.deletedAtEpochMillis,
-                        )
+        database.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                messages.forEach { message ->
+                    val clientOperationId = message.clientOperationId?.value
+                        ?: return@forEach
+                    usePrepared(
+                        "DELETE FROM messages WHERE accountId = ? AND clientOperationId = ? AND messageId <> ?",
+                    ) { statement ->
+                        statement.bindText(1, accountId.value)
+                        statement.bindText(2, clientOperationId)
+                        statement.bindText(3, message.id.value)
+                        statement.step()
                     }
-                },
-            )
+                }
+                val protectedIds = if (authoritative) {
+                    emptySet()
+                } else {
+                    activeAggregateIds(
+                        accountId = accountId.value,
+                        kinds = MESSAGE_MUTATION_KINDS,
+                    )
+                }
+                val localById = messages
+                    .map { it.conversationId.value }
+                    .distinct()
+                    .flatMap { conversationId ->
+                        database.messageDao().getAllForConversation(accountId.value, conversationId)
+                    }
+                    .associateBy(MessageEntity::messageId)
+                database.messageDao().upsertAll(
+                    messages.map { message ->
+                        val remote = message.toEntity(accountId)
+                        val local = localById[remote.messageId]
+                        if (local == null || remote.messageId !in protectedIds) {
+                            remote
+                        } else {
+                            remote.copy(
+                                body = local.body,
+                                editedAtEpochMillis = local.editedAtEpochMillis,
+                                deletedAtEpochMillis = local.deletedAtEpochMillis
+                                    ?: remote.deletedAtEpochMillis,
+                            )
+                        }
+                    },
+                )
+            }
         }
     }
 
@@ -271,20 +279,13 @@ class RoomRepositoryReconciler(
     }
 }
 
-private fun SupportSQLiteDatabase.activeAggregateIds(
+internal suspend fun PooledConnection.activeAggregateIds(
     accountId: String,
     kinds: Set<String>,
 ): Set<String> {
     if (kinds.isEmpty()) return emptySet()
     val kindPlaceholders = List(kinds.size) { "?" }.joinToString()
-    val arguments = buildList<Any?> {
-        add(accountId)
-        addAll(kinds)
-        add(LocalOutboxStates.PENDING)
-        add(LocalOutboxStates.IN_FLIGHT)
-        add(LocalOutboxStates.RETRYABLE)
-    }.toTypedArray()
-    return query(
+    return usePrepared(
         """
         SELECT aggregateId
         FROM pending_operations
@@ -292,33 +293,39 @@ private fun SupportSQLiteDatabase.activeAggregateIds(
           AND kind IN ($kindPlaceholders)
           AND state IN (?, ?, ?)
         """.trimIndent(),
-        arguments,
-    ).use { cursor ->
+    ) { statement ->
+        var index = 1
+        statement.bindText(index++, accountId)
+        kinds.forEach { kind -> statement.bindText(index++, kind) }
+        statement.bindText(index++, LocalOutboxStates.PENDING)
+        statement.bindText(index++, LocalOutboxStates.IN_FLIGHT)
+        statement.bindText(index++, LocalOutboxStates.RETRYABLE)
         buildSet {
-            val aggregateColumn = cursor.getColumnIndexOrThrow("aggregateId")
-            while (cursor.moveToNext()) {
-                add(cursor.getString(aggregateColumn))
+            while (statement.step()) {
+                add(statement.getText(0))
             }
         }
     }
 }
 
-private fun SupportSQLiteDatabase.deleteFriendsMissingFromSnapshot(
+private suspend fun PooledConnection.deleteFriendsMissingFromSnapshot(
     ownerId: String,
     retainedIds: Set<String>,
 ) {
     if (retainedIds.isEmpty()) {
-        delete("friends", "ownerId = ?", arrayOf(ownerId))
+        usePrepared("DELETE FROM friends WHERE ownerId = ?") { statement ->
+            statement.bindText(1, ownerId)
+            statement.step()
+        }
         return
     }
     val placeholders = List(retainedIds.size) { "?" }.joinToString()
-    val arguments = buildList {
-        add(ownerId)
-        addAll(retainedIds)
-    }.toTypedArray()
-    delete(
-        "friends",
-        "ownerId = ? AND friendUserId NOT IN ($placeholders)",
-        arguments,
-    )
+    usePrepared(
+        "DELETE FROM friends WHERE ownerId = ? AND friendUserId NOT IN ($placeholders)",
+    ) { statement ->
+        var index = 1
+        statement.bindText(index++, ownerId)
+        retainedIds.forEach { retained -> statement.bindText(index++, retained) }
+        statement.step()
+    }
 }

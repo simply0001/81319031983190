@@ -79,7 +79,7 @@ import com.pocketpass.app.domain.state.SyncState
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import java.util.UUID
+import kotlin.random.Random
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -1351,7 +1351,10 @@ class FixtureEncounterRemoteDataSource : EncounterRemoteDataSource {
         RepositoryResult.Success(
             signingPublicKeys.map { publicKey ->
                 IssuedNearbyCredential(
-                    token = UUID.randomUUID().toString(),
+                    token = Random.nextBytes(16)
+                        .joinToString("") { byte ->
+                            (byte.toInt() and 0xFF).toString(16).padStart(2, '0')
+                        },
                     signingPublicKey = publicKey,
                     expiresAt = Clock.System.now().plus((7 * 24 * 60 * 60).seconds),
                 )

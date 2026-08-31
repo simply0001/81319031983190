@@ -9,12 +9,12 @@ import com.pocketpass.app.domain.model.EncounterId
 import com.pocketpass.app.domain.model.SubmitNearbyEncounterCommand
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.security.SecureStringStore
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.DataInputStream
-import java.io.DataOutputStream
+import com.pocketpass.app.sync.OUTBOX_BASE64
+import com.pocketpass.app.sync.readLengthPrefixedUtf
+import com.pocketpass.app.sync.writeLengthPrefixedUtf
 import kotlin.time.Instant
-import java.util.Base64
+import kotlinx.io.Buffer
+import kotlinx.io.readByteArray
 
 class NearbyProofOutboxStore(
     private val outboxDao: OutboxDao,
@@ -78,46 +78,41 @@ object NearbyProofPayloadCodec {
     private const val VERSION = 1
 
     fun encode(command: SubmitNearbyEncounterCommand): String {
-        val bytes = ByteArrayOutputStream().use { buffer ->
-            DataOutputStream(buffer).use { output ->
-                output.writeInt(VERSION)
-                output.writeUTF(command.accountId.value)
-                output.writeUTF(command.encounterId.value)
-                output.writeUTF(command.clientOperationId.value)
-                output.writeUTF(command.ownToken)
-                output.writeUTF(command.peerToken)
-                output.writeUTF(command.ownSigningPublicKey)
-                output.writeUTF(command.peerSigningPublicKey)
-                output.writeUTF(command.transcriptHash)
-                output.writeUTF(command.ownSignature)
-                output.writeUTF(command.peerSignature)
-                output.writeLong(command.occurredAt.toEpochMilliseconds())
-            }
-            buffer.toByteArray()
+        val buffer = Buffer().apply {
+            writeInt(VERSION)
+            writeLengthPrefixedUtf(command.accountId.value)
+            writeLengthPrefixedUtf(command.encounterId.value)
+            writeLengthPrefixedUtf(command.clientOperationId.value)
+            writeLengthPrefixedUtf(command.ownToken)
+            writeLengthPrefixedUtf(command.peerToken)
+            writeLengthPrefixedUtf(command.ownSigningPublicKey)
+            writeLengthPrefixedUtf(command.peerSigningPublicKey)
+            writeLengthPrefixedUtf(command.transcriptHash)
+            writeLengthPrefixedUtf(command.ownSignature)
+            writeLengthPrefixedUtf(command.peerSignature)
+            writeLong(command.occurredAt.toEpochMilliseconds())
         }
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+        return OUTBOX_BASE64.encode(buffer.readByteArray())
     }
 
     fun decode(encoded: String): SubmitNearbyEncounterCommand {
-        val bytes = Base64.getUrlDecoder().decode(encoded)
-        return DataInputStream(ByteArrayInputStream(bytes)).use { input ->
-            require(input.readInt() == VERSION)
-            val command = SubmitNearbyEncounterCommand(
-                accountId = UserId(input.readUTF()),
-                encounterId = EncounterId(input.readUTF()),
-                clientOperationId = ClientOperationId(input.readUTF()),
-                ownToken = input.readUTF(),
-                peerToken = input.readUTF(),
-                ownSigningPublicKey = input.readUTF(),
-                peerSigningPublicKey = input.readUTF(),
-                transcriptHash = input.readUTF(),
-                ownSignature = input.readUTF(),
-                peerSignature = input.readUTF(),
-                occurredAt = Instant.fromEpochMilliseconds(input.readLong()),
-            )
-            require(input.available() == 0)
-            command
-        }
+        val input = Buffer().apply { write(OUTBOX_BASE64.decode(encoded)) }
+        require(input.readInt() == VERSION)
+        val command = SubmitNearbyEncounterCommand(
+            accountId = UserId(input.readLengthPrefixedUtf()),
+            encounterId = EncounterId(input.readLengthPrefixedUtf()),
+            clientOperationId = ClientOperationId(input.readLengthPrefixedUtf()),
+            ownToken = input.readLengthPrefixedUtf(),
+            peerToken = input.readLengthPrefixedUtf(),
+            ownSigningPublicKey = input.readLengthPrefixedUtf(),
+            peerSigningPublicKey = input.readLengthPrefixedUtf(),
+            transcriptHash = input.readLengthPrefixedUtf(),
+            ownSignature = input.readLengthPrefixedUtf(),
+            peerSignature = input.readLengthPrefixedUtf(),
+            occurredAt = Instant.fromEpochMilliseconds(input.readLong()),
+        )
+        require(input.exhausted())
+        return command
     }
 }
 
@@ -129,13 +124,13 @@ private fun NearbyEncounterProof.toCommand(
         accountId = accountId,
         encounterId = EncounterId(encounterId),
         clientOperationId = operationId,
-        ownToken = NearbyCredentialPool.bytesToUuid(ownToken).toString(),
-        peerToken = NearbyCredentialPool.bytesToUuid(peerToken).toString(),
-        ownSigningPublicKey = NearbyCredentialPool.encode(ownSigningPublicKey),
-        peerSigningPublicKey = NearbyCredentialPool.encode(peerSigningPublicKey),
-        transcriptHash = NearbyCredentialPool.encode(transcriptHash),
-        ownSignature = NearbyCredentialPool.encode(ownTranscriptSignature),
-        peerSignature = NearbyCredentialPool.encode(peerTranscriptSignature),
+        ownToken = NearbyEncoding.bytesToUuidString(ownToken),
+        peerToken = NearbyEncoding.bytesToUuidString(peerToken),
+        ownSigningPublicKey = NearbyEncoding.encode(ownSigningPublicKey),
+        peerSigningPublicKey = NearbyEncoding.encode(peerSigningPublicKey),
+        transcriptHash = NearbyEncoding.encode(transcriptHash),
+        ownSignature = NearbyEncoding.encode(ownTranscriptSignature),
+        peerSignature = NearbyEncoding.encode(peerTranscriptSignature),
         occurredAt = occurredAt,
     )
 }

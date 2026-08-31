@@ -2,6 +2,12 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 // Windows only: elsewhere the default keeps build output inside the workspace, where CI finds it.
@@ -36,6 +42,7 @@ kotlin {
             api(libs.supabase.postgrest)
             api(libs.supabase.realtime)
             api(libs.supabase.storage)
+            api(libs.androidx.room.runtime)
             implementation(libs.kotlinx.io.core)
         }
         commonTest.dependencies {
@@ -47,6 +54,13 @@ kotlin {
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.androidx.sqlite.bundled)
         }
     }
+}
+
+dependencies {
+    add("kspAndroid", libs.androidx.room.compiler)
+    add("kspIosArm64", libs.androidx.room.compiler)
+    add("kspIosSimulatorArm64", libs.androidx.room.compiler)
 }

@@ -1,13 +1,11 @@
 package com.pocketpass.app.nearby
 
-import android.util.Base64
 import com.pocketpass.app.data.local.dao.NearbyEncounterDao
 import com.pocketpass.app.data.local.entity.NearbyCredentialEntity
 import com.pocketpass.app.data.repository.remote.EncounterRemoteDataSource
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.security.SecureStringStore
-import java.nio.ByteBuffer
 import kotlin.time.Clock
 import kotlin.time.Instant
 import java.util.UUID
@@ -147,28 +145,14 @@ class NearbyCredentialPool(
 
     companion object {
         fun uuidToBytes(uuid: UUID): ByteArray =
-            ByteBuffer.allocate(16)
-                .putLong(uuid.mostSignificantBits)
-                .putLong(uuid.leastSignificantBits)
-                .array()
+            NearbyEncoding.uuidStringToBytes(uuid.toString())
 
-        fun bytesToUuid(bytes: ByteArray): UUID {
-            require(bytes.size == 16)
-            val buffer = ByteBuffer.wrap(bytes)
-            return UUID(buffer.long, buffer.long)
-        }
+        fun bytesToUuid(bytes: ByteArray): UUID =
+            UUID.fromString(NearbyEncoding.bytesToUuidString(bytes))
 
-        fun encode(bytes: ByteArray): String =
-            Base64.encodeToString(
-                bytes,
-                Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE,
-            )
+        fun encode(bytes: ByteArray): String = NearbyEncoding.encode(bytes)
 
-        fun decode(value: String): ByteArray =
-            Base64.decode(
-                value,
-                Base64.NO_WRAP or Base64.NO_PADDING or Base64.URL_SAFE,
-            )
+        fun decode(value: String): ByteArray = NearbyEncoding.decode(value)
 
         private const val CREDENTIAL_VERSION = "1"
         private const val CREDENTIAL_SEPARATOR = "|"

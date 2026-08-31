@@ -3,9 +3,9 @@ package com.pocketpass.app.sync
 import com.pocketpass.app.data.local.dao.OutboxDao
 import com.pocketpass.app.domain.model.UserId
 import kotlin.time.Clock
-import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
+import kotlin.random.Random
 
 data class OutboxDrainSummary(
     val acknowledged: Int,
@@ -66,7 +66,9 @@ class OutboxProcessor(
 
         while (claimedCount < maximumOperations) {
             val claimedAt = clock.now().toEpochMilliseconds()
-            val leaseToken = UUID.randomUUID().toString()
+            val leaseToken = Random.nextBytes(16).joinToString("") { byte ->
+                (byte.toInt() and 0xFF).toString(16).padStart(2, '0')
+            }
             val operation = outboxDao.claimNext(
                 accountId = accountId.value,
                 nowEpochMillis = claimedAt,

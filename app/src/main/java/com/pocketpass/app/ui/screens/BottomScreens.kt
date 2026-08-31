@@ -1470,9 +1470,10 @@ fun BioEditorBottomOverlay(
                 }
             }
         }
-        if (editor.error != null) {
+        val editorError = editor.error
+        if (editorError != null) {
             Text(
-                text = editor.error,
+                text = editorError,
                 modifier = Modifier.designBounds(metrics, 58f, 414f, 700f, 40f),
                 color = pocketPalette.ink(Color(0xFFB31E3A)),
                 fontFamily = Rubik,

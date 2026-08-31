@@ -1,9 +1,9 @@
 package com.pocketpass.app.data.repository
 
-import android.content.ContentValues
-import android.database.sqlite.SQLiteDatabase
-import androidx.room.withTransaction
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.PooledConnection
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
+import androidx.sqlite.SQLiteStatement
 import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.local.entity.LocalOutboxStates
 import com.pocketpass.app.data.local.toEntity
@@ -55,8 +55,8 @@ class ProductionMutationStore(
                 createdAtEpochMillis = command.changedAt.toEpochMilliseconds(),
             ),
             value = command.profile,
-        ) { writableDatabase ->
-            writableDatabase.upsertProfile(command.profile)
+        ) {
+            upsertProfile(command.profile)
         }
     }
 
@@ -81,8 +81,8 @@ class ProductionMutationStore(
                 createdAtEpochMillis = command.requestedAt.toEpochMilliseconds(),
             ),
             value = optimisticFriend,
-        ) { writableDatabase ->
-            writableDatabase.upsertFriend(optimisticFriend)
+        ) {
+            upsertFriend(optimisticFriend)
         }
     }
 
@@ -111,14 +111,14 @@ class ProductionMutationStore(
                 createdAtEpochMillis = command.respondedAt.toEpochMilliseconds(),
             ),
             value = optimisticFriend,
-        ) { writableDatabase ->
+        ) {
             if (optimisticFriend == null) {
-                writableDatabase.deleteFriend(
+                deleteFriend(
                     ownerId = command.accountId.value,
                     friendUserId = command.requester.userId.value,
                 )
             } else {
-                writableDatabase.upsertFriend(optimisticFriend)
+                upsertFriend(optimisticFriend)
             }
         }
     }
@@ -136,8 +136,8 @@ class ProductionMutationStore(
             createdAtEpochMillis = command.removedAt.toEpochMilliseconds(),
         ),
         value = Unit,
-    ) { writableDatabase ->
-        writableDatabase.deleteFriend(
+    ) {
+        deleteFriend(
             ownerId = command.accountId.value,
             friendUserId = command.friendUserId.value,
         )
@@ -156,9 +156,9 @@ class ProductionMutationStore(
             createdAtEpochMillis = command.changedAt.toEpochMilliseconds(),
         ),
         value = Unit,
-    ) { writableDatabase ->
+    ) {
         if (command.blocked) {
-            writableDatabase.deleteFriend(
+            deleteFriend(
                 ownerId = command.accountId.value,
                 friendUserId = command.targetUserId.value,
             )
@@ -167,43 +167,47 @@ class ProductionMutationStore(
 
     suspend fun enqueuePurchase(
         command: PurchaseShopItemCommand,
-    ): OptimisticMutationResult<Unit> = database.withTransaction {
-        val writableDatabase = database.openHelper.writableDatabase
-        val existing = writableDatabase.findOperation(
-            accountId = command.accountId.value,
-            idempotencyKey = command.clientOperationId.value,
-        )
-        if (existing == null) {
-            if (writableDatabase.ownsShopItem(command.accountId.value, command.itemId)) {
-                return@withTransaction OptimisticMutationResult.Conflict("Item is already owned")
-            }
-            if (writableDatabase.availableTokenBalance(command.accountId.value) < command.priceTokens) {
-                return@withTransaction OptimisticMutationResult.Conflict("Not enough tokens")
-            }
-        }
-        enqueue(
-            operation = OperationSpec(
-                operationId = command.clientOperationId.value,
+    ): OptimisticMutationResult<Unit> = database.useWriterConnection { transactor ->
+        transactor.immediateTransaction {
+            val existing = findOperation(
                 accountId = command.accountId.value,
                 idempotencyKey = command.clientOperationId.value,
-                kind = ProductionOperationKinds.PURCHASE_SHOP_ITEM,
-                aggregateId = command.itemId,
-                payload = ProductionOperationPayloadCodec.encode(command),
-                createdAtEpochMillis = command.requestedAt.toEpochMilliseconds(),
-            ),
-            value = Unit,
-        ) { database ->
-            database.insert(
-                "owned_shop_items",
-                SQLiteDatabase.CONFLICT_ABORT,
-                ContentValues().apply {
-                    put("accountId", command.accountId.value)
-                    put("itemId", command.itemId)
-                    put("pricePaid", command.priceTokens)
-                    put("purchasedAtEpochMillis", command.requestedAt.toEpochMilliseconds())
-                    put("pendingOperationId", command.clientOperationId.value)
-                },
             )
+            if (existing == null) {
+                if (ownsShopItem(command.accountId.value, command.itemId)) {
+                    return@immediateTransaction OptimisticMutationResult.Conflict("Item is already owned")
+                }
+                if (availableTokenBalance(command.accountId.value) < command.priceTokens) {
+                    return@immediateTransaction OptimisticMutationResult.Conflict("Not enough tokens")
+                }
+            }
+            enqueue(
+                operation = OperationSpec(
+                    operationId = command.clientOperationId.value,
+                    accountId = command.accountId.value,
+                    idempotencyKey = command.clientOperationId.value,
+                    kind = ProductionOperationKinds.PURCHASE_SHOP_ITEM,
+                    aggregateId = command.itemId,
+                    payload = ProductionOperationPayloadCodec.encode(command),
+                    createdAtEpochMillis = command.requestedAt.toEpochMilliseconds(),
+                ),
+                value = Unit,
+            ) {
+                usePrepared(
+                    """
+                    INSERT OR ABORT INTO owned_shop_items
+                        (accountId, itemId, pricePaid, purchasedAtEpochMillis, pendingOperationId)
+                    VALUES (?, ?, ?, ?, ?)
+                    """.trimIndent(),
+                ) { statement ->
+                    statement.bindText(1, command.accountId.value)
+                    statement.bindText(2, command.itemId)
+                    statement.bindLong(3, command.priceTokens.toLong())
+                    statement.bindLong(4, command.requestedAt.toEpochMilliseconds())
+                    statement.bindText(5, command.clientOperationId.value)
+                    statement.step()
+                }
+            }
         }
     }
 
@@ -220,19 +224,19 @@ class ProductionMutationStore(
             createdAtEpochMillis = command.readAt.toEpochMilliseconds(),
         ),
         value = Unit,
-    ) { writableDatabase ->
-        writableDatabase.execSQL(
+    ) {
+        usePrepared(
             """
             UPDATE notifications
             SET readAtEpochMillis = COALESCE(readAtEpochMillis, ?)
             WHERE accountId = ? AND notificationId = ?
             """.trimIndent(),
-            arrayOf<Any?>(
-                command.readAt.toEpochMilliseconds(),
-                command.accountId.value,
-                command.notificationId.value,
-            ),
-        )
+        ) { statement ->
+            statement.bindLong(1, command.readAt.toEpochMilliseconds())
+            statement.bindText(2, command.accountId.value)
+            statement.bindText(3, command.notificationId.value)
+            statement.step()
+        }
     }
 
     suspend fun enqueueMarkAllNotificationsRead(
@@ -248,15 +252,18 @@ class ProductionMutationStore(
             createdAtEpochMillis = command.readAt.toEpochMilliseconds(),
         ),
         value = Unit,
-    ) { writableDatabase ->
-        writableDatabase.execSQL(
+    ) {
+        usePrepared(
             """
             UPDATE notifications
             SET readAtEpochMillis = COALESCE(readAtEpochMillis, ?)
             WHERE accountId = ? AND deletedAtEpochMillis IS NULL
             """.trimIndent(),
-            arrayOf<Any?>(command.readAt.toEpochMilliseconds(), command.accountId.value),
-        )
+        ) { statement ->
+            statement.bindLong(1, command.readAt.toEpochMilliseconds())
+            statement.bindText(2, command.accountId.value)
+            statement.step()
+        }
     }
 
     suspend fun enqueueDeleteNotification(
@@ -272,50 +279,51 @@ class ProductionMutationStore(
             createdAtEpochMillis = command.deletedAt.toEpochMilliseconds(),
         ),
         value = Unit,
-    ) { writableDatabase ->
-        writableDatabase.execSQL(
+    ) {
+        usePrepared(
             """
             UPDATE notifications
             SET deletedAtEpochMillis = COALESCE(deletedAtEpochMillis, ?)
             WHERE accountId = ? AND notificationId = ?
             """.trimIndent(),
-            arrayOf<Any?>(
-                command.deletedAt.toEpochMilliseconds(),
-                command.accountId.value,
-                command.notificationId.value,
-            ),
-        )
+        ) { statement ->
+            statement.bindLong(1, command.deletedAt.toEpochMilliseconds())
+            statement.bindText(2, command.accountId.value)
+            statement.bindText(3, command.notificationId.value)
+            statement.step()
+        }
     }
 
     private suspend fun <T> enqueue(
         operation: OperationSpec,
         value: T,
-        applyOptimisticMutation: (SupportSQLiteDatabase) -> Unit,
-    ): OptimisticMutationResult<T> = database.withTransaction {
-        val writableDatabase = database.openHelper.writableDatabase
-        val existing = writableDatabase.findOperation(
-            accountId = operation.accountId,
-            idempotencyKey = operation.idempotencyKey,
-        )
-        if (existing != null) {
-            return@withTransaction if (existing.matches(operation)) {
-                OptimisticMutationResult.AlreadyEnqueued(
-                    operationId = existing.operationId,
-                    value = value,
-                )
-            } else {
-                OptimisticMutationResult.Conflict(
-                    reason = "Idempotency key is already attached to another local operation",
-                )
+        applyOptimisticMutation: suspend PooledConnection.() -> Unit,
+    ): OptimisticMutationResult<T> = database.useWriterConnection { transactor ->
+        transactor.immediateTransaction {
+            val existing = findOperation(
+                accountId = operation.accountId,
+                idempotencyKey = operation.idempotencyKey,
+            )
+            if (existing != null) {
+                return@immediateTransaction if (existing.matches(operation)) {
+                    OptimisticMutationResult.AlreadyEnqueued(
+                        operationId = existing.operationId,
+                        value = value,
+                    )
+                } else {
+                    OptimisticMutationResult.Conflict(
+                        reason = "Idempotency key is already attached to another local operation",
+                    )
+                }
             }
-        }
 
-        applyOptimisticMutation(writableDatabase)
-        writableDatabase.insertOperation(operation)
-        OptimisticMutationResult.Enqueued(
-            operationId = operation.operationId,
-            value = value,
-        )
+            applyOptimisticMutation()
+            insertOperation(operation)
+            OptimisticMutationResult.Enqueued(
+                operationId = operation.operationId,
+                value = value,
+            )
+        }
     }
 }
 
@@ -345,131 +353,155 @@ private data class ExistingOperation(
             payloadVersion == specification.payloadVersion
 }
 
-private fun SupportSQLiteDatabase.ownsShopItem(
+private fun SQLiteStatement.bindTextOrNull(index: Int, value: String?) {
+    if (value == null) bindNull(index) else bindText(index, value)
+}
+
+private fun SQLiteStatement.bindLongOrNull(index: Int, value: Long?) {
+    if (value == null) bindNull(index) else bindLong(index, value)
+}
+
+private suspend fun PooledConnection.ownsShopItem(
     accountId: String,
     itemId: String,
-): Boolean = query(
+): Boolean = usePrepared(
     "SELECT 1 FROM owned_shop_items WHERE accountId = ? AND itemId = ? LIMIT 1",
-    arrayOf(accountId, itemId),
-).use { cursor -> cursor.moveToFirst() }
+) { statement ->
+    statement.bindText(1, accountId)
+    statement.bindText(2, itemId)
+    statement.step()
+}
 
-private fun SupportSQLiteDatabase.availableTokenBalance(accountId: String): Int = query(
+private suspend fun PooledConnection.availableTokenBalance(accountId: String): Int = usePrepared(
     """
     SELECT balance - (
         SELECT COALESCE(SUM(pricePaid), 0) FROM owned_shop_items
         WHERE accountId = ? AND pendingOperationId IS NOT NULL
     ) FROM token_balances WHERE accountId = ? LIMIT 1
     """.trimIndent(),
-    arrayOf(accountId, accountId),
-).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+) { statement ->
+    statement.bindText(1, accountId)
+    statement.bindText(2, accountId)
+    if (statement.step()) statement.getLong(0).toInt() else 0
+}
 
-private fun SupportSQLiteDatabase.findOperation(
+private suspend fun PooledConnection.findOperation(
     accountId: String,
     idempotencyKey: String,
-): ExistingOperation? = query(
+): ExistingOperation? = usePrepared(
     """
     SELECT operationId, kind, aggregateId, payload, payloadVersion
     FROM pending_operations
     WHERE accountId = ? AND idempotencyKey = ?
     LIMIT 1
     """.trimIndent(),
-    arrayOf<Any?>(accountId, idempotencyKey),
-).use { cursor ->
-    if (!cursor.moveToFirst()) {
+) { statement ->
+    statement.bindText(1, accountId)
+    statement.bindText(2, idempotencyKey)
+    if (!statement.step()) {
         null
     } else {
         ExistingOperation(
-            operationId = cursor.getString(cursor.getColumnIndexOrThrow("operationId")),
-            kind = cursor.getString(cursor.getColumnIndexOrThrow("kind")),
-            aggregateId = cursor.getString(cursor.getColumnIndexOrThrow("aggregateId")),
-            payload = cursor.getString(cursor.getColumnIndexOrThrow("payload")),
-            payloadVersion = cursor.getInt(cursor.getColumnIndexOrThrow("payloadVersion")),
+            operationId = statement.getText(0),
+            kind = statement.getText(1),
+            aggregateId = statement.getText(2),
+            payload = statement.getText(3),
+            payloadVersion = statement.getLong(4).toInt(),
         )
     }
 }
 
-private fun SupportSQLiteDatabase.insertOperation(operation: OperationSpec) {
-    val values = ContentValues().apply {
-        put("operationId", operation.operationId)
-        put("accountId", operation.accountId)
-        put("idempotencyKey", operation.idempotencyKey)
-        put("kind", operation.kind)
-        put("aggregateId", operation.aggregateId)
-        put("payload", operation.payload)
-        put("payloadVersion", operation.payloadVersion)
-        put("state", LocalOutboxStates.PENDING)
-        put("attemptCount", 0)
-        put("createdAtEpochMillis", operation.createdAtEpochMillis)
-        put("nextAttemptAtEpochMillis", operation.createdAtEpochMillis)
-        putNull("leaseUntilEpochMillis")
-        putNull("leaseToken")
-        putNull("completedAtEpochMillis")
-        putNull("lastErrorCode")
-        putNull("lastErrorMessage")
-    }
-    check(
-        insert(
-            "pending_operations",
-            SQLiteDatabase.CONFLICT_ABORT,
-            values,
-        ) != -1L,
-    ) {
-        "Pending operation could not be inserted"
+private suspend fun PooledConnection.insertOperation(operation: OperationSpec) {
+    usePrepared(
+        """
+        INSERT OR ABORT INTO pending_operations
+            (operationId, accountId, idempotencyKey, kind, aggregateId, payload,
+             payloadVersion, state, attemptCount, createdAtEpochMillis,
+             nextAttemptAtEpochMillis, leaseUntilEpochMillis, leaseToken,
+             completedAtEpochMillis, lastErrorCode, lastErrorMessage)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)
+        """.trimIndent(),
+    ) { statement ->
+        statement.bindText(1, operation.operationId)
+        statement.bindText(2, operation.accountId)
+        statement.bindText(3, operation.idempotencyKey)
+        statement.bindText(4, operation.kind)
+        statement.bindText(5, operation.aggregateId)
+        statement.bindText(6, operation.payload)
+        statement.bindLong(7, operation.payloadVersion.toLong())
+        statement.bindText(8, LocalOutboxStates.PENDING)
+        statement.bindLong(9, 0L)
+        statement.bindLong(10, operation.createdAtEpochMillis)
+        statement.bindLong(11, operation.createdAtEpochMillis)
+        statement.step()
     }
 }
 
-private fun SupportSQLiteDatabase.upsertProfile(profile: UserProfile) {
+private suspend fun PooledConnection.upsertProfile(profile: UserProfile) {
     val entity = profile.toEntity()
-    val values = ContentValues().apply {
-        put("userId", entity.userId)
-        put("displayName", entity.displayName)
-        put("avatarKind", entity.avatarKind)
-        put("avatarValue", entity.avatarValue)
-        put("username", entity.username)
-        put("bio", entity.bio)
-        put("age", entity.age)
-        put("countryCode", entity.countryCode)
-        put("locationLabel", entity.locationLabel)
-        put("lastSeenAtEpochMillis", entity.lastSeenAtEpochMillis)
-        put("presence", entity.presence)
-        put("updatedAtEpochMillis", entity.updatedAtEpochMillis)
-    }
-    check(insert("profiles", SQLiteDatabase.CONFLICT_REPLACE, values) != -1L) {
-        "Optimistic profile could not be stored"
+    usePrepared(
+        """
+        INSERT OR REPLACE INTO profiles
+            (userId, displayName, avatarKind, avatarValue, username, bio, age,
+             countryCode, locationLabel, lastSeenAtEpochMillis, presence, updatedAtEpochMillis)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """.trimIndent(),
+    ) { statement ->
+        statement.bindText(1, entity.userId)
+        statement.bindText(2, entity.displayName)
+        statement.bindTextOrNull(3, entity.avatarKind)
+        statement.bindTextOrNull(4, entity.avatarValue)
+        statement.bindText(5, entity.username)
+        statement.bindText(6, entity.bio)
+        statement.bindLongOrNull(7, entity.age?.toLong())
+        statement.bindTextOrNull(8, entity.countryCode)
+        statement.bindTextOrNull(9, entity.locationLabel)
+        statement.bindLongOrNull(10, entity.lastSeenAtEpochMillis)
+        statement.bindText(11, entity.presence)
+        statement.bindLong(12, entity.updatedAtEpochMillis)
+        statement.step()
     }
 }
 
-private fun SupportSQLiteDatabase.upsertFriend(friend: Friend) {
+private suspend fun PooledConnection.upsertFriend(friend: Friend) {
     val entity = friend.toEntity()
-    val values = ContentValues().apply {
-        put("ownerId", entity.ownerId)
-        put("friendUserId", entity.friendUserId)
-        put("displayName", entity.displayName)
-        put("avatarKind", entity.avatarKind)
-        put("avatarValue", entity.avatarValue)
-        put("bio", entity.bio)
-        put("age", entity.age)
-        put("countryCode", entity.countryCode)
-        put("locationLabel", entity.locationLabel)
-        put("lastSeenAtEpochMillis", entity.lastSeenAtEpochMillis)
-        put("presence", entity.presence)
-        put("profileUpdatedAtEpochMillis", entity.profileUpdatedAtEpochMillis)
-        put("friendshipStatus", entity.friendshipStatus)
-        put("lastInteractionAtEpochMillis", entity.lastInteractionAtEpochMillis)
-        put("isOnline", entity.isOnline)
-    }
-    check(insert("friends", SQLiteDatabase.CONFLICT_REPLACE, values) != -1L) {
-        "Optimistic friend state could not be stored"
+    usePrepared(
+        """
+        INSERT OR REPLACE INTO friends
+            (ownerId, friendUserId, displayName, avatarKind, avatarValue, bio, age,
+             countryCode, locationLabel, lastSeenAtEpochMillis, presence,
+             profileUpdatedAtEpochMillis, friendshipStatus, lastInteractionAtEpochMillis, isOnline)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """.trimIndent(),
+    ) { statement ->
+        statement.bindText(1, entity.ownerId)
+        statement.bindText(2, entity.friendUserId)
+        statement.bindText(3, entity.displayName)
+        statement.bindTextOrNull(4, entity.avatarKind)
+        statement.bindTextOrNull(5, entity.avatarValue)
+        statement.bindText(6, entity.bio)
+        statement.bindLongOrNull(7, entity.age?.toLong())
+        statement.bindTextOrNull(8, entity.countryCode)
+        statement.bindTextOrNull(9, entity.locationLabel)
+        statement.bindLongOrNull(10, entity.lastSeenAtEpochMillis)
+        statement.bindText(11, entity.presence)
+        statement.bindLong(12, entity.profileUpdatedAtEpochMillis)
+        statement.bindText(13, entity.friendshipStatus)
+        statement.bindLongOrNull(14, entity.lastInteractionAtEpochMillis)
+        statement.bindLong(15, if (entity.isOnline) 1L else 0L)
+        statement.step()
     }
 }
 
-private fun SupportSQLiteDatabase.deleteFriend(
+private suspend fun PooledConnection.deleteFriend(
     ownerId: String,
     friendUserId: String,
 ) {
-    delete(
-        "friends",
-        "ownerId = ? AND friendUserId = ?",
-        arrayOf(ownerId, friendUserId),
-    )
+    usePrepared(
+        "DELETE FROM friends WHERE ownerId = ? AND friendUserId = ?",
+    ) { statement ->
+        statement.bindText(1, ownerId)
+        statement.bindText(2, friendUserId)
+        statement.step()
+    }
 }

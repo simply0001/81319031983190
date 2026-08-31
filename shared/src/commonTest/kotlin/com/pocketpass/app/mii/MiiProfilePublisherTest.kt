@@ -5,11 +5,11 @@ import com.pocketpass.app.domain.model.ClientOperationId
 import com.pocketpass.app.domain.model.UserId
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class MiiProfilePublisherTest {
     @Test
@@ -28,7 +28,7 @@ class MiiProfilePublisherTest {
 
     @Test
     fun commandRejectsNonPngAndUnnormalizedAppearance() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             PublishMiiProfileCommand(
                 accountId = UserId(ACCOUNT_ID),
                 appearance = MiiAppearance(),
@@ -36,7 +36,7 @@ class MiiProfilePublisherTest {
                 revision = 1,
             )
         }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertFailsWith<IllegalArgumentException> {
             PublishMiiProfileCommand(
                 accountId = UserId(ACCOUNT_ID),
                 appearance = MiiAppearance(glassesType = 99),

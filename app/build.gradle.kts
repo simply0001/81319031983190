@@ -6,7 +6,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
 }
 
 abstract class MinifyMiiRendererTask : DefaultTask() {
@@ -156,11 +155,6 @@ android {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-    arg("room.generateKotlin", "true")
-}
-
 androidComponents {
     val readableRenderer = providers
         .gradleProperty("pocketpass.readableRenderer")
@@ -214,7 +208,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.webkit)
-    ksp(libs.androidx.room.compiler)
 
     val supabaseBom = platform(libs.supabase.bom)
     implementation(supabaseBom)

@@ -13,6 +13,7 @@ import com.pocketpass.app.auth.AuthStateHolder
 import com.pocketpass.app.data.DataStoreSettingsRepository
 import com.pocketpass.app.data.SettingsRepository
 import com.pocketpass.app.data.local.PocketPassDatabase
+import com.pocketpass.app.data.local.build
 import com.pocketpass.app.data.repository.FixtureData
 import com.pocketpass.app.data.pretendo.OkHttpPretendoMiiSource
 import com.pocketpass.app.data.repository.FixtureRepositoryBundle

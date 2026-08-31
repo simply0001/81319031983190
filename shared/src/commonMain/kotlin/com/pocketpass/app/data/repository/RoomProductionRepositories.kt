@@ -1,7 +1,5 @@
 package com.pocketpass.app.data.repository
 
-import android.database.sqlite.SQLiteConstraintException
-import androidx.room.withTransaction
 import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.local.dao.ConversationDao
 import com.pocketpass.app.data.local.dao.ConversationMemberDao
@@ -70,14 +68,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-fun interface PendingOperationScheduler {
-    fun schedule(accountId: UserId)
-
-    companion object {
-        val None = PendingOperationScheduler { }
-    }
-}
 
 class RoomProfileRepository(
     private val profileDao: ProfileDao,
@@ -316,7 +306,7 @@ class RoomMessageRepository(
         when (val result = remote.leaveGroupConversation(command)) {
             is RepositoryResult.Failure -> result
             is RepositoryResult.Success -> {
-                database.withTransaction {
+                database.withWriterTransaction {
                     conversationDao.delete(command.accountId.value, command.conversationId.value)
                     conversationMemberDao.deleteForConversation(
                         command.accountId.value,
@@ -388,11 +378,11 @@ class RoomMessageRepository(
     override suspend fun sendMessage(
         command: SendMessageCommand,
     ): RepositoryResult<Message> = repositoryCall {
-        val localResult = database.withTransaction {
+        val localResult = database.withWriterTransaction {
             val conversation = conversationDao.get(
                 accountId = command.accountId.value,
                 conversationId = command.conversationId.value,
-            ) ?: return@withTransaction LocalMessageEnqueueResult.MissingConversation
+            ) ?: return@withWriterTransaction LocalMessageEnqueueResult.MissingConversation
 
             when (val enqueue = messageOutboxStore.enqueue(command)) {
                 is OutboxEnqueueResult.Conflict ->
@@ -451,7 +441,7 @@ class RoomMessageRepository(
     override suspend fun markConversationRead(
         command: MarkConversationReadCommand,
     ): RepositoryResult<Unit> = repositoryCall {
-        val exists = database.withTransaction {
+        val exists = database.withWriterTransaction {
             if (
                 conversationDao.get(
                     accountId = command.accountId.value,
@@ -519,9 +509,9 @@ class RoomMessageRepository(
         messageId: MessageId,
         apply: suspend () -> Boolean,
     ): RepositoryResult<Message> = repositoryCall {
-        val outcome = database.withTransaction {
+        val outcome = database.withWriterTransaction {
             val existing = messageDao.get(accountId.value, messageId.value)
-                ?: return@withTransaction LocalMessageMutationResult.Missing
+                ?: return@withWriterTransaction LocalMessageMutationResult.Missing
             if (
                 existing.conversationId != conversationId.value ||
                 existing.senderId != accountId.value ||
@@ -529,7 +519,7 @@ class RoomMessageRepository(
                 existing.deletedAtEpochMillis != null ||
                 !apply()
             ) {
-                return@withTransaction LocalMessageMutationResult.Conflict
+                return@withWriterTransaction LocalMessageMutationResult.Conflict
             }
             reconciler.refreshConversationPreview(accountId, conversationId)
             val updated = messageDao.get(accountId.value, messageId.value)
@@ -699,9 +689,9 @@ internal suspend fun <T> repositoryCall(
 }
 
 private fun Throwable.toLocalRepositoryFailure(): RepositoryFailure {
-    val kind = when (this) {
-        is SQLiteConstraintException -> RepositoryFailureKind.Conflict
-        is IllegalArgumentException -> RepositoryFailureKind.Validation
+    val kind = when {
+        isSqliteConstraintFailure() -> RepositoryFailureKind.Conflict
+        this is IllegalArgumentException -> RepositoryFailureKind.Validation
         else -> RepositoryFailureKind.Unknown
     }
     return RepositoryFailure(
