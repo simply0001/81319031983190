@@ -44,7 +44,7 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.requiresAccountSetup
 import com.pocketpass.app.ui.requiresForcedUpdate
 import com.pocketpass.app.ui.requiresMiiGate
-import com.pocketpass.app.ui.showsPocketPassApp
+import com.pocketpass.app.domain.state.showsPocketPassApp
 import com.pocketpass.app.ui.theme.BackgroundPair
 import com.pocketpass.app.ui.theme.PocketPalette
 import com.pocketpass.app.ui.theme.pocketPalette

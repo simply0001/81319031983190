@@ -1,6 +1,5 @@
 package com.pocketpass.app.auth
 
-import android.os.SystemClock
 import com.pocketpass.app.domain.repository.SessionRepository
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
@@ -15,11 +14,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
+import kotlin.time.TimeSource
 
 class AuthStateHolder(
     private val sessionRepository: SessionRepository,
     private val scope: CoroutineScope,
-    private val elapsedRealtimeMillis: () -> Long = SystemClock::elapsedRealtime,
+    private val elapsedRealtimeMillis: () -> Long = monotonicMillis(),
 ) {
     private val mutableState = MutableStateFlow(AuthUiState())
     val state: StateFlow<AuthUiState> = mutableState.asStateFlow()
@@ -296,4 +296,9 @@ class AuthStateHolder(
         const val RESEND_DELAY_MILLIS = 60_000L
         const val COUNTDOWN_TICK_MILLIS = 250L
     }
+}
+
+private fun monotonicMillis(): () -> Long {
+    val origin = TimeSource.Monotonic.markNow()
+    return { origin.elapsedNow().inWholeMilliseconds }
 }

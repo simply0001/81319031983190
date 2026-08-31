@@ -1,0 +1,60 @@
+name: iOS app
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    name: PocketPass IPA (macOS)
+    # Actions minutes are only free on the public mirror; the private repo would bill them.
+    if: github.repository == 'simply0001/81319031983190'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache the Kotlin/Native toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project
+        working-directory: ios-app
+        run: xcodegen generate
+      # No signing on CI: the IPA is unsigned, and a sideloading tool (Sideloadly,
+      # AltStore) re-signs it with the user's own Apple ID during install.
+      - name: Build for a device, unsigned
+        working-directory: ios-app
+        run: |
+          xcodebuild \
+            -project PocketPass.xcodeproj \
+            -scheme PocketPass \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+      - name: Package the IPA
+        working-directory: ios-app
+        run: |
+          mkdir -p build/Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/PocketPass.app build/Payload/
+          cd build
+          zip -qry PocketPass.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PocketPass-ipa
+          path: ios-app/build/PocketPass.ipa

@@ -152,22 +152,6 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-data class PocketPassRepositoryGraph(
-    val session: SessionRepository,
-    val profiles: ProfileRepository,
-    val friends: MutableFriendsRepository,
-    val conversations: MessageRepository,
-    val notifications: NotificationRepository,
-    val shop: ShopRepository,
-    val leaderboard: LeaderboardRepository,
-    val achievements: AchievementsRepository,
-    val worldTour: WorldTourRepository,
-    val bingo: BingoRepository,
-    val encounters: EncounterRepository,
-    val presence: PresenceRepository,
-    val sync: SyncRepository,
-)
-
 internal suspend fun clearSignOutData(cleanup: () -> Unit) {
     withContext(NonCancellable + Dispatchers.IO) {
         cleanup()

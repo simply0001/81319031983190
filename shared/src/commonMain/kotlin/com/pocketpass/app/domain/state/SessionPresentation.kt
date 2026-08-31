@@ -1,6 +1,4 @@
-package com.pocketpass.app.ui
-
-import com.pocketpass.app.domain.state.SessionState
+package com.pocketpass.app.domain.state
 
 fun SessionState.showsPocketPassApp(): Boolean =
     this is SessionState.Authenticated ||

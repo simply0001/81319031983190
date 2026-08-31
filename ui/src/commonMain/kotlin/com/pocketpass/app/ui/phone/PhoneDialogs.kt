@@ -67,7 +67,7 @@ import com.pocketpass.app.mii.PretendoImportState
 import com.pocketpass.app.ui.screens.ConnectedAppsOverlay
 import com.pocketpass.app.ui.screens.MiiSlotsOverlay
 import com.pocketpass.app.ui.screens.OAuthConsentOverlay
-import com.pocketpass.app.ui.showsPocketPassApp
+import com.pocketpass.app.domain.state.showsPocketPassApp
 import com.pocketpass.app.ui.screens.DynamicAvatar
 import com.pocketpass.app.ui.screens.cancelButtonBrush
 import com.pocketpass.app.ui.screens.greenButtonBrush

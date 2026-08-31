@@ -6,952 +6,130 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.createSavedStateHandle
-import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.pocketpass.app.AppContainer
-import com.pocketpass.app.audio.SoundEffect
 import com.pocketpass.app.PocketPassApplication
-import com.pocketpass.app.domain.model.ConversationId
-import com.pocketpass.app.domain.model.MessageId
-import com.pocketpass.app.domain.model.NotificationAction
-import com.pocketpass.app.domain.model.NotificationId
-import com.pocketpass.app.domain.model.UserId
-import com.pocketpass.app.domain.state.LoadState
-import com.pocketpass.app.domain.state.RepositoryResult
-import com.pocketpass.app.model.MessageComposerAction
+import com.pocketpass.app.audio.SoundEffect
+import com.pocketpass.app.audio.SoundEffectSink
+import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassDestination
-import com.pocketpass.app.ui.showsPocketPassApp
-import com.pocketpass.app.model.PocketPassReducer
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
-import com.pocketpass.app.model.ProfileViewerSource
-import com.pocketpass.app.model.GamesUiState
-import com.pocketpass.app.model.AchievementsUiState
-import com.pocketpass.app.model.ConnectedAppsUiState
-import com.pocketpass.app.model.OAuthConsentUiState
-import com.pocketpass.app.model.BingoUiState
-import com.pocketpass.app.model.GameTarget
-import com.pocketpass.app.model.WorldTourUiState
-import com.pocketpass.app.model.LeaderboardUiState
-import com.pocketpass.app.model.ShopUiState
-import com.pocketpass.app.mii.MiiEditorEvent
-import com.pocketpass.app.mii.MiiEditorController
-import com.pocketpass.app.mii.MiiEditorMode
 import com.pocketpass.app.status.AndroidStatusProvider
 import com.pocketpass.app.status.StatusProvider
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.pocketpass.app.ui.controller.ControllerFocus
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
 private const val SAVED_ROUTES_KEY = "routes"
 private val RouteJson = Json { ignoreUnknownKeys = true }
 
-private fun SavedStateHandle.restoredRoutes(): List<PocketPassRoute>? =
-    get<String>(SAVED_ROUTES_KEY)
-        ?.let { json ->
-            runCatching { RouteJson.decodeFromString<List<PocketPassRoute>>(json) }.getOrNull()
+private class SavedStateRouteStore(
+    private val savedStateHandle: SavedStateHandle,
+) : RouteStateStore {
+    override fun restore(): List<PocketPassRoute>? =
+        savedStateHandle.get<String>(SAVED_ROUTES_KEY)
+            ?.let { json ->
+                runCatching { RouteJson.decodeFromString<List<PocketPassRoute>>(json) }.getOrNull()
+            }
+
+    override fun persist(routes: List<PocketPassRoute>) {
+        savedStateHandle[SAVED_ROUTES_KEY] = RouteJson.encodeToString(routes)
+    }
+}
+
+private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
+    val container = this
+    return object : PocketPassStoreContainer {
+        override val soundEffects get() = container.soundEffects
+        override val miiEditor: MiiEditorController get() = container.miiEditor
+        override val integrityCompromised get() = container.integrityCompromised
+        override val miiEditorEnabled get() = container.miiEditorEnabled
+        override val pretendoImportEnabled get() = container.pretendoImportEnabled
+        override val encounterLedSupported get() = container.encounterLedSupported
+        override val activeAccountId get() = container.activeAccountId
+        override val repositories get() = container.repositories
+        override val auth get() = container.auth
+        override val accountSetup get() = container.accountSetup
+        override val homeProfile get() = container.homeProfile
+        override val profileViewer get() = container.profileViewer
+        override val friends get() = container.friends
+        override val connectedApps get() = container.connectedApps
+        override val messages get() = container.messages
+        override val notifications get() = container.notifications
+        override val activities get() = container.activities
+        override val shop get() = container.shop
+        override val games get() = container.games
+        override val leaderboard get() = container.leaderboard
+        override val achievements get() = container.achievements
+        override val worldTour get() = container.worldTour
+        override val bingo get() = container.bingo
+        override val settings get() = container.settings
+        override val nearby = object : NearbyActions {
+            override val state get() = container.nearby.state
+            override fun onNearbyPreferenceChanged(enabled: Boolean) =
+                container.nearby.onNearbyPreferenceChanged(enabled)
+            override fun requestPermissions() = container.nearby.requestPermissions()
+            override fun skipOnboarding() = container.nearby.skipOnboarding()
+            override fun onAppOpened(openRepair: Boolean) = container.nearby.onAppOpened(openRepair)
+            override fun onPermissionResult() = container.nearby.onPermissionResult()
         }
-        ?.takeIf { it.firstOrNull() is PocketPassRoute.Root }
+        override val appUpdate = object : AppUpdateActions {
+            override val state get() = container.appUpdate.state
+            override fun check() = container.appUpdate.check()
+            override fun download() = container.appUpdate.download()
+            override fun install() = container.appUpdate.install()
+        }
+        override val requestedAppUpdate get() = container.requestedAppUpdate
+        override val requestedConversation get() = container.requestedConversation
+
+        override fun consumeRequestedAppUpdate() = container.consumeRequestedAppUpdate()
+        override fun consumeRequestedConversation() = container.consumeRequestedConversation()
+
+        override suspend fun deleteMiiSlot(slot: Int) = container.deleteMiiSlot(slot)
+        override suspend fun deleteAccount() = container.deleteAccount()
+        override suspend fun signOut() = container.signOut()
+        override suspend fun handleAuthCallback(callbackUri: String) =
+            container.handleAuthCallback(callbackUri)
+        override suspend fun resetSettings() = container.resetSettings()
+        override suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
+            container.setUpdateAlertsEnabled(enabled)
+    }
+}
 
 class PocketPassViewModel(
     application: Application,
     private val container: AppContainer,
-    private val statusProvider: StatusProvider = AndroidStatusProvider(),
-    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    statusProvider: StatusProvider = AndroidStatusProvider(),
+    savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : AndroidViewModel(application) {
-    private val _state = MutableStateFlow(
-        PocketPassUiState(
-            routes = savedStateHandle.restoredRoutes()
-                ?: listOf(PocketPassRoute.Root(PocketPassDestination.Home)),
-            integrityCompromised = container.integrityCompromised,
-            miiEditorEnabled = container.miiEditorEnabled,
-            pretendoImportEnabled = container.pretendoImportEnabled,
-        ),
+    private val store = PocketPassStore(
+        container = container.asStoreContainer(),
+        statusFeed = { statusProvider.status(application) },
+        routeStore = SavedStateRouteStore(savedStateHandle),
+        scope = viewModelScope,
     )
-    val state: StateFlow<PocketPassUiState> = _state.asStateFlow()
-    val soundEffects: com.pocketpass.app.audio.SoundEffectSink
+
+    val state: StateFlow<PocketPassUiState> get() = store.state
+    val soundEffects: SoundEffectSink
         get() = container.soundEffects
-    val controllerFocus: com.pocketpass.app.ui.controller.ControllerFocus =
-        com.pocketpass.app.ui.controller.ControllerFocus(
+    val controllerFocus: ControllerFocus =
+        ControllerFocus(
             onMoved = { container.soundEffects.play(SoundEffect.Navigation) },
         )
     val miiEditorController: MiiEditorController
         get() = container.miiEditor
 
-    init {
-        collectFeatureState(application)
-        persistRoutes()
-        reopenRestoredConversation()
-    }
+    fun dispatch(event: PocketPassEvent) = store.dispatch(event)
 
-    private fun persistRoutes() {
-        viewModelScope.launch {
-            _state.map { it.routes }.distinctUntilChanged().collect { routes ->
-                savedStateHandle[SAVED_ROUTES_KEY] = RouteJson.encodeToString(routes)
-            }
-        }
-    }
+    fun handleAuthCallback(callbackUri: String) = store.handleAuthCallback(callbackUri)
 
-    private fun reopenRestoredConversation() {
-        val routes = _state.value.routes
-        val conversationId = routes
-            .filterIsInstance<PocketPassRoute.MessageDetail>()
-            .lastOrNull()
-            ?.conversationId
-        val composerOpen = routes.lastOrNull() is PocketPassRoute.NewGroup
-        if (conversationId == null && !composerOpen) return
-        viewModelScope.launch {
-            container.activeAccountId.filterNotNull().first()
-            if (
-                conversationId != null &&
-                container.messages.state.value.selectedConversationId?.value != conversationId
-            ) {
-                container.messages.openConversation(ConversationId(conversationId))
-            }
-            if (composerOpen) container.messages.openGroupComposer()
-        }
-    }
+    fun handleConsentLink(authorizationId: String) = store.handleConsentLink(authorizationId)
 
-    fun dispatch(event: PocketPassEvent) {
-        soundEffectFor(event, _state.value.rootDestination)?.let(container.soundEffects::play)
-        when (event) {
-            PocketPassEvent.Back -> {
-                if (_state.value.shop.buyPromptItemId != null) {
-                    _state.update { current ->
-                        PocketPassReducer.reduce(current, PocketPassEvent.CloseBuyShopItem)
-                    }
-                    return
-                }
-                if (_state.value.removeFriendPromptVisible) {
-                    _state.update { current ->
-                        PocketPassReducer.reduce(current, PocketPassEvent.CloseRemoveFriend)
-                    }
-                    return
-                }
-                if (_state.value.sortMenuOpen) {
-                    _state.update { current ->
-                        PocketPassReducer.reduce(current, PocketPassEvent.CloseSortMenu)
-                    }
-                    return
-                }
-                val setupState = container.accountSetup.state.value
-                if (setupState.required && setupState.resolved) {
-                    container.accountSetup.backStep()
-                    return
-                }
-                val miiState = container.miiEditor.state.value
-                if (miiState.pretendoImport != null) {
-                    container.miiEditor.dispatch(MiiEditorEvent.ClosePretendoImport)
-                    return
-                }
-                if (miiState.isEditorVisible) {
-                    when {
-                        miiState.colorPaletteOpen ->
-                            container.miiEditor.dispatch(MiiEditorEvent.CloseColorPalette)
+    fun onAppOpened(openNearbyRepair: Boolean) = store.onAppOpened(openNearbyRepair)
 
-                        miiState.activeAdjustment != null ->
-                            container.miiEditor.dispatch(MiiEditorEvent.CloseAdjustment)
-
-                        miiState.discardPromptVisible ->
-                            container.miiEditor.dispatch(MiiEditorEvent.DismissDiscardPrompt)
-
-                        miiState.mode == MiiEditorMode.EditExisting ->
-                            container.miiEditor.dispatch(MiiEditorEvent.RequestCancel)
-
-                        else -> Unit
-                    }
-                    return
-                }
-                if (container.connectedApps.dismissConsent()) return
-                if (container.connectedApps.closeRevoke()) return
-                if (container.connectedApps.close()) return
-                if (container.profileViewer.close()) return
-                if (container.shop.close()) return
-                if (container.games.close()) return
-                if (container.achievements.close()) return
-                if (container.leaderboard.close()) return
-                if (container.homeProfile.closeBioEditor()) return
-                if (container.homeProfile.closeNameEditor()) return
-                if (container.homeProfile.closeMoodPicker()) return
-                if (container.friends.closeOverlay()) return
-                if (container.messages.closeGroupInfo()) return
-                if (container.messages.closeMessageActions()) return
-                if (container.messages.closeActionRail()) return
-                if (container.messages.cancelEdit()) return
-                if (_state.value.routes.lastOrNull() is com.pocketpass.app.model.PocketPassRoute.MessageDetail) {
-                    container.messages.closeConversation()
-                }
-                if (_state.value.routes.lastOrNull() is PocketPassRoute.NewGroup) {
-                    container.messages.closeGroupComposer()
-                }
-            }
-
-            PocketPassEvent.OpenConnectedApps -> container.connectedApps.open()
-            PocketPassEvent.CloseConnectedApps -> container.connectedApps.close()
-            is PocketPassEvent.OpenRevokeConnectedApp ->
-                container.connectedApps.openRevoke(event.clientId)
-            PocketPassEvent.CloseRevokeConnectedApp -> container.connectedApps.closeRevoke()
-            PocketPassEvent.ConfirmRevokeConnectedApp -> container.connectedApps.confirmRevoke()
-            PocketPassEvent.DismissOAuthConsent -> container.connectedApps.dismissConsent()
-            PocketPassEvent.ApproveOAuthConsent -> container.connectedApps.decideConsent(true)
-            PocketPassEvent.DenyOAuthConsent -> container.connectedApps.decideConsent(false)
-
-            PocketPassEvent.OpenShop -> container.shop.open()
-            PocketPassEvent.CloseShop -> container.shop.close()
-            PocketPassEvent.ConfirmBuyShopItem ->
-                _state.value.shop.buyPromptItemId?.let(container.shop::buy)
-
-            PocketPassEvent.OpenGames -> container.games.open()
-            PocketPassEvent.CloseGames -> container.games.close()
-            is PocketPassEvent.OpenGame -> {
-                container.games.openGame(event.game)
-                when (event.game) {
-                    GameTarget.WorldTour -> container.worldTour.refresh()
-                    GameTarget.Bingo -> container.bingo.refresh()
-                    GameTarget.PuzzleSwap -> Unit
-                }
-            }
-            is PocketPassEvent.SelectBingoSquare ->
-                container.games.selectBingoGoal(event.index)
-            PocketPassEvent.CloseBingoSquare -> container.games.closeBingoGoal()
-            PocketPassEvent.OpenWorldTourRegions -> container.games.openWorldTourRegions()
-            PocketPassEvent.CloseWorldTourRegions -> container.games.closeWorldTourRegions()
-
-            PocketPassEvent.OpenLeaderboard -> container.leaderboard.open()
-            PocketPassEvent.CloseLeaderboard -> container.leaderboard.close()
-            PocketPassEvent.OpenLeaderboardSettings ->
-                container.leaderboard.openSettings()
-            PocketPassEvent.CloseLeaderboardSettings ->
-                container.leaderboard.closeSettings()
-            is PocketPassEvent.SetLeaderboardScope ->
-                container.leaderboard.setScope(event.scope)
-
-            PocketPassEvent.OpenAchievements -> container.achievements.open()
-            PocketPassEvent.CloseAchievements -> container.achievements.close()
-
-            is PocketPassEvent.SelectDestination -> {
-                container.miiEditor.dispatch(MiiEditorEvent.ClosePretendoImport)
-                container.profileViewer.close()
-                container.shop.close()
-                container.games.reset()
-                container.achievements.close()
-                container.leaderboard.close()
-                container.homeProfile.closeBioEditor()
-                container.homeProfile.closeNameEditor()
-                container.homeProfile.closeMoodPicker()
-                container.friends.closeOverlay()
-                container.messages.closeConversation()
-                container.messages.closeGroupComposer()
-                container.connectedApps.close()
-            }
-
-            PocketPassEvent.OpenMiiEditor -> {
-                container.profileViewer.close()
-                container.homeProfile.closeBioEditor()
-                container.homeProfile.closeNameEditor()
-                container.homeProfile.closeMoodPicker()
-                container.friends.closeOverlay()
-                container.messages.closeConversation()
-                container.messages.closeGroupComposer()
-            }
-
-            PocketPassEvent.OpenBioEditor -> {
-                container.profileViewer.close()
-                container.friends.closeOverlay()
-                container.homeProfile.openBioEditor()
-            }
-
-            PocketPassEvent.OpenNameEditor -> {
-                container.profileViewer.close()
-                container.homeProfile.openNameEditor()
-            }
-
-            is PocketPassEvent.OpenMessage -> {
-                val conversationId = runCatching {
-                    ConversationId(event.conversationId)
-                }.getOrNull() ?: return
-                if (_state.value.conversations.none { it.id == conversationId }) return
-                container.messages.openConversation(conversationId)
-            }
-
-            is PocketPassEvent.OpenUserProfile -> {
-                val profile = when (event.source) {
-                    ProfileViewerSource.RecentInteraction ->
-                        _state.value.recentInteractions
-                            .firstOrNull {
-                                it.profile.userId.value == event.userId
-                            }
-                            ?.profile
-
-                    ProfileViewerSource.Friend ->
-                        _state.value.friends
-                            .firstOrNull {
-                                it.profile.userId.value == event.userId
-                            }
-                            ?.profile
-                } ?: return
-                container.homeProfile.closeMoodPicker()
-                container.friends.closeOverlay()
-                container.profileViewer.open(profile, event.source)
-            }
-
-            PocketPassEvent.CloseUserProfile -> container.profileViewer.close()
-
-            PocketPassEvent.SendProfileFriendRequest -> Unit
-
-            is PocketPassEvent.OpenNotification -> {
-                container.profileViewer.close()
-                container.homeProfile.closeMoodPicker()
-                val notificationId = runCatching {
-                    NotificationId(event.notificationId)
-                }.getOrNull() ?: return
-                val notification = _state.value.notifications
-                    .firstOrNull { it.id == notificationId }
-                    ?: return
-                container.notifications.markRead(notificationId)
-                when (val action = notification.action) {
-                    is NotificationAction.OpenConversation -> {
-                        container.friends.closeOverlay()
-                        container.messages.openConversation(action.conversationId)
-                        _state.update {
-                            it.copy(
-                                routes = listOf(
-                                    com.pocketpass.app.model.PocketPassRoute.Root(
-                                        com.pocketpass.app.model.PocketPassDestination.Messages,
-                                    ),
-                                    com.pocketpass.app.model.PocketPassRoute.MessageDetail(
-                                        action.conversationId.value,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-
-                    NotificationAction.OpenFriends -> {
-                        container.friends.closeOverlay()
-                        _state.update {
-                            it.copy(
-                                routes = listOf(
-                                    com.pocketpass.app.model.PocketPassRoute.Root(
-                                        com.pocketpass.app.model.PocketPassDestination.Friends,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-
-                    NotificationAction.OpenHome -> {
-                        container.friends.closeOverlay()
-                        _state.update {
-                            it.copy(
-                                routes = listOf(
-                                    com.pocketpass.app.model.PocketPassRoute.Root(
-                                        com.pocketpass.app.model.PocketPassDestination.Home,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-
-                    is NotificationAction.RespondToFriendRequest,
-                    NotificationAction.None,
-                    -> Unit
-                }
-            }
-
-            else -> Unit
-        }
-        _state.update { current -> PocketPassReducer.reduce(current, event) }
-
-        when (event) {
-            is PocketPassEvent.Auth -> container.auth.dispatch(event.event)
-            is PocketPassEvent.AccountSetup ->
-                container.accountSetup.dispatch(event.event)
-            is PocketPassEvent.Mii -> container.miiEditor.dispatch(event.event)
-            PocketPassEvent.CloseMiiSlots ->
-                container.miiEditor.dispatch(MiiEditorEvent.ClosePretendoImport)
-            PocketPassEvent.OpenMiiEditor ->
-                container.miiEditor.beginEdit(
-                    container.miiEditor.state.value.activeSlot,
-                )
-            is PocketPassEvent.EditMiiSlot -> container.miiEditor.beginEdit(event.slot)
-            is PocketPassEvent.WearShopItem -> {
-                val shop = _state.value.shop
-                val item = shop.item(event.itemId)
-                val hat = item?.miiHatType
-                if (
-                    container.miiEditorEnabled &&
-                    hat != null &&
-                    (item.id in shop.ownedItemIds || item.id in shop.unlockedItemIds) &&
-                    container.miiEditor.state.value.mode == MiiEditorMode.Inactive
-                ) {
-                    container.miiEditor.beginEdit(
-                        slot = container.miiEditor.state.value.activeSlot,
-                        wearHat = hat,
-                    )
-                }
-            }
-            is PocketPassEvent.SetActiveMiiSlot ->
-                container.miiEditor.setActiveSlot(event.slot)
-            PocketPassEvent.ConfirmDeleteMiiSlot -> viewModelScope.launch {
-                val slot = _state.value.miiDeleteSlot ?: return@launch
-                val result = container.deleteMiiSlot(slot)
-                _state.update {
-                    it.copy(
-                        miiDeleteInProgress = false,
-                        miiDeleteSlot = if (result is RepositoryResult.Failure) {
-                            it.miiDeleteSlot
-                        } else {
-                            null
-                        },
-                        miiDeleteError = if (result is RepositoryResult.Failure) {
-                            "Your Mii could not be deleted."
-                        } else {
-                            null
-                        },
-                    )
-                }
-            }
-            PocketPassEvent.ShuffleActivities -> container.activities.toggle()
-            PocketPassEvent.ToggleHomeMoodPicker ->
-                container.homeProfile.toggleMoodPicker()
-            is PocketPassEvent.SelectHomeMood ->
-                container.homeProfile.selectMood(event.mood)
-            PocketPassEvent.CloseHomeMoodPicker ->
-                container.homeProfile.closeMoodPicker()
-            is PocketPassEvent.UpdateBioDraft ->
-                container.homeProfile.setBioDraft(event.value)
-            PocketPassEvent.SaveBio -> container.homeProfile.saveBio()
-            PocketPassEvent.CloseBioEditor -> container.homeProfile.closeBioEditor()
-            is PocketPassEvent.UpdateNameDraft ->
-                container.homeProfile.setNameDraft(event.value)
-            PocketPassEvent.SaveName -> container.homeProfile.saveName()
-            PocketPassEvent.CloseNameEditor -> container.homeProfile.closeNameEditor()
-            is PocketPassEvent.UpdateMessageDraft ->
-                container.messages.setDraft(event.value)
-
-            PocketPassEvent.SendMessage -> container.messages.sendDraft()
-            PocketPassEvent.ToggleMessageActions -> container.messages.toggleActionRail()
-            is PocketPassEvent.RetryMessage -> runCatching {
-                container.messages.retryMessage(MessageId(event.messageId))
-            }
-
-            is PocketPassEvent.SelectMessageAction -> when (event.action) {
-                MessageComposerAction.Image -> container.messages.requestImageAttachment()
-                MessageComposerAction.Emoji,
-                MessageComposerAction.File,
-                -> container.messages.closeActionRail()
-            }
-
-            is PocketPassEvent.OpenMessageActions -> runCatching {
-                container.messages.openMessageActions(MessageId(event.messageId))
-            }
-
-            PocketPassEvent.CloseMessageActions -> container.messages.closeMessageActions()
-            PocketPassEvent.EditSelectedMessage -> container.messages.editSelectedMessage()
-            PocketPassEvent.DeleteSelectedMessage -> container.messages.deleteSelectedMessage()
-            PocketPassEvent.CancelMessageEdit -> container.messages.cancelEdit()
-
-            PocketPassEvent.OpenAddFriend -> {
-                container.profileViewer.close()
-                container.friends.openAddFriend()
-            }
-            PocketPassEvent.RefreshFriends -> container.friends.refreshFriends()
-            is PocketPassEvent.OpenUserProfile -> Unit
-            PocketPassEvent.CloseUserProfile -> Unit
-            PocketPassEvent.SendProfileFriendRequest ->
-                container.profileViewer.sendFriendRequest()
-            PocketPassEvent.RemoveProfileFriend ->
-                container.profileViewer.removeFriend()
-            PocketPassEvent.MessageProfileFriend ->
-                container.profileViewer.openConversation()
-            PocketPassEvent.ToggleNotifications -> {
-                container.profileViewer.close()
-                container.homeProfile.closeMoodPicker()
-                container.friends.toggleNotifications()
-                container.notifications.refresh()
-            }
-            PocketPassEvent.CloseFriendsOverlay -> container.friends.closeOverlay()
-            is PocketPassEvent.UpdateFriendCode ->
-                container.friends.setEntry(event.value)
-            PocketPassEvent.SubmitFriendCode -> container.friends.submitFriendCode()
-            is PocketPassEvent.RespondToNotificationFriendRequest -> runCatching {
-                container.notifications.respondToFriendRequest(
-                    NotificationId(event.notificationId),
-                    event.accept,
-                )
-            }
-            is PocketPassEvent.DeleteNotification -> runCatching {
-                container.notifications.delete(NotificationId(event.notificationId))
-            }
-            PocketPassEvent.MarkAllNotificationsRead ->
-                container.notifications.markAllRead()
-            PocketPassEvent.ClearAllNotifications ->
-                container.notifications.clearAll()
-
-            is PocketPassEvent.OpenNotification -> Unit
-
-            is PocketPassEvent.SetNearby -> viewModelScope.launch {
-                container.nearby.onNearbyPreferenceChanged(event.enabled)
-            }
-
-            PocketPassEvent.RequestNearbyPermissions ->
-                container.nearby.requestPermissions()
-
-            PocketPassEvent.SkipNearbyPermissions ->
-                container.nearby.skipOnboarding()
-
-            is PocketPassEvent.SetSoundLevel -> viewModelScope.launch {
-                container.settings.setSoundLevel(event.level)
-            }
-
-            is PocketPassEvent.SetSfxLevel -> viewModelScope.launch {
-                container.settings.setSfxLevel(event.level)
-            }
-
-            is PocketPassEvent.SetThemeMode -> viewModelScope.launch {
-                container.settings.setThemeMode(event.mode)
-            }
-
-            is PocketPassEvent.SetRecentInteractionsSort -> viewModelScope.launch {
-                container.settings.setRecentInteractionsSort(event.sort)
-            }
-
-            is PocketPassEvent.SetFriendsSort -> viewModelScope.launch {
-                container.settings.setFriendsSort(event.sort)
-            }
-
-            is PocketPassEvent.SetMoodEmojisEnabled -> viewModelScope.launch {
-                container.settings.setMoodEmojisEnabled(event.enabled)
-            }
-
-            is PocketPassEvent.SetEncounterLedEnabled -> viewModelScope.launch {
-                container.settings.setEncounterLedEnabled(event.enabled)
-            }
-
-            is PocketPassEvent.SetEncounterAlertsEnabled -> viewModelScope.launch {
-                container.settings.setEncounterAlertsEnabled(event.enabled)
-            }
-
-            is PocketPassEvent.SetNearbyRepairAlertsEnabled -> viewModelScope.launch {
-                container.settings.setNearbyRepairAlertsEnabled(event.enabled)
-            }
-
-            is PocketPassEvent.SetUpdateAlertsEnabled -> viewModelScope.launch {
-                container.setUpdateAlertsEnabled(event.enabled)
-            }
-
-            PocketPassEvent.ResetSettings -> viewModelScope.launch {
-                container.resetSettings()
-            }
-
-            PocketPassEvent.CheckForAppUpdate -> container.appUpdate.check()
-
-            PocketPassEvent.DownloadAppUpdate -> container.appUpdate.download()
-
-            PocketPassEvent.InstallAppUpdate -> container.appUpdate.install()
-
-            PocketPassEvent.ConfirmDeleteAccount -> viewModelScope.launch {
-                container.profileViewer.close()
-                container.homeProfile.resetSession()
-                val result = container.deleteAccount()
-                _state.update { current ->
-                    current.copy(
-                        deleteAccountInProgress = false,
-                        deleteAccountVisible = result is RepositoryResult.Failure,
-                        deleteAccountError = (result as? RepositoryResult.Failure)
-                            ?.error
-                            ?.deleteAccountMessage(),
-                    )
-                }
-            }
-
-            PocketPassEvent.SignOut -> viewModelScope.launch {
-                container.profileViewer.close()
-                container.homeProfile.resetSession()
-                container.signOut()
-            }
-
-            PocketPassEvent.OpenNewGroup -> {
-                if (_state.value.routes.lastOrNull() is PocketPassRoute.NewGroup) {
-                    container.profileViewer.close()
-                    container.friends.closeOverlay()
-                    container.messages.openGroupComposer()
-                }
-            }
-            PocketPassEvent.CloseNewGroup -> container.messages.closeGroupComposer()
-            is PocketPassEvent.ToggleGroupMember -> runCatching {
-                container.messages.toggleGroupMember(UserId(event.userId))
-            }
-            is PocketPassEvent.UpdateGroupTitle -> container.messages.setGroupTitle(event.value)
-            PocketPassEvent.CreateGroup -> container.messages.createGroup()
-            PocketPassEvent.OpenGroupInfo -> container.messages.openGroupInfo()
-            PocketPassEvent.CloseGroupInfo -> container.messages.closeGroupInfo()
-            is PocketPassEvent.AddGroupMembers -> runCatching {
-                container.messages.addMembersToGroup(event.userIds.map(::UserId))
-            }
-            is PocketPassEvent.RemoveGroupMember -> runCatching {
-                container.messages.removeGroupMember(UserId(event.userId))
-            }
-            PocketPassEvent.LeaveGroup -> container.messages.leaveGroup()
-            is PocketPassEvent.RenameGroup -> container.messages.renameGroup(event.title)
-            PocketPassEvent.DismissConversationNotice ->
-                container.messages.clearConversationNotice()
-
-            else -> Unit
-        }
-    }
-
-    fun handleAuthCallback(callbackUri: String) {
-        viewModelScope.launch {
-            val result = container.handleAuthCallback(callbackUri)
-            if (result is com.pocketpass.app.domain.state.RepositoryResult.Success) {
-                container.auth.clearTemporaryStateAfterAuthentication()
-            }
-        }
-    }
-
-    fun handleConsentLink(authorizationId: String) {
-        container.connectedApps.handleConsentLink(authorizationId)
-    }
-
-    fun onAppOpened(openNearbyRepair: Boolean) {
-        container.nearby.onAppOpened(openNearbyRepair)
-    }
-
-    fun onNearbyPermissionResult() {
-        container.nearby.onPermissionResult()
-    }
-
-    private fun collectFeatureState(application: Application) {
-        viewModelScope.launch {
-            container.miiEditor.state.collect { mii ->
-                _state.update {
-                    it.copy(
-                        miiEditorEnabled = container.miiEditorEnabled,
-                        pretendoImportEnabled = container.pretendoImportEnabled,
-                        miiEditor = mii,
-                        miiSlotsVisible = it.miiSlotsVisible && !mii.isEditorPresented,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.homeProfile.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        profile = feature.profile.dataOr(current.profile),
-                        homeMood = feature.selectedMood,
-                        homeMoodPickerExpanded = feature.moodPickerExpanded,
-                        homeMoodSelectionCount = feature.moodSelectionCount,
-                        homeMoodActive = feature.moodActive,
-                        bioEditor = feature.bioEditor,
-                        nameEditor = feature.nameEditor,
-                        recentInteractions = feature.recentInteractions.dataOr(
-                            current.recentInteractions,
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.profileViewer.state.collect { viewer ->
-                _state.update { current ->
-                    current.copy(profileViewer = viewer)
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.friends.state.collect { feature ->
-                _state.update { current ->
-                    val friends = feature.friends.dataOr(current.friends)
-                    current.copy(
-                        friends = friends,
-                        onlineFriendCount = friends.count { it.isOnline },
-                        friendsLoading = feature.friends is LoadState.Loading,
-                        friendsRefreshing = feature.refreshing,
-                        friendsRefreshError = feature.refreshError,
-                        friendsOverlay = feature.overlay,
-                        myFriendCode = feature.myFriendCode.dataOr(current.myFriendCode),
-                        friendCodeEntry = feature.entry,
-                        friendCodeSubmitting = feature.submitting,
-                        friendCodeMessage = feature.message,
-                        friendCodeError = feature.error,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.notifications.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        notifications = feature.notifications.dataOr(current.notifications),
-                        notificationOperationError = feature.error,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.messages.state.collect { feature ->
-                _state.update { current ->
-                    val conversations = feature.conversations.dataOr(current.conversations)
-                    val routes = if (
-                        feature.conversationNotice != null &&
-                        feature.selectedConversationId == null &&
-                        current.routes.lastOrNull() is PocketPassRoute.MessageDetail
-                    ) {
-                        current.routes.dropLast(1)
-                    } else {
-                        current.routes
-                    }
-                    current.copy(
-                        routes = routes,
-                        conversations = conversations,
-                        selectedConversationId = feature.selectedConversationId,
-                        selectedConversation = feature.selectedConversation,
-                        selectedMessages = feature.messages.dataOr(emptyList()),
-                        messageDraft = feature.currentDraft,
-                        messageActionRailExpanded = feature.actionRailExpanded,
-                        messageSendInProgress = feature.isSending,
-                        messageOperationError = feature.operationError,
-                        messageActionMessageId = feature.actionMessageId?.value,
-                        editingMessageId = feature.editingMessageId?.value,
-                        groupComposer = feature.groupComposer,
-                        groupInfoOpen = feature.groupInfoOpen,
-                        groupOperationInProgress = feature.groupOperationInProgress,
-                        groupOperationError = feature.groupOperationError,
-                        conversationNotice = feature.conversationNotice,
-                        selectedMembersById = feature.selectedMembersById,
-                        typingUserIds = feature.typingUserIds,
-                        isGroupOwner = feature.isGroupOwner,
-                        canAddGroupMembers = feature.canAddGroupMembers,
-                        messageTotalCount = feature.totalMessageCount,
-                        typingConversationIds = feature.typingConversationIds
-                            .mapTo(mutableSetOf()) { it.value },
-                        unreadConversationCount = conversations.count { it.unreadCount > 0 },
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.activities.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        activityVariant = feature.variant,
-                        activitySnapshot = feature.snapshot.dataOr(current.activitySnapshot),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.shop.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        shop = current.shop.copy(
-                            visible = feature.visible,
-                            categories = feature.categories,
-                            tokenBalance = feature.tokenBalance,
-                            refreshError = feature.refreshError,
-                            ownedItemIds = feature.ownedItemIds,
-                            unlockedItemIds = feature.unlockedItemIds,
-                            purchasingItemIds = feature.purchasingItemIds,
-                            purchaseError = feature.purchaseError,
-                            buyPromptItemId = current.shop.buyPromptItemId.takeIf { feature.visible },
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.games.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        games = GamesUiState(
-                            visible = feature.visible,
-                            activeGame = feature.activeGame,
-                            bingoGoalIndex = feature.bingoGoalIndex,
-                            worldTourRegionsVisible = feature.worldTourRegionsVisible,
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.leaderboard.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        leaderboard = LeaderboardUiState(
-                            visible = feature.visible,
-                            settingsVisible = feature.settingsVisible,
-                            scope = feature.scope,
-                            entries = feature.entries,
-                            refreshError = feature.refreshError,
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.connectedApps.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        connectedApps = ConnectedAppsUiState(
-                            enabled = container.connectedApps.enabled,
-                            visible = feature.visible,
-                            loading = feature.loading,
-                            apps = feature.apps,
-                            error = feature.error,
-                            revokeClientId = feature.revokeClientId,
-                            revokeInProgress = feature.revokeInProgress,
-                            revokeError = feature.revokeError,
-                        ),
-                        oauthConsent = OAuthConsentUiState(
-                            visible = feature.consent.visible,
-                            loading = feature.consent.loading,
-                            request = feature.consent.request,
-                            error = feature.consent.error,
-                            deciding = feature.consent.deciding,
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.achievements.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        achievements = AchievementsUiState(
-                            visible = feature.visible,
-                            achievements = feature.achievements,
-                            refreshError = feature.refreshError,
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.worldTour.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        worldTour = WorldTourUiState(
-                            regions = feature.regions,
-                            refreshError = feature.refreshError,
-                        ),
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.bingo.state.collect { feature ->
-                _state.update { current ->
-                    current.copy(
-                        bingo = BingoUiState(
-                            cells = feature.cells,
-                            refreshError = feature.refreshError,
-                        ),
-                    )
-                }
-            }
-        }
-        _state.update {
-            it.copy(encounterLedSupported = container.encounterLedSupported)
-        }
-        viewModelScope.launch {
-            container.settings.settings.collect { settings ->
-                _state.update {
-                    it.copy(
-                        nearbyEnabled = settings.nearbyEnabled,
-                        soundLevel = settings.soundLevel,
-                        sfxLevel = settings.sfxLevel,
-                        themeMode = settings.themeMode,
-                        recentInteractionsSort = settings.recentInteractionsSort,
-                        friendsSort = settings.friendsSort,
-                        moodEmojisEnabled = settings.moodEmojisEnabled,
-                        encounterLedEnabled = settings.encounterLedEnabled,
-                        encounterAlertsEnabled = settings.encounterAlertsEnabled,
-                        nearbyRepairAlertsEnabled = settings.nearbyRepairAlertsEnabled,
-                        updateAlertsEnabled = settings.updateAlertsEnabled,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.nearby.state.collect { nearby ->
-                _state.update {
-                    it.copy(
-                        nearbyRuntime = nearby.runtime,
-                        nearbyPermissionUi = nearby.permissionUi,
-                    )
-                }
-            }
-        }
-        viewModelScope.launch {
-            container.appUpdate.state.collect { update ->
-                _state.update { it.copy(appUpdate = update) }
-            }
-        }
-        viewModelScope.launch {
-            container.repositories.session.sessionState.collect { session ->
-                _state.update { it.copy(sessionState = session) }
-            }
-        }
-        viewModelScope.launch {
-            container.auth.state.collect { auth ->
-                _state.update { it.copy(auth = auth) }
-            }
-        }
-        viewModelScope.launch {
-            container.accountSetup.state.collect { setup ->
-                _state.update { it.copy(accountSetup = setup) }
-            }
-        }
-        viewModelScope.launch {
-            container.repositories.sync.syncState.collect { sync ->
-                _state.update { it.copy(syncState = sync) }
-            }
-        }
-        viewModelScope.launch {
-            statusProvider.status(application).collect { status ->
-                dispatch(PocketPassEvent.StatusChanged(status))
-            }
-        }
-        viewModelScope.launch {
-            container.requestedAppUpdate.collect { requested ->
-                if (!requested) return@collect
-                _state.first { it.sessionState.showsPocketPassApp() && it.accountSetup.resolved }
-                container.consumeRequestedAppUpdate()
-                dispatch(PocketPassEvent.SelectDestination(PocketPassDestination.Settings))
-                dispatch(PocketPassEvent.OpenAppUpdate)
-            }
-        }
-        viewModelScope.launch {
-            container.requestedConversation.collect { conversationId ->
-                if (conversationId == null) return@collect
-                container.consumeRequestedConversation()
-                container.messages.awaitConversation(conversationId)
-                _state.update {
-                    it.copy(
-                        routes = listOf(
-                            com.pocketpass.app.model.PocketPassRoute.Root(
-                                com.pocketpass.app.model.PocketPassDestination.Messages,
-                            ),
-                            com.pocketpass.app.model.PocketPassRoute.MessageDetail(
-                                conversationId.value,
-                            ),
-                        ),
-                    )
-                }
-            }
-        }
-    }
+    fun onNearbyPermissionResult() = store.onNearbyPermissionResult()
 
     class Factory(
         private val application: PocketPassApplication,
@@ -970,24 +148,3 @@ class PocketPassViewModel(
         }
     }
 }
-
-private fun com.pocketpass.app.domain.state.RepositoryFailure.deleteAccountMessage(): String =
-    when (kind) {
-        com.pocketpass.app.domain.state.RepositoryFailureKind.Offline ->
-            "Connect to the internet to delete your account."
-
-        com.pocketpass.app.domain.state.RepositoryFailureKind.Unauthorized ->
-            "Sign in again to delete your account."
-
-        com.pocketpass.app.domain.state.RepositoryFailureKind.Misconfigured ->
-            "Account deletion is unavailable."
-
-        else -> "Your account could not be deleted."
-    }
-
-private fun <T> LoadState<T>.dataOr(previous: T): T =
-    when (this) {
-        is LoadState.Data -> value
-        is LoadState.Error -> cachedValue ?: previous
-        LoadState.Loading -> previous
-    }
