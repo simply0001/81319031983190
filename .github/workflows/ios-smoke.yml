@@ -56,18 +56,27 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           APP=build/DerivedData/Build/Products/Debug-iphonesimulator/PocketPass.app
           xcrun simctl install "$UDID" "$APP"
-          xcrun simctl launch --console-pty "$UDID" xyz.pocketpass.PocketPass > launch-console.txt 2>&1 &
-          CONSOLE_PID=$!
+          # A detached launch: tying the app to a console-pty session would kill
+          # it when the watcher exits. Simulator apps are host processes, so the
+          # printed PID works with plain ps.
+          LAUNCH_OUT=$(xcrun simctl launch \
+            --stdout="$PWD/launch-stdout.txt" \
+            --stderr="$PWD/launch-stderr.txt" \
+            "$UDID" xyz.pocketpass.PocketPass)
+          echo "$LAUNCH_OUT"
+          APP_PID=$(echo "$LAUNCH_OUT" | awk '{print $NF}')
           sleep 30
-          kill "$CONSOLE_PID" 2>/dev/null || true
-          echo "=== console tail ==="
-          tail -n 150 launch-console.txt || true
+          if ps -p "$APP_PID" > /dev/null; then ALIVE=1; else ALIVE=0; fi
+          echo "alive: $ALIVE"
+          echo "=== stdout tail ==="
+          tail -n 100 launch-stdout.txt || true
+          echo "=== stderr tail ==="
+          tail -n 150 launch-stderr.txt || true
           mkdir -p crash-reports
           cp ~/Library/Logs/DiagnosticReports/PocketPass* crash-reports/ 2>/dev/null || true
           ls -la crash-reports || true
-          ALIVE=$(xcrun simctl spawn "$UDID" launchctl list | grep -c "xyz.pocketpass.PocketPass" || true)
-          echo "alive-entries: $ALIVE"
-          if [ -n "$(ls -A crash-reports 2>/dev/null)" ] || grep -q "Uncaught Kotlin exception" launch-console.txt; then
+          if [ -n "$(ls -A crash-reports 2>/dev/null)" ] || \
+             grep -q "Uncaught Kotlin exception" launch-stderr.txt launch-stdout.txt; then
             echo "::error::PocketPass crashed at launch on the simulator"
             for f in crash-reports/*; do
               echo "=== $f (head) ==="
@@ -85,6 +94,7 @@ jobs:
         with:
           name: smoke-launch-logs
           path: |
-            ios-app/launch-console.txt
+            ios-app/launch-stdout.txt
+            ios-app/launch-stderr.txt
             ios-app/crash-reports/
           if-no-files-found: ignore
