@@ -6590,6 +6590,9 @@ internal fun MiiDeleteConfirmDialog(
     }
 }
 
+// Above content surfaces (10) and below modal dialogs (20).
+private const val PROFILE_OVERLAY_FOCUS_LAYER = 15
+
 @Composable
 fun FriendProfileBottomOverlay(
     metrics: DesignMetrics,
@@ -6599,6 +6602,13 @@ fun FriendProfileBottomOverlay(
     val viewer = state.profileViewer
     val profile = viewer.profile ?: return
     val busy = viewer.actionInProgress
+    val request = viewer.friendRequestState
+    val isFriend = viewer.source == ProfileViewerSource.Friend ||
+        request == ProfileFriendRequestState.Friends
+    val requestButtonVisible = request == ProfileFriendRequestState.Available ||
+        request == ProfileFriendRequestState.Sending ||
+        request == ProfileFriendRequestState.Pending ||
+        request == ProfileFriendRequestState.Failed
     val entrance = remember { Animatable(48f) }
     LaunchedEffect(viewer.selectedUserId) {
         entrance.snapTo(48f)
@@ -6606,6 +6616,15 @@ fun FriendProfileBottomOverlay(
             targetValue = 0f,
             animationSpec = tween(280, easing = FastOutSlowInEasing),
         )
+    }
+    val focus = LocalControllerFocus.current
+    val primaryFocusId = when {
+        isFriend -> "profile_message"
+        requestButtonVisible -> "profile_add_friend"
+        else -> null
+    }
+    LaunchedEffect(viewer.selectedUserId, primaryFocusId) {
+        primaryFocusId?.let { focus?.focus(it, reveal = false) }
     }
 
     Box(
@@ -6658,28 +6677,56 @@ fun FriendProfileBottomOverlay(
             .designBounds(metrics, 0f, 866f, 1240f, 165f)
             .graphicsLayer { translationY = entrance.value },
     ) {
-        FriendActionButton(
-            metrics = metrics,
-            x = 50f,
-            label = "Remove Friend",
-            textColor = Color.White,
-            fill = redButtonBrush(),
-            borderColor = Color(0xFFC24B4B),
-            enabled = !busy,
-            tag = "profile_remove_friend",
-            onClick = { dispatch(PocketPassEvent.OpenRemoveFriend) },
-        )
-        FriendActionButton(
-            metrics = metrics,
-            x = 645f,
-            label = "Message",
-            textColor = pocketPalette.textPrimary,
-            fill = greyPanelBrush(),
-            borderColor = pocketPalette.borderGrey,
-            enabled = !busy,
-            tag = "profile_message",
-            onClick = { dispatch(PocketPassEvent.MessageProfileFriend) },
-        )
+        when {
+            isFriend -> {
+                FriendActionButton(
+                    metrics = metrics,
+                    x = 50f,
+                    label = "Remove Friend",
+                    textColor = Color.White,
+                    fill = redButtonBrush(),
+                    borderColor = Color(0xFFC24B4B),
+                    enabled = !busy,
+                    tag = "profile_remove_friend",
+                    focusLayer = PROFILE_OVERLAY_FOCUS_LAYER,
+                    onClick = { dispatch(PocketPassEvent.OpenRemoveFriend) },
+                )
+                FriendActionButton(
+                    metrics = metrics,
+                    x = 645f,
+                    label = "Message",
+                    textColor = pocketPalette.textPrimary,
+                    fill = greyPanelBrush(),
+                    borderColor = pocketPalette.borderGrey,
+                    enabled = !busy,
+                    tag = "profile_message",
+                    focusLayer = PROFILE_OVERLAY_FOCUS_LAYER,
+                    onClick = { dispatch(PocketPassEvent.MessageProfileFriend) },
+                )
+            }
+
+            requestButtonVisible -> {
+                val sendable = request == ProfileFriendRequestState.Available ||
+                    request == ProfileFriendRequestState.Failed
+                FriendActionButton(
+                    metrics = metrics,
+                    x = 347.5f,
+                    label = when (request) {
+                        ProfileFriendRequestState.Sending -> "Sending…"
+                        ProfileFriendRequestState.Pending -> "Request Sent"
+                        ProfileFriendRequestState.Failed -> "Try Again"
+                        else -> "Add Friend"
+                    },
+                    textColor = Color.White,
+                    fill = greenButtonBrush(),
+                    borderColor = Color(0xFF3CBC29),
+                    enabled = !busy && sendable,
+                    tag = "profile_add_friend",
+                    focusLayer = PROFILE_OVERLAY_FOCUS_LAYER,
+                    onClick = { dispatch(PocketPassEvent.SendProfileFriendRequest) },
+                )
+            }
+        }
     }
 
     (viewer.actionError ?: viewer.friendRequestError)?.let { error ->
@@ -6863,6 +6910,7 @@ internal fun FriendActionButton(
     borderColor: Color,
     enabled: Boolean,
     tag: String,
+    focusLayer: Int = 0,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(metrics.dp(118f))
@@ -6877,6 +6925,9 @@ internal fun FriendActionButton(
             .clip(shape)
             .pocketFrame(fill, metrics.dp(20.152f), borderColor, shape)
             .testTag(tag)
+            .controllerTarget(tag, layer = focusLayer, cornerRadius = 118f) {
+                if (enabled) onClick()
+            }
             .clickable(
                 interactionSource = remember(tag) { MutableInteractionSource() },
                 indication = null,

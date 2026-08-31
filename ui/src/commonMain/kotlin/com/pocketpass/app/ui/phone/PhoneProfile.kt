@@ -206,19 +206,22 @@ private fun ProfileBody(
                 }
                 else -> Unit
             }
-            PhoneButton(
-                metrics = metrics,
-                label = "Message",
-                modifier = Modifier.weight(1f),
-                fill = greyPanelBrush(),
-                borderColor = pocketPalette.borderGrey,
-                textColor = pocketPalette.textPrimary,
-                enabled = !busy,
-                height = 165f,
-                fontSize = 42f,
-                tag = "profile_message",
-                onClick = { dispatch(PocketPassEvent.MessageProfileFriend) },
-            )
+            // Direct messages are friend-only, so strangers see no dead button.
+            if (isFriend) {
+                PhoneButton(
+                    metrics = metrics,
+                    label = "Message",
+                    modifier = Modifier.weight(1f),
+                    fill = greyPanelBrush(),
+                    borderColor = pocketPalette.borderGrey,
+                    textColor = pocketPalette.textPrimary,
+                    enabled = !busy,
+                    height = 165f,
+                    fontSize = 42f,
+                    tag = "profile_message",
+                    onClick = { dispatch(PocketPassEvent.MessageProfileFriend) },
+                )
+            }
         }
         val error = viewer.actionError ?: viewer.friendRequestError
         if (error != null) {
