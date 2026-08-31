@@ -4,6 +4,10 @@ import com.pocketpass.app.PocketPassRepositoryGraph
 import com.pocketpass.app.audio.IosBackgroundMusicPlayer
 import com.pocketpass.app.audio.IosSoundEffectPlayer
 import com.pocketpass.app.auth.AuthStateHolder
+import com.pocketpass.app.mii.FixturePretendoMiiSource
+import com.pocketpass.app.mii.IosFileMiiEditorPersistence
+import com.pocketpass.app.mii.MiiEditorStateHolder
+import com.pocketpass.app.mii.iosDeletePortraitFile
 import com.pocketpass.app.data.SettingsRepository
 import com.pocketpass.app.data.UserDefaultsSettingsRepository
 import com.pocketpass.app.data.repository.FixtureData
@@ -78,10 +82,16 @@ class IosAppContainer(
 
     override val soundEffects = IosSoundEffectPlayer()
     val backgroundMusic = IosBackgroundMusicPlayer()
-    override val miiEditor = InactiveMiiEditorController
+    override val miiEditor = MiiEditorStateHolder(
+        persistence = IosFileMiiEditorPersistence(),
+        scope = applicationScope,
+        ownedHatTypes = repositories.shop.observeOwnedHatTypes(FixtureData.CurrentUserId),
+        pretendoMiiSource = FixturePretendoMiiSource(),
+        deletePortraitFile = { iosDeletePortraitFile(it) },
+    )
     override val integrityCompromised = false
-    override val miiEditorEnabled = false
-    override val pretendoImportEnabled = false
+    override val miiEditorEnabled = true
+    override val pretendoImportEnabled = true
     override val encounterLedSupported = false
 
     override val auth = AuthStateHolder(
@@ -182,6 +192,7 @@ class IosAppContainer(
         applicationScope.launch {
             repositories.session.initialize()
         }
+        miiEditor.activateAccount(FixtureData.CurrentUserId.value)
         applicationScope.launch {
             settingsRepository.settings.collect { soundEffects.volume = it.sfxLevel }
         }

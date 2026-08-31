@@ -1,7 +1,7 @@
 package com.pocketpass.app.mii
 
-import java.io.File
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,10 +27,11 @@ class MiiEditorStateHolder(
     private val scope: CoroutineScope,
     private val saveCallback: MiiEditorSaveCallback = LocalOnlyMiiEditorSaveCallback,
     private val activeSlotCallback: MiiActiveSlotCallback = LocalOnlyMiiActiveSlotCallback,
-    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
+    private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val remoteRestore: (suspend (String) -> MiiPersistedEditorSession?)? = null,
     private val ownedHatTypes: Flow<Set<Int>> = flowOf(emptySet()),
     private val pretendoMiiSource: PretendoMiiSource? = null,
+    private val deletePortraitFile: suspend (String) -> Unit = {},
 ) : MiiEditorController {
     private val mutableState = MutableStateFlow(MiiEditorUiState())
     override val state: StateFlow<MiiEditorUiState> = mutableState.asStateFlow()
@@ -250,9 +251,7 @@ class MiiEditorStateHolder(
         persistNow(draft = mutableState.value.draft)
         val portraitPath = removed.portraitFilePath ?: return
         scope.launch {
-            withContext(Dispatchers.IO) {
-                runCatching { File(portraitPath).delete() }
-            }
+            runCatching { deletePortraitFile(portraitPath) }
         }
     }
 
@@ -818,7 +817,7 @@ class MiiEditorStateHolder(
             val stored = MiiStoredProfile(
                 appearance = pending.appearance,
                 encodedMiiBase64 = artifact.encodedMii?.let {
-                    Base64.getEncoder().encodeToString(it)
+                    Base64.encode(it)
                 },
                 portraitFilePath = artifact.portraitFilePath,
                 rendererVersion = artifact.rendererVersion

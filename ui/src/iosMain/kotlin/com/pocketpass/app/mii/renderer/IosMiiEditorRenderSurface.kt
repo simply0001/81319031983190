@@ -1,55 +1,52 @@
 package com.pocketpass.app.mii.renderer
 
-import android.content.Context
-import android.util.Base64
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import com.pocketpass.app.mii.MiiAppearance
+import androidx.compose.ui.viewinterop.UIKitView
 import com.pocketpass.app.mii.MiiEditorCamera
 import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.mii.MiiEditorEvent
 import com.pocketpass.app.mii.MiiRendererCommand
 import com.pocketpass.app.mii.MiiRendererSaveArtifact
-import com.pocketpass.app.mii.toNativeRendererFields
-import java.io.File
-import java.util.UUID
+import com.pocketpass.app.mii.iosPortraitsDirectory
+import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import platform.Foundation.NSUUID
 
 @Composable
-fun MiiEditorRenderSurface(
+fun IosMiiEditorRenderSurface(
     editorController: MiiEditorController,
+    initialCanonicalBase64: String?,
     modifier: Modifier = Modifier,
-    initialCanonicalBase64: String? = null,
 ) {
-    val renderer = rememberMiiRenderController()
-    val appContext = LocalContext.current.applicationContext
+    val renderer = IosMiiRenderController.shared
+    val webView = remember(renderer) { renderer.createWebView() }
 
-    BindMiiEditorRenderer(
-        editorController = editorController,
-        renderer = renderer,
-        appContext = appContext,
-    )
-    MiiRenderSurface(
-        controller = renderer,
-        modifier = modifier,
-        initialCanonicalBase64 = initialCanonicalBase64
-            ?: MiiRenderController.DEFAULT_MII_BASE64,
-    )
+    DisposableEffect(webView, renderer) {
+        renderer.attach(
+            webView,
+            initialCanonicalBase64 ?: IosMiiRenderController.DEFAULT_MII_BASE64,
+        )
+        onDispose { renderer.detach(webView) }
+    }
+
+    BindMiiEditorRenderer(editorController, renderer)
+    UIKitView(factory = { webView }, modifier = modifier)
 }
 
 @Composable
 private fun BindMiiEditorRenderer(
     editorController: MiiEditorController,
-    renderer: MiiRenderController,
-    appContext: Context,
+    renderer: IosMiiRenderController,
 ) {
-    LaunchedEffect(editorController, renderer, appContext) {
+    LaunchedEffect(editorController, renderer) {
         coroutineScope {
             val queue = Channel<MiiRendererCommand>(Channel.UNLIMITED)
             launch(start = CoroutineStart.UNDISPATCHED) {
@@ -78,19 +75,21 @@ private fun BindMiiEditorRenderer(
                             }
 
                             is MiiRendererCommand.CaptureForSave -> {
-                                val encodedMii = renderer
-                                    .applyAppearance(command.appearance)
-                                    .decodeCanonicalMii()
-                                val portrait = renderer.exportPortrait(
-                                    destination = newPortraitFile(appContext),
+                                val encodedMii = Base64.decode(
+                                    renderer.applyAppearance(command.appearance),
+                                )
+                                val portraitPath = renderer.exportPortraitToFile(
+                                    destinationPath =
+                                    "${iosPortraitsDirectory()}/portrait-${NSUUID().UUIDString}.png",
                                 )
                                 editorController.dispatch(
                                     MiiEditorEvent.RendererSaveReady(
                                         requestId = command.requestId,
                                         artifact = MiiRendererSaveArtifact(
                                             encodedMii = encodedMii,
-                                            portraitFilePath = portrait.absolutePath,
-                                            rendererVersion = MiiRenderController.RENDERER_VERSION,
+                                            portraitFilePath = portraitPath,
+                                            rendererVersion =
+                                            IosMiiRenderController.RENDERER_VERSION,
                                         ),
                                     ),
                                 )
@@ -148,7 +147,7 @@ private fun BindMiiEditorRenderer(
                                 readyReported = true
                                 editorController.dispatch(
                                     MiiEditorEvent.RendererReady(
-                                        MiiRenderController.RENDERER_VERSION,
+                                        IosMiiRenderController.RENDERER_VERSION,
                                     ),
                                 )
                             }
@@ -170,15 +169,4 @@ private fun BindMiiEditorRenderer(
 private fun MiiEditorCamera.toRenderCamera(): MiiRenderCamera = when (this) {
     MiiEditorCamera.WholeHead -> MiiRenderCamera.WholeHead
     MiiEditorCamera.FullBody -> MiiRenderCamera.FullBody
-}
-
-private fun String.decodeCanonicalMii(): ByteArray =
-    Base64.decode(this, Base64.DEFAULT)
-
-private fun newPortraitFile(context: Context): File {
-    val directory = File(context.filesDir, "mii/portraits")
-    check(directory.exists() || directory.mkdirs()) {
-        "Unable to create the private Mii portrait directory"
-    }
-    return File(directory, "portrait-${UUID.randomUUID()}.png")
 }

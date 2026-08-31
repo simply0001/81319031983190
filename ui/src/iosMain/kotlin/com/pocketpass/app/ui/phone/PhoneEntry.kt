@@ -16,6 +16,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.unit.dp
 import com.pocketpass.app.audio.LocalSoundEffects
+import com.pocketpass.app.mii.renderer.IosMiiEditorRenderSurface
+import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.audio.backgroundMusicTrack
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassExtensions
@@ -61,6 +63,9 @@ private fun IosPhoneApp() {
     CompositionLocalProvider(
         LocalSoundEffects provides container.soundEffects,
         LocalAppVersionName provides bundleVersionName(),
+        LocalMiiRenderSurface provides { controller, initialCanonicalBase64, modifier ->
+            IosMiiEditorRenderSurface(controller, initialCanonicalBase64, modifier)
+        },
     ) {
         PocketPassTheme(state.themeMode) {
             Box(

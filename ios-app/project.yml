@@ -24,6 +24,10 @@ targets:
         name: audio
         type: folder
         buildPhase: resources
+      - path: ../app/src/main/assets/mii_renderer
+        name: mii_renderer
+        type: folder
+        buildPhase: resources
     info:
       path: Sources/Info.plist
       properties:

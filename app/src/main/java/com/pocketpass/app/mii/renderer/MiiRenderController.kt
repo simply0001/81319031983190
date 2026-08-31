@@ -25,6 +25,7 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.pocketpass.app.mii.MiiAppearance
+import com.pocketpass.app.mii.toNativeRendererFields
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files

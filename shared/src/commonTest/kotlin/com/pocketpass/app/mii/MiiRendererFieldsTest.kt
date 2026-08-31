@@ -1,10 +1,9 @@
-package com.pocketpass.app.mii.renderer
+package com.pocketpass.app.mii
 
-import com.pocketpass.app.mii.MiiAppearance
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
-class MiiAppearanceRendererAdapterTest {
+class MiiRendererFieldsTest {
     @Test
     fun defaultAppearanceMapsEveryPinnedRendererField() {
         val fields = MiiAppearance().toNativeRendererFields()

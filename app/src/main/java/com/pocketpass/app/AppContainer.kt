@@ -293,6 +293,9 @@ class AppContainer(
         } else {
             null
         },
+        deletePortraitFile = { path ->
+            withContext(Dispatchers.IO) { File(path).delete() }
+        },
     )
 
     val nearbyCredentialPool = NearbyCredentialPool(
