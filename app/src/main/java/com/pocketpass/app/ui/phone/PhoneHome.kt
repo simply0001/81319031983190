@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.phone
 
+import com.pocketpass.app.ui.PocketAsset
 import android.animation.ValueAnimator
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -477,7 +478,7 @@ internal fun PhoneRisingEmojis(
     }
 }
 
-private fun phoneRisingEmoji(id: Long, resource: Int, width: Float): RisingEmoji {
+private fun phoneRisingEmoji(id: Long, resource: PocketAsset, width: Float): RisingEmoji {
     val depth = Random.nextFloat()
     val size = HOME_EMOJI_SIZE * (0.5f + 0.75f * depth)
     return RisingEmoji(

@@ -1,8 +1,7 @@
 package com.pocketpass.app.ui.screens
 
+import com.pocketpass.app.ui.PocketAsset
 import android.animation.ValueAnimator
-import androidx.annotation.AnyRes
-import androidx.annotation.RawRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -83,6 +82,8 @@ import com.pocketpass.app.ui.setup.CountryCatalog
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import coil3.compose.AsyncImage
+import coil3.compose.rememberAsyncImagePainter
+import com.pocketpass.app.ui.components.rememberPocketAssetBytes
 import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.model.ConversationSummary
 import com.pocketpass.app.domain.model.Message
@@ -1564,7 +1565,7 @@ private fun HomeMoodControls(
 @Composable
 internal fun HomeMoodButton(
     metrics: DesignMetrics,
-    @RawRes resource: Int,
+    resource: PocketAsset,
     description: String,
     modifier: Modifier = Modifier,
     size: Float = HOME_MOOD_BUTTON_SIZE,
@@ -1651,8 +1652,7 @@ internal fun rememberHomeMoodOptionProgress(
     return progress
 }
 
-@RawRes
-internal fun HomeMood.assetResource(): Int = when (this) {
+internal fun HomeMood.assetResource(): PocketAsset = when (this) {
     HomeMood.Happy -> Assets.HomeMoodHappy
     HomeMood.Sad -> Assets.HomeMoodSad
     HomeMood.Neutral -> Assets.HomeMoodNeutral
@@ -1663,7 +1663,7 @@ internal fun HomeMood.assetResource(): Int = when (this) {
 
 internal data class RisingEmoji(
     val id: Long,
-    @RawRes val resource: Int,
+    val resource: PocketAsset,
     val x: Float,
     val depth: Float,
     val durationMillis: Int,
@@ -1680,8 +1680,7 @@ internal data class RisingEmoji(
         get() = 0.5f + 0.5f * depth
 }
 
-@RawRes
-internal fun HomeMood.emojiResource(): Int = when (this) {
+internal fun HomeMood.emojiResource(): PocketAsset = when (this) {
     HomeMood.Happy -> Assets.HomeMoodEmojiHappy
     HomeMood.Sad -> Assets.HomeMoodEmojiSad
     HomeMood.Neutral -> Assets.HomeMoodEmojiNeutral
@@ -1690,7 +1689,7 @@ internal fun HomeMood.emojiResource(): Int = when (this) {
     HomeMood.Cool -> Assets.HomeMoodEmojiCool
 }
 
-internal fun risingEmoji(id: Long, @RawRes resource: Int): RisingEmoji {
+internal fun risingEmoji(id: Long, resource: PocketAsset): RisingEmoji {
     val depth = Random.nextFloat()
     val size = HOME_EMOJI_SIZE * (0.5f + 0.75f * depth)
     return RisingEmoji(
@@ -2092,7 +2091,7 @@ private fun MessagesTop(state: PocketPassUiState, threadPresenting: Boolean) {
 internal fun DynamicTopAvatar(
     avatar: AvatarReference?,
     localPortraitFilePath: String? = null,
-    @AnyRes fallbackResource: Int?,
+    fallbackResource: PocketAsset?,
     modifier: Modifier,
 ) {
     val localPortrait = remember(localPortraitFilePath) {
@@ -2100,19 +2099,17 @@ internal fun DynamicTopAvatar(
             ?.let(::File)
             ?.takeIf(File::isFile)
     }
-    val model = localPortrait ?: when (avatar) {
-        is AvatarReference.Remote -> avatar.url
-        is AvatarReference.Bundled -> when (avatar.key) {
-            "home_avatar_petah" -> Assets.HomeAvatarPetah
-            "home_avatar_matt" -> Assets.HomeAvatarMatt
-            "friends_avatar_matt" -> Assets.FriendsAvatarMatt
-            "messages_avatar_spob" -> Assets.MessagesAvatarSpob
-            "messages_avatar_sans" -> Assets.MessagesAvatarSans
-            else -> fallbackResource
-        }
+    val bundled = when (avatar) {
+        is AvatarReference.Remote -> null
+        is AvatarReference.Bundled -> avatarResourceForKey(avatar.key) ?: fallbackResource
         null -> fallbackResource
     }
-    val fallbackPainter = fallbackResource?.let { painterResource(it) }
+    val model: Any? = localPortrait
+        ?: (avatar as? AvatarReference.Remote)?.url
+        ?: bundled?.let { rememberPocketAssetBytes(it) }
+    val fallbackPainter = fallbackResource
+        ?.let { rememberPocketAssetBytes(it) }
+        ?.let { bytes -> rememberAsyncImagePainter(bytes) }
     AsyncImage(
         model = model,
         contentDescription = null,

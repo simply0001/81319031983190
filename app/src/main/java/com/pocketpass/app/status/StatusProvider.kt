@@ -19,41 +19,13 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-object StatusFormatter {
-    private val clockFormat = DateTimeFormatter.ofPattern("HH:mm")
+private val clockFormat = DateTimeFormatter.ofPattern("HH:mm")
 
-    fun time(time: LocalTime): String = time.format(clockFormat)
+private fun formatTime(time: LocalTime): String = time.format(clockFormat)
 
-    fun battery(percent: Int): String = "${percent.coerceIn(0, 100)}%"
-
-    fun batteryPercent(
-        level: Int,
-        scale: Int,
-        fallback: Int,
-    ): Int = if (level >= 0 && scale > 0) {
-        ((level.toFloat() / scale) * 100f).roundToInt().coerceIn(0, 100)
-    } else {
-        fallback.coerceIn(0, 100)
-    }
-
-    fun batteryFillFraction(percent: Int): Float =
-        percent.coerceIn(0, 100) / 100f
-
-    fun batteryIsCharging(status: Int): Boolean =
-        status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL
-
-    fun wifiSignalLevel(
-        connected: Boolean,
-        signalStrength: Int,
-    ): Int = when {
-        !connected -> -1
-        signalStrength == Int.MIN_VALUE -> 2
-        signalStrength >= -65 -> 2
-        signalStrength >= -75 -> 1
-        else -> 0
-    }
-}
+private fun batteryIsCharging(status: Int): Boolean =
+    status == BatteryManager.BATTERY_STATUS_CHARGING ||
+        status == BatteryManager.BATTERY_STATUS_FULL
 
 fun interface StatusProvider {
     fun status(context: Context): Flow<StatusInfo>
@@ -94,9 +66,9 @@ class AndroidStatusProvider : StatusProvider {
             )
             trySend(
                 StatusInfo(
-                    time = StatusFormatter.time(LocalTime.now()),
+                    time = formatTime(LocalTime.now()),
                     batteryPercent = StatusFormatter.batteryPercent(level, scale, fallback),
-                    batteryCharging = StatusFormatter.batteryIsCharging(batteryStatus),
+                    batteryCharging = batteryIsCharging(batteryStatus),
                     wifiConnected = wifiConnected,
                     wifiSignalLevel = wifiSignalLevel,
                 ),

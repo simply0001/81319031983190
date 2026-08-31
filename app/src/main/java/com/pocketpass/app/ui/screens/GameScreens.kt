@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.screens
 
+import com.pocketpass.app.R
 import com.pocketpass.app.ui.toJavaInstant
 import android.animation.ValueAnimator
 import android.graphics.BitmapFactory
@@ -331,7 +332,7 @@ internal fun WorldTourGlobe(modifier: Modifier) {
     val mapBitmap = remember(context) {
         BitmapFactory.decodeResource(
             context.resources,
-            Assets.WorldTourGlobeMap,
+            R.drawable.worldtour_globe_map,
             BitmapFactory.Options().apply { inScaled = false },
         )
     }

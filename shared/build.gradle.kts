@@ -18,7 +18,7 @@ System.getenv("LOCALAPPDATA")?.let { localAppData ->
 kotlin {
     androidLibrary {
         namespace = "com.pocketpass.shared"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 30
 
         withHostTestBuilder {}.configure {}

@@ -1,6 +1,6 @@
 package com.pocketpass.app.ui.auth
 
-import androidx.annotation.RawRes
+import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -260,7 +260,7 @@ private const val PERMISSION_PANEL_HEIGHT = 740f
 private fun PermissionRow(
     metrics: DesignMetrics,
     y: Float,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     title: String,
     detail: String,
 ) {

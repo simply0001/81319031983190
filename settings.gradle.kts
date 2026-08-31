@@ -17,4 +17,5 @@ dependencyResolutionManagement {
 rootProject.name = "PocketPass"
 include(":app")
 include(":shared")
+include(":ui")
 

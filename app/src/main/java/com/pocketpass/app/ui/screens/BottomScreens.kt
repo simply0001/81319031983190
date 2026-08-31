@@ -1,11 +1,10 @@
 package com.pocketpass.app.ui.screens
 
+import com.pocketpass.app.ui.PocketAsset
 import android.animation.ValueAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.annotation.AnyRes
-import androidx.annotation.RawRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -608,7 +607,7 @@ private fun RecentInteractionsEmptyPanel(metrics: DesignMetrics) {
 @Composable
 internal fun EmptyStateRow(
     metrics: DesignMetrics,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     title: String,
     subtitle: String,
     tag: String,
@@ -1750,7 +1749,7 @@ private fun SectionTitle(
     metrics: DesignMetrics,
     title: String,
     color: Color,
-    @RawRes filterAsset: Int,
+    filterAsset: PocketAsset,
     buttonBorder: Color,
     buttonTint: Color,
     onFilter: (() -> Unit)? = null,
@@ -1858,7 +1857,7 @@ private fun PersonCard(
     nameColor: Color,
     detailColor: Color,
     avatar: AvatarReference?,
-    @AnyRes fallbackAvatar: Int?,
+    fallbackAvatar: PocketAsset?,
     initial: String,
     name: String,
     showOnline: Boolean,
@@ -1999,7 +1998,7 @@ internal data class PersonCardUi(
     val id: String,
     val name: String,
     val avatar: AvatarReference?,
-    @AnyRes val fallbackAvatar: Int?,
+    val fallbackAvatar: PocketAsset?,
     val isOnline: Boolean,
     val detail: String,
     val initial: String,
@@ -2052,38 +2051,6 @@ internal fun relativeTime(instant: Instant): String {
 
 internal const val CARD_PORTRAIT_ZOOM = 0.90f
 
-@Composable
-internal fun DynamicAvatar(
-    avatar: AvatarReference?,
-    @AnyRes fallbackResource: Int?,
-    modifier: Modifier,
-    contentScale: ContentScale = ContentScale.Crop,
-) {
-    val model = when (avatar) {
-        is AvatarReference.Remote -> avatar.url
-        is AvatarReference.Bundled -> avatarResourceForKey(avatar.key) ?: fallbackResource
-        null -> fallbackResource
-    }
-    if (model == null) return
-    val fallbackPainter = fallbackResource?.let { painterResource(it) }
-    AsyncImage(
-        model = model,
-        contentDescription = null,
-        modifier = modifier,
-        contentScale = contentScale,
-        fallback = fallbackPainter,
-        error = fallbackPainter,
-    )
-}
-
-internal fun avatarResourceForKey(key: String): Int? = when (key) {
-    "home_avatar_petah" -> Assets.HomeAvatarPetah
-    "home_avatar_matt" -> Assets.HomeAvatarMatt
-    "friends_avatar_matt" -> Assets.FriendsAvatarMatt
-    "messages_avatar_spob" -> Assets.MessagesAvatarSpob
-    "messages_avatar_sans" -> Assets.MessagesAvatarSans
-    else -> null
-}
 
 @Composable
 private fun ActivitiesBottom(
@@ -2144,7 +2111,7 @@ private fun ActivitiesBottom(
     }
 }
 
-internal fun shopAssetForKey(key: String): Int? = when (key) {
+internal fun shopAssetForKey(key: String): PocketAsset? = when (key) {
     "shop_category_hats" -> Assets.ShopCategoryHats
     "shop_item_baseball_cap" -> Assets.ShopItemBaseballCap
     "shop_item_halo" -> Assets.ShopItemHalo
@@ -2685,7 +2652,7 @@ fun GamesBottomOverlay(
 
 internal class GameEntry(
     val title: String,
-    @param:RawRes val icon: Int,
+    val icon: PocketAsset,
     val target: GameTarget,
 )
 
@@ -3279,7 +3246,7 @@ internal fun LeaderboardRow(
 @Composable
 internal fun LeaderboardStat(
     metrics: DesignMetrics,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     iconWidth: Float,
     iconHeight: Float,
     value: Int,
@@ -3312,7 +3279,7 @@ private val AchievementProgressColor = Color(0xFFFF6321)
 private val AchievementUnlockedBadgeColor = Color(0xFF3ECF00)
 private val AchievementLockedBadgeColor = Color(0xFF9F9F9F)
 
-internal fun achievementAssetForKey(key: String): Int? = when (key) {
+internal fun achievementAssetForKey(key: String): PocketAsset? = when (key) {
     "day_one" -> Assets.AchievementDayOne
     "saving_up" -> Assets.AchievementSavingUp
     "icebreaker" -> Assets.AchievementIcebreaker
@@ -3635,8 +3602,8 @@ internal fun ActivityPanel(
     textColor: Color,
     borderColor: Color,
     fillBottom: Color,
-    @RawRes icon: Int,
-    @RawRes arrow: Int,
+    icon: PocketAsset,
+    arrow: PocketAsset,
     entranceDelayMillis: Int,
     onClick: () -> Unit,
     height: Float = 220f,
@@ -4455,7 +4422,7 @@ private const val BUBBLE_TAIL_ROTATION = 141.4f
 private class BubblePalette(
     val border: Color,
     val fill: Array<Pair<Float, Color>>,
-    @param:RawRes val tail: Int,
+    val tail: PocketAsset,
 )
 
 private val IncomingBubble = BubblePalette(
@@ -4481,7 +4448,7 @@ private val OutgoingBubble = BubblePalette(
 @Composable
 private fun BoxScope.MessageBubbleTail(
     metrics: DesignMetrics,
-    @RawRes resource: Int,
+    resource: PocketAsset,
     outgoing: Boolean,
 ) {
     Box(modifier = Modifier.matchParentSize()) {
@@ -4875,7 +4842,7 @@ private const val ADD_FRIEND_FOCUS_LAYER = 10
 @Composable
 private fun RailGlyph(
     metrics: DesignMetrics,
-    @RawRes resource: Int,
+    resource: PocketAsset,
     railHeight: () -> Float,
     x: Float,
     y: Float,
@@ -6833,7 +6800,7 @@ internal fun RemoveFriendConfirmDialog(
 internal fun FriendStat(
     metrics: DesignMetrics,
     modifier: Modifier,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     iconWidth: Float,
     iconHeight: Float,
     value: Int?,
@@ -7233,7 +7200,7 @@ private fun BoxScope.ThemeChoiceLabel(
     metrics: DesignMetrics,
     mode: ThemeMode,
     label: String,
-    @RawRes icon: Int,
+    icon: PocketAsset,
 ) {
     Row(
         modifier = Modifier.themeChoiceBounds(metrics, mode),
@@ -7546,7 +7513,7 @@ private const val SUBPAGE_HEADER_PIVOT_Y = 146f
 @Composable
 internal fun BoxScope.SettingsHeading(
     metrics: DesignMetrics,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     title: String,
     subtitle: String,
     subtitleColor: Color? = null,

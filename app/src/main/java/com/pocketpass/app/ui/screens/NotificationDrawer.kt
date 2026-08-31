@@ -1,6 +1,6 @@
 package com.pocketpass.app.ui.screens
 
-import androidx.annotation.RawRes
+import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -709,7 +709,7 @@ private fun FriendRequestActionButton(
     label: String,
     labelX: Float,
     labelWidth: Float,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     iconX: Float,
     iconY: Float,
     iconWidth: Float,

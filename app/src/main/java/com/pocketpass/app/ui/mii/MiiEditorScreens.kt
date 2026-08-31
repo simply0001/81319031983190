@@ -1,7 +1,7 @@
 package com.pocketpass.app.ui.mii
 
+import com.pocketpass.app.ui.PocketAsset
 import android.animation.ValueAnimator
-import androidx.annotation.RawRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
@@ -164,7 +164,7 @@ fun MiiEditorTopScreen(
                 },
         ) {
             FigmaAsset(
-                resource = R.raw.mii_editor_top_background,
+                resource = PocketAsset("files/figma/mii_editor_top_background.png"),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.FillBounds,
             )
@@ -190,7 +190,7 @@ fun MiiEditorTopScreen(
             )
 
             FigmaAsset(
-                resource = R.raw.mii_editor_ground_shadow,
+                resource = PocketAsset("files/figma/mii_editor_ground_shadow.svg"),
                 modifier = Modifier.designBounds(
                     metrics,
                     x = 720.64f,
@@ -563,7 +563,7 @@ private fun MiiEditorBackground(metrics: DesignMetrics) {
                 ),
         )
         FigmaAsset(
-            resource = R.raw.mii_editor_bottom_pattern,
+            resource = PocketAsset("files/figma/mii_editor_bottom_pattern.png"),
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
             alpha = 0.19f,
@@ -573,7 +573,7 @@ private fun MiiEditorBackground(metrics: DesignMetrics) {
 
 private data class CategoryVisual(
     val category: MiiCategory,
-    @RawRes val icon: Int,
+    val icon: PocketAsset,
     val width: Float,
     val height: Float,
 )
@@ -599,14 +599,14 @@ private const val MII_ADJUSTMENT_SLIDER_TAG = "mii_adjustment_slider"
 private fun miiCategoryTag(category: MiiCategory): String = "mii_category_${category.name}"
 
 private val categoryVisuals = listOf(
-    CategoryVisual(MiiCategory.Face, R.raw.mii_editor_category_face, 83f, 83f),
-    CategoryVisual(MiiCategory.Hair, R.raw.mii_editor_category_hair, 83f, 83f),
-    CategoryVisual(MiiCategory.Eyebrows, R.raw.mii_editor_category_eyebrow, 96f, 43f),
-    CategoryVisual(MiiCategory.Eyes, R.raw.mii_editor_category_eye, 89f, 62f),
-    CategoryVisual(MiiCategory.Nose, R.raw.mii_editor_category_nose, 84f, 61f),
-    CategoryVisual(MiiCategory.Mouth, R.raw.mii_editor_category_mouth, 89f, 58f),
-    CategoryVisual(MiiCategory.Glasses, R.raw.mii_editor_category_glasses, 99f, 35f),
-    CategoryVisual(MiiCategory.Body, R.raw.mii_editor_category_body, 75f, 85f),
+    CategoryVisual(MiiCategory.Face, PocketAsset("files/figma/mii_editor_category_face.svg"), 83f, 83f),
+    CategoryVisual(MiiCategory.Hair, PocketAsset("files/figma/mii_editor_category_hair.svg"), 83f, 83f),
+    CategoryVisual(MiiCategory.Eyebrows, PocketAsset("files/figma/mii_editor_category_eyebrow.svg"), 96f, 43f),
+    CategoryVisual(MiiCategory.Eyes, PocketAsset("files/figma/mii_editor_category_eye.svg"), 89f, 62f),
+    CategoryVisual(MiiCategory.Nose, PocketAsset("files/figma/mii_editor_category_nose.svg"), 84f, 61f),
+    CategoryVisual(MiiCategory.Mouth, PocketAsset("files/figma/mii_editor_category_mouth.svg"), 89f, 58f),
+    CategoryVisual(MiiCategory.Glasses, PocketAsset("files/figma/mii_editor_category_glasses.svg"), 99f, 35f),
+    CategoryVisual(MiiCategory.Body, PocketAsset("files/figma/mii_editor_category_body.svg"), 75f, 85f),
 )
 
 @Composable
@@ -692,7 +692,7 @@ private fun CategoryRail(
 
         if (index < categoryVisuals.lastIndex) {
             FigmaAsset(
-                resource = R.raw.mii_editor_rail_divider,
+                resource = PocketAsset("files/figma/mii_editor_rail_divider.svg"),
                 modifier = Modifier.designBounds(
                     metrics,
                     x = 0f,
@@ -791,9 +791,9 @@ private fun TraitPill(
         if (field == MiiTraitField.Gender) {
             FigmaAsset(
                 resource = if (index == 0) {
-                    R.raw.mii_editor_gender_male
+                    PocketAsset("files/figma/mii_editor_gender_male.svg")
                 } else {
-                    R.raw.mii_editor_gender_female
+                    PocketAsset("files/figma/mii_editor_gender_female.svg")
                 },
                 modifier = Modifier.requiredSize(metrics.dp(112f)),
                 contentScale = ContentScale.Fit,
@@ -801,7 +801,7 @@ private fun TraitPill(
             )
         } else if (field == MiiTraitField.HatType && index < 0) {
             FigmaAsset(
-                resource = R.raw.mii_editor_hat_none,
+                resource = PocketAsset("files/figma/mii_editor_hat_none.svg"),
                 modifier = Modifier.requiredSize(metrics.dp(112f)),
                 contentScale = ContentScale.Fit,
                 description = "No hat",
@@ -851,7 +851,7 @@ private fun TraitPill(
                 contentAlignment = Alignment.Center,
             ) {
                 FigmaAsset(
-                    resource = R.raw.mii_editor_lock,
+                    resource = PocketAsset("files/figma/mii_editor_lock.svg"),
                     modifier = Modifier.requiredSize(metrics.dp(26f)),
                     contentScale = ContentScale.Fit,
                 )
@@ -1163,15 +1163,15 @@ private fun swatchBorder(index: Int, color: Color): Color = when (index) {
 }
 
 private enum class AdjustmentVisualSlot(
-    @RawRes val icon: Int,
+    val icon: PocketAsset,
     val visualWidth: Float,
     val visualHeight: Float,
 ) {
-    Vertical(R.raw.mii_editor_adjust_vertical, 56.703f, 96.385f),
-    Horizontal(R.raw.mii_editor_adjust_horizontal, 96.385f, 56.703f),
-    Rotate(R.raw.mii_editor_adjust_rotate, 84.179f, 96.383f),
-    Scale(R.raw.mii_editor_adjust_scale, 81.469f, 81.469f),
-    Spacing(R.raw.mii_editor_adjust_spacing, 101.355f, 81.084f),
+    Vertical(PocketAsset("files/figma/mii_editor_adjust_vertical.svg"), 56.703f, 96.385f),
+    Horizontal(PocketAsset("files/figma/mii_editor_adjust_horizontal.svg"), 96.385f, 56.703f),
+    Rotate(PocketAsset("files/figma/mii_editor_adjust_rotate.svg"), 84.179f, 96.383f),
+    Scale(PocketAsset("files/figma/mii_editor_adjust_scale.svg"), 81.469f, 81.469f),
+    Spacing(PocketAsset("files/figma/mii_editor_adjust_spacing.svg"), 101.355f, 81.084f),
 }
 
 @Composable
@@ -1262,26 +1262,26 @@ private fun AdjustmentButtons(
 }
 
 private class RailToggle(
-    @RawRes val icon: Int,
+    val icon: PocketAsset,
     val on: Boolean,
     val event: MiiEditorEvent,
 )
 
 private fun MiiEditorUiState.railToggle(): RailToggle? = when (selectedCategory) {
     MiiCategory.Hair -> RailToggle(
-        icon = R.raw.mii_editor_adjust_hat,
+        icon = PocketAsset("files/figma/mii_editor_adjust_hat.svg"),
         on = hatMode,
         event = MiiEditorEvent.SelectTraitField(
             if (hatMode) MiiTraitField.HairType else MiiTraitField.HatType,
         ),
     )
     MiiCategory.Face -> RailToggle(
-        icon = R.raw.mii_editor_adjust_mole,
+        icon = PocketAsset("files/figma/mii_editor_adjust_mole.svg"),
         on = draft.moleEnabled,
         event = MiiEditorEvent.SetToggle(MiiToggleField.Mole, !draft.moleEnabled),
     )
     MiiCategory.Mouth -> RailToggle(
-        icon = R.raw.mii_editor_adjust_facial_hair,
+        icon = PocketAsset("files/figma/mii_editor_adjust_facial_hair.svg"),
         on = facialHairMode,
         event = MiiEditorEvent.SelectTraitField(
             if (facialHairMode) MiiTraitField.MouthType else MiiTraitField.MustacheType,
@@ -1991,7 +1991,7 @@ private fun ContinuePanel(
 
         if (glyph) {
             FigmaAsset(
-                resource = R.raw.mii_editor_ok_y,
+                resource = PocketAsset("files/figma/mii_editor_ok_y.svg"),
                 modifier = Modifier.designBounds(metrics, 68.78f, 46.28f, 85.44f, 92.44f),
             )
         }

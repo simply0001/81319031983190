@@ -74,7 +74,7 @@ val pocketPassSigningProperties = Properties().apply {
 
 android {
     namespace = "com.pocketpass.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.pocketpass.app"
@@ -181,6 +181,7 @@ androidComponents {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(project(":ui"))
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)

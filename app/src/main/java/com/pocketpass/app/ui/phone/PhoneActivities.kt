@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.phone
 
+import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -327,7 +328,7 @@ private fun SectionNotice(metrics: DesignMetrics, message: String, tag: String) 
 @Composable
 private fun SectionArt(
     metrics: DesignMetrics,
-    resource: Int,
+    resource: PocketAsset,
     width: Float,
     height: Float,
     idle: IdleMotion,
@@ -506,7 +507,7 @@ private fun CounterLayer(
 @Composable
 private fun Counter(
     metrics: DesignMetrics,
-    resource: Int,
+    resource: PocketAsset,
     count: Int,
     color: Color,
     entrance: EntranceMotion,

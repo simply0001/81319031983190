@@ -1,6 +1,6 @@
 package com.pocketpass.app.ui.phone
 
-import androidx.annotation.RawRes
+import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -457,7 +457,7 @@ private fun PhoneSubpageRow(
 @Composable
 private fun PhoneToggleRow(
     metrics: DesignMetrics,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     title: String,
     subtitle: String,
     enabled: Boolean,

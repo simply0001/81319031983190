@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.phone
 
+import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -403,7 +404,7 @@ private fun PhoneNotificationCard(
 private fun PhoneRequestButton(
     metrics: DesignMetrics,
     label: String,
-    icon: Int,
+    icon: PocketAsset,
     iconWidth: Float,
     iconHeight: Float,
     fill: Brush,

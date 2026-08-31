@@ -26,12 +26,12 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Type-check shared against every target
-        run: ./gradlew :shared:compileCommonMainKotlinMetadata --console=plain
+      - name: Type-check shared and ui against every target
+        run: ./gradlew :shared:compileCommonMainKotlinMetadata :ui:compileCommonMainKotlinMetadata --console=plain
       - name: Build the Android app
         run: ./gradlew :app:assembleDebug --console=plain
       - name: Unit tests
-        run: ./gradlew :app:testDebugUnitTest :shared:allTests --console=plain
+        run: ./gradlew :app:testDebugUnitTest :shared:allTests :ui:testAndroidHostTest --console=plain
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -56,10 +56,10 @@ jobs:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
           restore-keys: konan-${{ runner.os }}-
-      - name: Link the simulator framework
-        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --console=plain
-      - name: Link the device framework
-        run: ./gradlew :shared:linkReleaseFrameworkIosArm64 --console=plain
+      - name: Link the simulator frameworks
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 :ui:linkDebugFrameworkIosSimulatorArm64 --console=plain
+      - name: Link the device frameworks
+        run: ./gradlew :shared:linkReleaseFrameworkIosArm64 :ui:linkReleaseFrameworkIosArm64 --console=plain
       - name: iOS unit tests
         run: ./gradlew :shared:iosSimulatorArm64Test --console=plain
       - uses: actions/upload-artifact@v4

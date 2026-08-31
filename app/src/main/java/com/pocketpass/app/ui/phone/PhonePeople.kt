@@ -1,7 +1,6 @@
 package com.pocketpass.app.ui.phone
 
-import androidx.annotation.AnyRes
-import androidx.annotation.RawRes
+import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -293,7 +292,7 @@ internal fun PhonePersonCard(
 @Composable
 internal fun PhoneEmptyRow(
     metrics: DesignMetrics,
-    @RawRes icon: Int,
+    icon: PocketAsset,
     title: String,
     subtitle: String,
     tag: String,
@@ -447,7 +446,7 @@ internal fun PhoneAvatarFrame(
     size: Float,
     avatar: AvatarReference?,
     localPortraitPath: String?,
-    @AnyRes fallback: Int?,
+    fallback: PocketAsset?,
     border: Color,
     surface: Color,
     online: Boolean,
@@ -499,7 +498,7 @@ internal fun PhoneProfileHero(
     country: String?,
     avatar: AvatarReference?,
     localPortraitPath: String?,
-    @AnyRes fallback: Int?,
+    fallback: PocketAsset?,
     border: Color,
     surface: Color,
     nameColor: Color,

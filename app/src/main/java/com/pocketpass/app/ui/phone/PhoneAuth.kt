@@ -1,8 +1,8 @@
 package com.pocketpass.app.ui.phone
 
+import com.pocketpass.app.ui.PocketAsset
 import android.animation.ValueAnimator
 import android.os.Build
-import androidx.annotation.RawRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -764,7 +764,7 @@ internal fun PhoneNearbyPermissionScreen(
 }
 
 @Composable
-private fun PermissionRow(metrics: DesignMetrics, @RawRes icon: Int, title: String, detail: String) {
+private fun PermissionRow(metrics: DesignMetrics, icon: PocketAsset, title: String, detail: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         FigmaAsset(resource = icon, modifier = Modifier.requiredSize(metrics.dp(124f)))
         Column(
