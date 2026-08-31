@@ -30,18 +30,10 @@ import com.pocketpass.app.data.repository.remote.ProfileRemoteDataSource
 import com.pocketpass.app.data.supabase.PocketPassSupabaseClientFactory
 import com.pocketpass.app.data.supabase.SupabaseBackendConfig
 import com.pocketpass.app.data.supabase.SupabaseProductionRemoteDataSources
-import com.pocketpass.app.data.supabase.realtime.ConversationRealtimeEvent
-import com.pocketpass.app.data.supabase.realtime.MessageChangeOperation
-import com.pocketpass.app.data.supabase.realtime.PresenceStateDto
 import com.pocketpass.app.data.supabase.realtime.SupabaseRealtimeGateway
-import com.pocketpass.app.data.supabase.realtime.TokenChannelEvent
-import com.pocketpass.app.data.supabase.realtime.NotificationChange
 import com.pocketpass.app.audio.SoundEffect
 import com.pocketpass.app.audio.SoundEffectPlayer
 import com.pocketpass.app.domain.model.ConversationId
-import com.pocketpass.app.domain.model.FriendshipStatus
-import com.pocketpass.app.domain.model.LeaderboardScope
-import com.pocketpass.app.domain.model.PresenceStatus
 import com.pocketpass.app.domain.model.EncounterId
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.repository.AccountDeleter
@@ -65,6 +57,7 @@ import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
+import com.pocketpass.app.domain.state.accountIdOrNull
 import com.pocketpass.app.feature.AccountSetupStateHolder
 import com.pocketpass.app.feature.ActivitiesStateHolder
 import com.pocketpass.app.feature.GamesStateHolder
@@ -112,6 +105,8 @@ import com.pocketpass.app.security.AppIntegrityStatus
 import com.pocketpass.app.security.KeystoreSupabaseCodeVerifierCache
 import com.pocketpass.app.security.KeystoreSupabaseSessionManager
 import com.pocketpass.app.sync.DatabaseOutboxWorkRunner
+import com.pocketpass.app.sync.RealtimeNetworkState
+import com.pocketpass.app.sync.RealtimeRuntime
 import com.pocketpass.app.sync.OutboxWorkCoordinator
 import com.pocketpass.app.sync.OutboxWorkerRuntime
 import com.pocketpass.app.update.ApkInstaller
@@ -127,15 +122,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -150,22 +142,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 internal suspend fun clearSignOutData(cleanup: () -> Unit) {
     withContext(NonCancellable + Dispatchers.IO) {
         cleanup()
     }
-}
-
-internal data class RealtimeRuntimeGate(
-    val accountId: UserId?,
-    val appForeground: Boolean,
-    val networkAvailable: Boolean,
-    val networkGeneration: Long,
-) {
-    val shouldRun: Boolean
-        get() = accountId != null && appForeground && networkAvailable
 }
 
 class AppContainer(
@@ -176,7 +157,6 @@ class AppContainer(
     val settingsRepository: SettingsRepository = DataStoreSettingsRepository(context)
     val soundEffects = SoundEffectPlayer(context)
     private val appForeground = MutableStateFlow(false)
-    private var lastSeenRefreshJob: Job? = null
     private val connectivityManager =
         context.getSystemService(ConnectivityManager::class.java)
     private val realtimeNetworkState = MutableStateFlow(
@@ -194,8 +174,6 @@ class AppContainer(
     )
 
     private val outboxWorkCoordinator = OutboxWorkCoordinator(context)
-    private val postedNearbyNotificationIds =
-        ConcurrentHashMap.newKeySet<String>()
     val nearbyProofOutboxStore = NearbyProofOutboxStore(
         outboxDao = database.outboxDao(),
         secureStore = nearbySecureStore,
@@ -231,7 +209,7 @@ class AppContainer(
             kotlinx.coroutines.flow.MutableStateFlow(FixtureData.CurrentUserId)
         } else {
             repositories.session.sessionState
-                .map(::accountIdOrNull)
+                .map { it.accountIdOrNull() }
                 .stateIn(
                     scope = applicationScope,
                     started = SharingStarted.Eagerly,
@@ -249,6 +227,11 @@ class AppContainer(
             QueuedMiiEditorSaveCallback(
                 queue = miiPublishQueue,
                 publisher = publisher,
+                readPortrait = { path ->
+                    withContext(Dispatchers.IO) {
+                        File(path).takeIf(File::isFile)?.readBytes()
+                    }
+                },
                 onPublished = { publication ->
                     repositories.profiles.refreshProfile(publication.accountId)
                 },
@@ -447,6 +430,31 @@ class AppContainer(
         scope = applicationScope,
     )
 
+    private val realtimeRuntime: RealtimeRuntime? = productionComponents?.let { production ->
+        RealtimeRuntime(
+            scope = applicationScope,
+            database = database,
+            repositories = production.repositories,
+            bundle = production.bundle,
+            presence = production.presence,
+            realtime = requireNotNull(backendComponents).realtime,
+            profileRemote = production.profileRemote,
+            soundEffects = soundEffects,
+            settingsRepository = settingsRepository,
+            appForeground = appForeground,
+            networkState = realtimeNetworkState,
+            observeSelfTyping = { messages.observeSelfTyping(it) },
+            onAppUpdateSignal = { appUpdate.onRemoteManifestChanged() },
+            onNearbyEncounterNotification = { displayName, notificationKey ->
+                NearbyNotifications.postEncounter(
+                    context = context,
+                    displayName = displayName,
+                    notificationKey = notificationKey,
+                )
+            },
+        )
+    }
+
     val authRemoteDataSource: SupabaseAuthRemoteDataSource?
         get() = backendComponents?.authRemote
 
@@ -483,7 +491,10 @@ class AppContainer(
             repositories.session.initialize()
         }
         appUpdate.checkOnLaunch()
-        productionComponents?.let(::startProductionRuntime)
+        realtimeRuntime?.let { runtime ->
+            registerRealtimeNetworkCallback()
+            runtime.start()
+        }
     }
 
     suspend fun handleAuthCallback(callbackUri: String): RepositoryResult<SessionState> =
@@ -682,7 +693,10 @@ class AppContainer(
                             .exceptionOrNull(),
                     )
                 }
-                add(runCatching { postedNearbyNotificationIds.clear() }.exceptionOrNull())
+                add(
+                    runCatching { realtimeRuntime?.clearPostedNearbyNotifications() }
+                        .exceptionOrNull(),
+                )
             }.filterNotNull()
             val databaseCleanupFailure = try {
                 clearSignOutData(database::clearAllTables)
@@ -825,479 +839,6 @@ class AppContainer(
         )
     }
 
-    private fun startProductionRuntime(production: ProductionComponents) {
-        registerRealtimeNetworkCallback()
-        applicationScope.launch {
-            combine(
-                repositories.session.sessionState
-                    .map(::accountIdOrNull)
-                    .distinctUntilChanged(),
-                appForeground,
-                realtimeNetworkState,
-            ) { accountId, foreground, network ->
-                RealtimeRuntimeGate(
-                    accountId = accountId,
-                    appForeground = foreground,
-                    networkAvailable = network.available,
-                    networkGeneration = network.generation,
-                )
-            }
-                .distinctUntilChanged()
-                .collectLatest { gate ->
-                    production.presence.clearAll()
-                    if (!gate.shouldRun) {
-                        Log.i(
-                            TAG,
-                            "Realtime stopped: foreground=${gate.appForeground}, " +
-                                "network=${gate.networkAvailable}, " +
-                                "authenticated=${gate.accountId != null}",
-                        )
-                        if (gate.accountId != null && gate.networkAvailable) {
-                            touchLastSeen(production)
-                        }
-                        return@collectLatest
-                    }
-
-                    val accountId = requireNotNull(gate.accountId)
-                    Log.i(
-                        TAG,
-                        "Realtime starting for network generation ${gate.networkGeneration}",
-                    )
-                    try {
-                        repositories.sync.synchronize(accountId)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Throwable) {
-                        Log.w(TAG, "Realtime reconciliation failed before reconnect", error)
-                    }
-                    coroutineScope {
-                        launch { touchLastSeenPeriodically(production) }
-                        launch { collectRealtimeConversations(accountId, production) }
-                        launch { collectRealtimeNotifications(accountId, production) }
-                        launch { collectRealtimeFriends(accountId, production) }
-                        launch { collectRealtimeTokenBalance(accountId, production) }
-                        launch { collectRealtimeEncounterStats(accountId, production) }
-                        launch { collectRealtimeAppUpdates() }
-                    }
-                }
-        }
-    }
-
-    private suspend fun collectRealtimeFriends(
-        accountId: UserId,
-        production: ProductionComponents,
-    ) = coroutineScope {
-        production.bundle.friends.refreshFriends(accountId)
-        launch {
-            var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            while (currentCoroutineContext().isActive) {
-                try {
-                    requireNotNull(backendComponents).realtime
-                        .friendInvalidations(accountId.value)
-                        .collect {
-                            production.bundle.friends.refreshFriends(accountId)
-                            production.bundle.notifications.refreshNotifications(accountId)
-                        }
-                    retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (error: Throwable) {
-                    Log.w(TAG, "Friend invalidation channel failed; retrying", error)
-                }
-                delay(retryDelayMillis)
-                production.bundle.friends.refreshFriends(accountId)
-                retryDelayMillis = (retryDelayMillis * 2)
-                    .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-            }
-        }
-        launch {
-            val channelJobs = mutableMapOf<UserId, Job>()
-            try {
-                database.friendDao()
-                    .observeForOwner(accountId.value)
-                    .map { rows ->
-                        rows.asSequence()
-                            .filter {
-                                it.friendshipStatus == FriendshipStatus.Accepted.name
-                            }
-                            .mapTo(linkedSetOf()) { UserId(it.friendUserId) }
-                    }
-                    .distinctUntilChanged()
-                    .collect { friendIds ->
-                        val removed = channelJobs.keys - friendIds
-                        removed.forEach { friendId ->
-                            channelJobs.remove(friendId)?.cancel()
-                            production.presence.clearFriendPresence(
-                                friendPresencePairKey(accountId, friendId),
-                            )
-                        }
-
-                        (friendIds - channelJobs.keys).forEach { friendId ->
-                            channelJobs[friendId] = launch {
-                                collectFriendPresence(
-                                    accountId = accountId,
-                                    friendId = friendId,
-                                    production = production,
-                                )
-                            }
-                        }
-                    }
-            } finally {
-                channelJobs.values.forEach(Job::cancel)
-                channelJobs.keys.forEach { friendId ->
-                    production.presence.clearFriendPresence(
-                        friendPresencePairKey(accountId, friendId),
-                    )
-                }
-            }
-        }
-    }
-
-    private suspend fun touchLastSeen(production: ProductionComponents) {
-        when (val result = production.profileRemote.touchLastSeen()) {
-            is RepositoryResult.Success -> Unit
-            is RepositoryResult.Failure ->
-                Log.d(TAG, "Last seen touch failed: ${result.error.message}")
-        }
-    }
-
-    private suspend fun touchLastSeenPeriodically(production: ProductionComponents) {
-        while (currentCoroutineContext().isActive) {
-            touchLastSeen(production)
-            delay(LAST_SEEN_TOUCH_INTERVAL_MILLIS)
-        }
-    }
-
-    private fun scheduleLastSeenRefresh(accountId: UserId, production: ProductionComponents) {
-        lastSeenRefreshJob?.cancel()
-        lastSeenRefreshJob = applicationScope.launch {
-            delay(LAST_SEEN_REFRESH_DELAY_MILLIS)
-            production.bundle.friends.refreshFriends(accountId)
-        }
-    }
-
-    private suspend fun collectFriendPresence(
-        accountId: UserId,
-        friendId: UserId,
-        production: ProductionComponents,
-    ) {
-        val pairKey = friendPresencePairKey(accountId, friendId)
-        var friendOnline = false
-        var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-        while (currentCoroutineContext().isActive) {
-            try {
-                requireNotNull(backendComponents).realtime
-                    .friendPresence(
-                        accountId = accountId.value,
-                        friendUserId = friendId.value,
-                    )
-                    .collect { presences ->
-                        Log.i(
-                            TAG,
-                            "Friend presence changed: onlineMembers=${presences.size}",
-                        )
-                        val online = presences.any { it.userId == friendId.value }
-                        if (friendOnline && !online) {
-                            scheduleLastSeenRefresh(accountId, production)
-                        }
-                        friendOnline = online
-                        production.presence.replaceFriendPresence(
-                            pairKey = pairKey,
-                            snapshot = presences
-                                .mapNotNull { presence ->
-                                    runCatching {
-                                        UserId(presence.userId) to PresenceStatus.Online
-                                    }.getOrNull()
-                                }
-                                .toMap(),
-                        )
-                    }
-                retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                production.presence.clearFriendPresence(pairKey)
-                Log.w(TAG, "Friend presence channel failed; reconciling and retrying", error)
-                try {
-                    production.bundle.friends.refreshFriends(accountId)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (refreshError: Throwable) {
-                    Log.w(TAG, "Friend reconciliation failed after Presence error", refreshError)
-                }
-            }
-            delay(retryDelayMillis)
-            retryDelayMillis = (retryDelayMillis * 2)
-                .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-        }
-    }
-
-    private fun friendPresencePairKey(first: UserId, second: UserId): String =
-        listOf(first.value, second.value)
-            .sorted()
-            .joinToString(separator = ":")
-
-    private suspend fun collectRealtimeAppUpdates() {
-        var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-        while (currentCoroutineContext().isActive) {
-            try {
-                requireNotNull(backendComponents).realtime
-                    .appUpdateSignals()
-                    .collect { appUpdate.onRemoteManifestChanged() }
-                retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                Log.w(TAG, "App update channel failed; retrying", error)
-            }
-            delay(retryDelayMillis)
-            retryDelayMillis = (retryDelayMillis * 2)
-                .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-        }
-    }
-
-    private suspend fun collectRealtimeTokenBalance(
-        accountId: UserId,
-        production: ProductionComponents,
-    ) {
-        var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-        while (currentCoroutineContext().isActive) {
-            production.repositories.shop.refresh(accountId)
-            try {
-                requireNotNull(backendComponents).realtime
-                    .tokenBalanceInvalidations(accountId.value)
-                    .collect { event ->
-                        when (event) {
-                            TokenChannelEvent.Balance ->
-                                production.repositories.shop.refreshTokenBalance(accountId)
-                            TokenChannelEvent.Supporter ->
-                                production.repositories.shop.refreshSupporterStatus(accountId)
-                        }
-                    }
-                retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                Log.w(TAG, "Token balance channel failed; retrying", error)
-            }
-            delay(retryDelayMillis)
-            retryDelayMillis = (retryDelayMillis * 2)
-                .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-        }
-    }
-
-    private suspend fun collectRealtimeEncounterStats(
-        accountId: UserId,
-        production: ProductionComponents,
-    ) {
-        suspend fun refreshStats() {
-            production.repositories.leaderboard.refresh(accountId, LeaderboardScope.Friends)
-            production.repositories.leaderboard.refresh(accountId, LeaderboardScope.Global)
-            production.repositories.worldTour.refresh(accountId)
-        }
-        var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-        while (currentCoroutineContext().isActive) {
-            refreshStats()
-            try {
-                requireNotNull(backendComponents).realtime
-                    .encounterInvalidations(accountId.value)
-                    .collect { refreshStats() }
-                retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                Log.w(TAG, "Encounter stats channel failed; retrying", error)
-            }
-            delay(retryDelayMillis)
-            retryDelayMillis = (retryDelayMillis * 2)
-                .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-        }
-    }
-
-    private suspend fun collectRealtimeNotifications(
-        accountId: UserId,
-        production: ProductionComponents,
-    ) {
-        var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-        while (currentCoroutineContext().isActive) {
-            production.bundle.notifications.refreshNotifications(accountId)
-            postUnreadNearbyNotifications(accountId)
-            try {
-                requireNotNull(backendComponents).realtime
-                    .notificationInvalidations(accountId.value)
-                    .collect { change ->
-                        if (change == NotificationChange.Inserted) {
-                            soundEffects.play(SoundEffect.Notification)
-                        }
-                        production.bundle.notifications.refreshNotifications(accountId)
-                        postUnreadNearbyNotifications(accountId)
-                        refreshConversationsForNotifications(accountId, production)
-                    }
-                retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                Log.w(TAG, "Notification invalidation channel failed; retrying", error)
-            }
-            delay(retryDelayMillis)
-            retryDelayMillis = (retryDelayMillis * 2)
-                .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-        }
-    }
-
-    private suspend fun postUnreadNearbyNotifications(accountId: UserId) {
-        val alertsEnabled = settingsRepository.settings.first().encounterAlertsEnabled
-        database.notificationDao()
-            .getUnreadNearbyForAccount(accountId.value)
-            .forEach { notification ->
-                if (
-                    postedNearbyNotificationIds.add(notification.notificationId) &&
-                    alertsEnabled
-                ) {
-                    NearbyNotifications.postEncounter(
-                        context = context,
-                        displayName = notification.actorDisplayName
-                            ?.takeIf(String::isNotBlank)
-                            ?: "Someone",
-                        notificationKey = notification.notificationId,
-                    )
-                }
-            }
-    }
-
-    private suspend fun refreshConversationsForNotifications(
-        accountId: UserId,
-        production: ProductionComponents,
-    ) {
-        val pending = database.notificationDao().conversationIdsNeedingRefresh(accountId.value)
-        if (pending.isNotEmpty()) {
-            production.bundle.messages.refreshConversations(accountId)
-        }
-    }
-
-    private suspend fun collectRealtimeConversations(
-        accountId: UserId,
-        production: ProductionComponents,
-    ) = coroutineScope {
-        val channelJobs = mutableMapOf<ConversationId, Job>()
-        try {
-            database.conversationDao()
-                .observeForAccount(accountId.value)
-                .map { rows ->
-                    rows.mapTo(linkedSetOf()) { row ->
-                        ConversationId(row.conversationId)
-                    }
-                }
-                .distinctUntilChanged()
-                .collect { conversationIds ->
-                    val removed = channelJobs.keys - conversationIds
-                    removed.forEach { conversationId ->
-                        channelJobs.remove(conversationId)?.cancel()
-                        production.presence.clearConversation(conversationId)
-                    }
-
-                    (conversationIds - channelJobs.keys).forEach { conversationId ->
-                        channelJobs[conversationId] = launch {
-                            collectConversationRealtime(
-                                accountId = accountId,
-                                conversationId = conversationId,
-                                production = production,
-                            )
-                        }
-                    }
-                }
-        } finally {
-            channelJobs.values.forEach(Job::cancel)
-            channelJobs.keys.forEach(production.presence::clearConversation)
-        }
-    }
-
-    private suspend fun collectConversationRealtime(
-        accountId: UserId,
-        conversationId: ConversationId,
-        production: ProductionComponents,
-    ) {
-        var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-        while (currentCoroutineContext().isActive) {
-            production.bundle.messages.refreshConversations(accountId)
-            production.bundle.messages.refreshMessages(accountId, conversationId)
-
-            try {
-                requireNotNull(backendComponents).realtime
-                    .conversationEvents(
-                        conversationId = conversationId.value,
-                        userId = accountId.value,
-                        typingUpdates = messages.observeSelfTyping(conversationId),
-                    )
-                    .collect { event ->
-                        when (event) {
-                            is ConversationRealtimeEvent.MessageInvalidated -> {
-                                val invalidation = event.invalidation
-                                if (
-                                    invalidation.operation == MessageChangeOperation.Insert &&
-                                    invalidation.senderId != null &&
-                                    invalidation.senderId != accountId.value
-                                ) {
-                                    soundEffects.play(SoundEffect.MessageReceived)
-                                }
-                                production.bundle.messages.refreshMessages(
-                                    accountId,
-                                    conversationId,
-                                )
-                                production.bundle.messages.refreshConversations(accountId)
-                            }
-
-                            is ConversationRealtimeEvent.ConversationInvalidated -> {
-                                production.bundle.messages.refreshConversations(accountId)
-                            }
-
-                            is ConversationRealtimeEvent.PresenceChanged -> {
-                                production.presence.replaceConversationPresence(
-                                    conversationId = conversationId,
-                                    snapshot = event.presences
-                                        .mapNotNull { presence ->
-                                            runCatching {
-                                                UserId(presence.userId) to PresenceStatus.Online
-                                            }.getOrNull()
-                                        }
-                                        .toMap(),
-                                )
-                                production.presence.replaceConversationTyping(
-                                    conversationId = conversationId,
-                                    typingUserIds = event.presences
-                                        .filter(PresenceStateDto::isTyping)
-                                        .mapNotNull { presence ->
-                                            runCatching {
-                                                UserId(presence.userId)
-                                            }.getOrNull()
-                                        }
-                                        .filterNot { it == accountId }
-                                        .toSet(),
-                                )
-                            }
-                        }
-                    }
-                retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                production.presence.clearConversation(conversationId)
-                Log.w(TAG, "Conversation Realtime channel failed; retrying", error)
-            }
-
-            delay(retryDelayMillis)
-            retryDelayMillis = (retryDelayMillis * 2)
-                .coerceAtMost(MAX_REALTIME_RETRY_MILLIS)
-        }
-    }
-
-    private fun accountIdOrNull(session: SessionState): UserId? =
-        when (session) {
-            is SessionState.Authenticated -> session.userId
-            is SessionState.OfflineWithCachedSession -> session.userId
-            else -> null
-        }
-
     private fun registerRealtimeNetworkCallback() {
         if (connectivityCallback != null) return
         val callback = object : ConnectivityManager.NetworkCallback() {
@@ -1379,18 +920,8 @@ class AppContainer(
         val verifierCache: KeystoreSupabaseCodeVerifierCache,
     )
 
-    private data class RealtimeNetworkState(
-        val available: Boolean,
-        val networkHandle: Long?,
-        val generation: Long,
-    )
-
     private companion object {
         const val TAG = "PocketPassRealtime"
-        const val INITIAL_REALTIME_RETRY_MILLIS = 1_000L
-        const val LAST_SEEN_TOUCH_INTERVAL_MILLIS = 5 * 60_000L
-        const val LAST_SEEN_REFRESH_DELAY_MILLIS = 4_000L
-        const val MAX_REALTIME_RETRY_MILLIS = 30_000L
         const val MII_PUBLICATION_RETRY_MILLIS = 60_000L
     }
 }

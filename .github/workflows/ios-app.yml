@@ -34,8 +34,13 @@ jobs:
         run: xcodegen generate
       # No signing on CI: the IPA is unsigned, and a sideloading tool (Sideloadly,
       # AltStore) re-signs it with the user's own Apple ID during install.
+      # The publishable key reaches the Kotlin build through the Xcode pre-build
+      # gradle step's environment; without the secret the app stays in fixture mode.
       - name: Build for a device, unsigned
         working-directory: ios-app
+        env:
+          POCKETPASS_BACKEND_ENABLED: 'true'
+          POCKETPASS_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.POCKETPASS_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           xcodebuild \
             -project PocketPass.xcodeproj \

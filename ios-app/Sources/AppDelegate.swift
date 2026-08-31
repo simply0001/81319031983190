@@ -15,4 +15,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         self.window = window
         return true
     }
+
+    // The pocketpass:// scheme carries the OAuth sign-in callback.
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        PhoneEntryKt.PhoneAppHandleUrl(url: url.absoluteString)
+        return true
+    }
 }

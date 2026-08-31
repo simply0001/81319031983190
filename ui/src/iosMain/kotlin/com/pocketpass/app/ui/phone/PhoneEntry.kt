@@ -49,6 +49,12 @@ fun PhoneAppViewController(): UIViewController = ComposeUIViewController {
     IosPhoneApp()
 }
 
+// Called from the Swift AppDelegate when the app is opened through its URL
+// scheme; the callback policy ignores anything that is not a sign-in response.
+fun PhoneAppHandleUrl(url: String) {
+    store.handleAuthCallback(url)
+}
+
 @Composable
 private fun IosPhoneApp() {
     val state by store.state.collectAsState()

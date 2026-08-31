@@ -10,7 +10,6 @@ data class SupabaseBackendConfig(
 ) {
     init {
         validateHttpsUrl("baseUrl", baseUrl, pathMustBeEmpty = true)
-        validateHttpsUrl("authCallbackUrl", authCallbackUrl, pathMustBeEmpty = false)
         require(publishableKey.isNotBlank()) { "publishableKey must not be blank" }
         require(!publishableKey.contains("service_role", ignoreCase = true)) {
             "A service-role key must never be used by the Android client"
@@ -19,15 +18,21 @@ data class SupabaseBackendConfig(
             "A service-role JWT must never be used by the Android client"
         }
 
-        val callback = Url(authCallbackUrl)
-        require(callback.host.equals(AUTH_CALLBACK_HOST, ignoreCase = true)) {
-            "authCallbackUrl must use $AUTH_CALLBACK_HOST"
-        }
-        require(callback.encodedPath == AUTH_CALLBACK_PATH) {
-            "authCallbackUrl must use path $AUTH_CALLBACK_PATH"
-        }
-        require(callback.encodedQuery.isEmpty() && callback.fragment.isEmpty()) {
-            "authCallbackUrl must not contain a query or fragment"
+        // iOS cannot claim the https link without an associated-domains
+        // entitlement, so it redirects through the app's own scheme instead;
+        // only this exact literal is allowed past the https rules.
+        if (authCallbackUrl != MOBILE_AUTH_CALLBACK_URL) {
+            validateHttpsUrl("authCallbackUrl", authCallbackUrl, pathMustBeEmpty = false)
+            val callback = Url(authCallbackUrl)
+            require(callback.host.equals(AUTH_CALLBACK_HOST, ignoreCase = true)) {
+                "authCallbackUrl must use $AUTH_CALLBACK_HOST"
+            }
+            require(callback.encodedPath == AUTH_CALLBACK_PATH) {
+                "authCallbackUrl must use path $AUTH_CALLBACK_PATH"
+            }
+            require(callback.encodedQuery.isEmpty() && callback.fragment.isEmpty()) {
+                "authCallbackUrl must not contain a query or fragment"
+            }
         }
     }
 
@@ -44,6 +49,9 @@ data class SupabaseBackendConfig(
         const val AUTH_CALLBACK_PATH = "/auth/callback"
         const val DEFAULT_AUTH_CALLBACK_URL =
             "https://$AUTH_CALLBACK_HOST$AUTH_CALLBACK_PATH"
+
+        // Must stay listed in the server's additional_redirect_urls.
+        const val MOBILE_AUTH_CALLBACK_URL = "pocketpass://auth/callback"
 
         private fun validateHttpsUrl(
             name: String,

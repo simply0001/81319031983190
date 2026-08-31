@@ -1,10 +1,10 @@
-package com.pocketpass.app
+package com.pocketpass.app.sync
 
 import com.pocketpass.app.domain.model.UserId
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class RealtimeRuntimeGateTest {
     private val accountId = UserId("account")

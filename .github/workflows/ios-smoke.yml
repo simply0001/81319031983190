@@ -32,8 +32,13 @@ jobs:
       - name: Generate the Xcode project
         working-directory: ios-app
         run: xcodegen generate
+      # Same backend wiring as the IPA build so the smoke test exercises the
+      # production container's startup path (database creation, Supabase client).
       - name: Build for the simulator
         working-directory: ios-app
+        env:
+          POCKETPASS_BACKEND_ENABLED: 'true'
+          POCKETPASS_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.POCKETPASS_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           xcodebuild \
             -project PocketPass.xcodeproj \

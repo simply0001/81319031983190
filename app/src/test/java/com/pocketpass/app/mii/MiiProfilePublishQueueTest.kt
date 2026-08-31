@@ -19,6 +19,7 @@ class MiiProfilePublishQueueTest {
         var publishCount = 0
         val callback = QueuedMiiEditorSaveCallback(
             queue = queue,
+            readPortrait = ::readPortraitFile,
             publisher = MiiProfilePublisher { command ->
                 publishCount += 1
                 RepositoryResult.Success(publication(command))
@@ -40,6 +41,7 @@ class MiiProfilePublishQueueTest {
         var publishCount = 0
         val callback = QueuedMiiEditorSaveCallback(
             queue = queue,
+            readPortrait = ::readPortraitFile,
             publisher = MiiProfilePublisher {
                 publishCount += 1
                 RepositoryResult.Failure(
@@ -59,6 +61,7 @@ class MiiProfilePublishQueueTest {
         queue.enqueue(saveRequest(revision = 6))
         val callback = QueuedMiiEditorSaveCallback(
             queue = queue,
+            readPortrait = ::readPortraitFile,
             publisher = MiiProfilePublisher {
                 RepositoryResult.Failure(
                     RepositoryFailure(
@@ -80,6 +83,7 @@ class MiiProfilePublishQueueTest {
         var publishCount = 0
         val callback = QueuedMiiEditorSaveCallback(
             queue = queue,
+            readPortrait = ::readPortraitFile,
             publisher = MiiProfilePublisher {
                 publishCount += 1
                 RepositoryResult.Failure(
@@ -117,6 +121,7 @@ class MiiProfilePublishQueueTest {
         val publishedRevisions = mutableListOf<Long>()
         val callback = QueuedMiiEditorSaveCallback(
             queue = queue,
+            readPortrait = ::readPortraitFile,
             publisher = MiiProfilePublisher { command ->
                 publishedRevisions += command.revision
                 RepositoryResult.Success(publication(command))
@@ -136,7 +141,7 @@ class MiiProfilePublishQueueTest {
             canonical = byteArrayOf(1, 2, 3, 4),
         )
 
-        val command = entry.toCommand()
+        val command = entry.toCommand(PNG)
 
         assertEquals(19, command.appearance.glassesType)
         assertTrue(command.canonicalMiic!!.contentEquals(byteArrayOf(1, 2, 3, 4)))
@@ -195,6 +200,9 @@ class MiiProfilePublishQueueTest {
             revision = revision,
             clientOperationId = "operation-$revision",
         )
+
+    private fun readPortraitFile(path: String): ByteArray? =
+        java.io.File(path).takeIf { it.isFile }?.readBytes()
 
     private fun portraitFile() = Files.createTempFile("pocketpass-mii-", ".png").also {
         Files.write(it, PNG)

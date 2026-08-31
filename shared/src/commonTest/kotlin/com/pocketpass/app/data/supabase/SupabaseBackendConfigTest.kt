@@ -39,6 +39,28 @@ class SupabaseBackendConfigTest {
     }
 
     @Test
+    fun acceptsTheExactMobileSchemeCallback() {
+        val config = SupabaseBackendConfig(
+            baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
+            publishableKey = "sb_publishable_example",
+            authCallbackUrl = SupabaseBackendConfig.MOBILE_AUTH_CALLBACK_URL,
+        )
+
+        assertEquals("pocketpass://auth/callback", config.authCallbackUrl)
+    }
+
+    @Test
+    fun rejectsAnyOtherMobileSchemeCallback() {
+        assertFailsWith<IllegalArgumentException> {
+            SupabaseBackendConfig(
+                baseUrl = SupabaseBackendConfig.DEFAULT_BASE_URL,
+                publishableKey = "sb_publishable_example",
+                authCallbackUrl = "pocketpass://auth/callback/extra",
+            )
+        }
+    }
+
+    @Test
     fun rejectsObviousServiceRoleKey() {
         assertFailsWith<IllegalArgumentException> {
             SupabaseBackendConfig(

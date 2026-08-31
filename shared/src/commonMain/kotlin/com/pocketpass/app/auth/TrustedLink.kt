@@ -20,6 +20,21 @@ internal fun trustedLinkOrigin(rawUri: String): TrustedLink {
     if (rawUri.length > MAX_LINK_URI_LENGTH || rawUri.hasUnsafeCharacters()) {
         return TrustedLink.Malformed
     }
+    // The app-scheme callback (used where https links cannot reach the app,
+    // i.e. iOS) is accepted only as this exact origin, and is normalized to
+    // the https callback path so downstream path checks stay uniform.
+    if (rawUri.startsWith(MOBILE_SCHEME_PREFIX, ignoreCase = true)) {
+        val withoutFragment = rawUri.substringBefore('#')
+        val origin = withoutFragment.substringBefore('?')
+        return if (origin.equals(SupabaseBackendConfig.MOBILE_AUTH_CALLBACK_URL, ignoreCase = true)) {
+            TrustedLink.Accepted(
+                path = SupabaseBackendConfig.AUTH_CALLBACK_PATH,
+                rawQuery = withoutFragment.substringAfter('?', ""),
+            )
+        } else {
+            TrustedLink.UntrustedOrigin
+        }
+    }
     if (!rawUri.startsWith(HTTPS_PREFIX, ignoreCase = true)) return TrustedLink.UntrustedOrigin
 
     val withoutFragment = rawUri.substringBefore('#')
@@ -61,5 +76,6 @@ private fun String.hasUnsafeCharacters(): Boolean =
     any { it.isWhitespace() || it.code < 0x20 || it.code == 0x7F || it == '\\' }
 
 private const val HTTPS_PREFIX = "https://"
+private const val MOBILE_SCHEME_PREFIX = "pocketpass://"
 private const val UNSPECIFIED_PORT = 0
 private val ACCEPTED_PORTS = setOf(UNSPECIFIED_PORT, 443)

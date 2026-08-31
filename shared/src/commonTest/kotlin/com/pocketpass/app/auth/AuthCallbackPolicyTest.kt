@@ -286,6 +286,70 @@ class AuthCallbackPolicyTest {
     }
 
     @Test
+    fun acceptsTheMobileSchemeCallbackWithAnAuthorizationCode() {
+        assertEquals(
+            AuthCallbackDecision.AuthorizationCode("one-time-code"),
+            AuthCallbackPolicy.evaluate("pocketpass://auth/callback?code=one-time-code"),
+        )
+    }
+
+    @Test
+    fun acceptsAnUppercaseMobileScheme() {
+        assertEquals(
+            AuthCallbackDecision.AuthorizationCode("abc"),
+            AuthCallbackPolicy.evaluate("POCKETPASS://auth/callback?code=abc"),
+        )
+    }
+
+    @Test
+    fun reportsAProviderErrorOnTheMobileSchemeCallback() {
+        assertEquals(
+            AuthCallbackDecision.ProviderError("access_denied", null),
+            AuthCallbackPolicy.evaluate("pocketpass://auth/callback?error=access_denied"),
+        )
+    }
+
+    @Test
+    fun rejectsAnotherPathOnTheMobileScheme() {
+        assertEquals(
+            ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedOrigin),
+            AuthCallbackPolicy.evaluate("pocketpass://auth/other?code=abc"),
+        )
+    }
+
+    @Test
+    fun rejectsATrailingSlashOnTheMobileSchemeCallback() {
+        assertEquals(
+            ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedOrigin),
+            AuthCallbackPolicy.evaluate("pocketpass://auth/callback/?code=abc"),
+        )
+    }
+
+    @Test
+    fun rejectsUserInfoSmuggledIntoTheMobileSchemeAuthority() {
+        assertEquals(
+            ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedOrigin),
+            AuthCallbackPolicy.evaluate("pocketpass://attacker@auth/callback?code=abc"),
+        )
+    }
+
+    @Test
+    fun rejectsAFragmentOnTheMobileSchemeCallback() {
+        assertEquals(
+            ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedFragment),
+            AuthCallbackPolicy.evaluate("pocketpass://auth/callback?code=abc#extra"),
+        )
+    }
+
+    @Test
+    fun reportsMissingResultForAMobileSchemeCallbackWithoutAQuery() {
+        assertEquals(
+            ignored(AuthCallbackDecision.Ignored.Reason.MissingResult),
+            AuthCallbackPolicy.evaluate("pocketpass://auth/callback"),
+        )
+    }
+
+    @Test
     fun keepsTheCodeOutOfToString() {
         val rendered = AuthCallbackDecision.AuthorizationCode("super-secret").toString()
 

@@ -17,7 +17,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
-import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 class SupabaseRealtimeGateway(
     private val client: SupabaseClient,
@@ -336,9 +337,10 @@ class SupabaseRealtimeGateway(
             }
         }
 
+    @OptIn(ExperimentalUuidApi::class)
     private fun requireUuidChannelSegment(value: String, name: String): String {
         val normalized = value.trim().lowercase()
-        val parsed = runCatching { UUID.fromString(normalized) }.getOrNull()
+        val parsed = runCatching { Uuid.parse(normalized) }.getOrNull()
         require(parsed != null && parsed.toString() == normalized) {
             "$name must be a canonical UUID"
         }

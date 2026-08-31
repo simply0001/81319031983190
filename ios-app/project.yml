@@ -37,6 +37,12 @@ targets:
         # render at 60Hz without it.
         CADisableMinimumFrameDurationOnPhone: true
         UILaunchScreen: {}
+        # Discord OAuth redirects back through this scheme (allowlisted
+        # server-side as pocketpass://auth/callback).
+        CFBundleURLTypes:
+          - CFBundleURLName: xyz.pocketpass.auth
+            CFBundleURLSchemes:
+              - pocketpass
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
