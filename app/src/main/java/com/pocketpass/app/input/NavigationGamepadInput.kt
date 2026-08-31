@@ -3,6 +3,7 @@ package com.pocketpass.app.input
 import android.view.KeyEvent
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
+import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.controller.ControllerFocus
 import com.pocketpass.app.ui.controller.FocusDirection

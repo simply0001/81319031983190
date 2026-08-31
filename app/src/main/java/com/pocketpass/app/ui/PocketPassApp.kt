@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalTextStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.pocketpass.app.input.hasDismissableLayer
+import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassRoute
@@ -443,10 +443,6 @@ internal fun PocketPassUiState.requiresMiiGate(): Boolean {
         miiEditor.mode == MiiEditorMode.Loading ||
         miiEditor.isEditorPresented
 }
-
-internal fun SessionState.showsPocketPassApp(): Boolean =
-    this is SessionState.Authenticated ||
-        this is SessionState.OfflineWithCachedSession
 
 @Composable
 private fun TopDestinationBackground(

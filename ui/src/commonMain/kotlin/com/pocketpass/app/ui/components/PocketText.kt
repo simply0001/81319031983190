@@ -2,6 +2,7 @@ package com.pocketpass.app.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -58,6 +59,7 @@ fun Text(
     minLines: Int = 1,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     style: TextStyle = LocalTextStyle.current,
+    autoSize: TextAutoSize? = null,
 ) {
     Text(
         text = AnnotatedString(text),
@@ -77,6 +79,7 @@ fun Text(
         minLines = minLines,
         onTextLayout = onTextLayout,
         style = style,
+        autoSize = autoSize,
     )
 }
 
@@ -100,6 +103,7 @@ fun Text(
     inlineContent: Map<String, InlineTextContent> = mapOf(),
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     style: TextStyle = LocalTextStyle.current,
+    autoSize: TextAutoSize? = null,
 ) {
     val resolvedColor = color.takeOrElse { style.color.takeOrElse { LocalContentColor.current } }
     val merged = style.merge(
@@ -125,6 +129,7 @@ fun Text(
         maxLines = maxLines,
         minLines = minLines,
         inlineContent = inlineContent,
+        autoSize = autoSize,
     )
 }
 

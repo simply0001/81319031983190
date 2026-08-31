@@ -3,6 +3,7 @@ package com.pocketpass.app.input
 import android.view.InputDevice
 import android.view.KeyEvent
 import com.pocketpass.app.model.PocketPassEvent
+import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.controller.ControllerFocus
 
@@ -55,34 +56,6 @@ internal fun classifyBackGamepadKey(
 
 private const val BACKSPACE_HOLD_START_REPEAT = 2
 private const val BACKSPACE_HOLD_STEP_REPEATS = 2
-
-fun PocketPassUiState.hasDismissableLayer(): Boolean =
-    (accountSetup.resolved && accountSetup.required) ||
-        profileViewer.visible ||
-        shop.visible ||
-        games.visible ||
-        achievements.visible ||
-        leaderboard.visible ||
-        miiSlotsVisible ||
-        connectedApps.visible ||
-        connectedApps.revokeClientId != null ||
-        oauthConsent.visible ||
-        miiEditor.activeAdjustment != null ||
-        miiEditor.colorPaletteOpen ||
-        miiEditor.discardPromptVisible ||
-        (miiEditor.isEditorVisible && miiEditor.mode == com.pocketpass.app.mii.MiiEditorMode.EditExisting) ||
-        themePickerExpanded ||
-        sortMenuOpen ||
-        deleteAccountVisible ||
-        homeMoodPickerExpanded ||
-        bioEditor.visible ||
-        nameEditor.visible ||
-        friendsOverlay != com.pocketpass.app.model.FriendsOverlay.None ||
-        messageActionRailExpanded ||
-        messageActionMessageId != null ||
-        editingMessageId != null ||
-        groupInfoOpen ||
-        routes.size > 1
 
 fun handleBackGamepadKeyEvent(
     event: KeyEvent,

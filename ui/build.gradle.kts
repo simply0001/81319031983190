@@ -16,6 +16,10 @@ kotlin {
         compileSdk = 37
         minSdk = 30
 
+        // Without this the androidLibrary target drops composeResources from the
+        // AAR assets, and Res.readBytes crashes at runtime on Android.
+        androidResources.enable = true
+
         withHostTestBuilder {}.configure {}
     }
 

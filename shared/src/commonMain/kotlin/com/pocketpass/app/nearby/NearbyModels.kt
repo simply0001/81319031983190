@@ -134,3 +134,14 @@ data class NearbyEncryptedPacket(
         require(ciphertext.size in 16..NearbyWireProtocol.MAX_PACKET_BYTES)
     }
 }
+
+data class NearbyPermissionUiState(
+    val visible: Boolean = false,
+    val isRepair: Boolean = false,
+    val error: String? = null,
+)
+
+data class NearbyFeatureState(
+    val runtime: NearbyRuntimeState = NearbyRuntimeState(),
+    val permissionUi: NearbyPermissionUiState = NearbyPermissionUiState(),
+)

@@ -39,7 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.pocketpass.app.input.hasDismissableLayer
+import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.model.FriendsOverlay
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
@@ -327,40 +327,3 @@ internal fun PhonePageLayer(
     }
 }
 
-@Composable
-internal fun PhonePanes(
-    metrics: DesignMetrics,
-    panes: WidePanes,
-    stage: @Composable BoxScope.() -> Unit,
-    deck: @Composable BoxScope.() -> Unit,
-) {
-    val insets = LocalPhoneInsets.current
-    Row(Modifier.fillMaxSize()) {
-        Box(
-            Modifier
-                .width(metrics.dp(panes.stage))
-                .fillMaxHeight(),
-            content = stage,
-        )
-        Box(
-            Modifier
-                .width(metrics.dp(panes.gap))
-                .fillMaxHeight()
-                .padding(top = metrics.dp(insets.top + 72f), bottom = metrics.dp(insets.bottom + 72f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .width(metrics.dp(4f))
-                    .fillMaxHeight()
-                    .background(pocketPalette.borderSoft, RoundedCornerShape(metrics.dp(2f))),
-            )
-        }
-        Box(
-            Modifier
-                .width(metrics.dp(panes.deck))
-                .fillMaxHeight(),
-            content = deck,
-        )
-    }
-}

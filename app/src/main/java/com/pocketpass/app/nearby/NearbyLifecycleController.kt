@@ -24,17 +24,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class NearbyPermissionUiState(
-    val visible: Boolean = false,
-    val isRepair: Boolean = false,
-    val error: String? = null,
-)
-
-data class NearbyFeatureState(
-    val runtime: NearbyRuntimeState = NearbyRuntimeState(),
-    val permissionUi: NearbyPermissionUiState = NearbyPermissionUiState(),
-)
-
 private const val TAG = "PocketPassNearby"
 
 class NearbyLifecycleController(

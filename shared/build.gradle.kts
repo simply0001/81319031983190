@@ -51,6 +51,9 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
+            // NavKeyMarker is a typealias for navigation3's NavKey on Android, and NavKey is
+            // thereby a supertype of every route, so consumers need it on their classpath too.
+            api(libs.androidx.navigation3.runtime)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
