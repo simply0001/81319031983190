@@ -58,7 +58,11 @@ jobs:
           restore-keys: konan-${{ runner.os }}-
       - name: Link the simulator frameworks
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 :ui:linkDebugFrameworkIosSimulatorArm64 --console=plain
+      # Release-mode Kotlin/Native runs whole-program optimisation with no incremental
+      # cache (~24 minutes for the ui module), and IPA builds exercise it anyway, so
+      # per-push runs stick to the simulator link and this step waits for manual runs.
       - name: Link the device frameworks
+        if: github.event_name == 'workflow_dispatch'
         run: ./gradlew :shared:linkReleaseFrameworkIosArm64 :ui:linkReleaseFrameworkIosArm64 --console=plain
       - name: iOS unit tests
         run: ./gradlew :shared:iosSimulatorArm64Test --console=plain
