@@ -1805,7 +1805,7 @@ private fun HorizontalCards(
     val scroll = rememberScrollState()
     val focus = LocalControllerFocus.current
     val density = LocalDensity.current
-    val cardIds = remember(people) { people.map { "card_${it.id}" } }
+    val cardIds = remember(people) { people.map { "card_${it.focusKey}" } }
     if (focus != null) {
         // Follow the controller focus explicitly: the generic bring-into-view reveal has
         // proven unreliable for this row, which strands the highlight on off-screen cards.
@@ -1862,7 +1862,7 @@ private fun HorizontalCards(
                     initial = person.initial,
                     showOnline = person.isOnline,
                     detail = person.detail,
-                    focusId = "card_${person.id}",
+                    focusId = "card_${person.focusKey}",
                     onClick = { onCard(person.id) },
                 )
             }
@@ -2019,6 +2019,9 @@ private fun PersonCard(
 
 internal data class PersonCardUi(
     val id: String,
+    // Unique per card: encounters can repeat the same profile, so the focus target and
+    // compose identity must not key on the profile id alone.
+    val focusKey: String,
     val name: String,
     val avatar: AvatarReference?,
     val fallbackAvatar: PocketAsset?,
@@ -2033,6 +2036,7 @@ private fun List<Friend>.toFriendCardUi(): List<PersonCardUi> =
             .ifBlank { "PocketPass User" }
         PersonCardUi(
             id = friend.profile.userId.value,
+            focusKey = friend.profile.userId.value,
             name = displayName,
             avatar = friend.profile.avatar,
             fallbackAvatar = null,
@@ -2052,6 +2056,7 @@ private fun List<NearbyEncounter>.toEncounterCardUi(): List<PersonCardUi> =
             .ifBlank { "PocketPass User" }
         PersonCardUi(
             id = encounter.profile.userId.value,
+            focusKey = encounter.id.value,
             name = displayName,
             avatar = encounter.profile.avatar,
             fallbackAvatar = null,
