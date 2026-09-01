@@ -23,6 +23,7 @@ import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.state.IosAppContainer
+import com.pocketpass.app.state.IosBackgroundRefresh
 import com.pocketpass.app.state.IosStatusFeed
 import com.pocketpass.app.state.PocketPassStore
 import com.pocketpass.app.ui.LocalAppVersionName
@@ -39,10 +40,19 @@ private val store by lazy {
     )
 }
 
+private val backgroundRefresh by lazy { IosBackgroundRefresh(container) }
+
 private fun bundleVersionName(): String =
     NSBundle.mainBundle.infoDictionary
         ?.get("CFBundleShortVersionString") as? String
         ?: ""
+
+// Called first thing from the Swift AppDelegate: BGTaskScheduler handlers
+// must be registered before didFinishLaunching returns.
+fun PhoneAppDidLaunch() {
+    backgroundRefresh.register()
+    backgroundRefresh.schedule()
+}
 
 // The iOS application's root, called from the Swift AppDelegate.
 fun PhoneAppViewController(): UIViewController = ComposeUIViewController {

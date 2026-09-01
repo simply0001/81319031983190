@@ -9,6 +9,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Registers the BGTaskScheduler background-refresh handler; must run
+        // before this method returns.
+        PhoneEntryKt.PhoneAppDidLaunch()
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = PhoneEntryKt.PhoneAppViewController()
         window.makeKeyAndVisible()

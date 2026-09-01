@@ -43,6 +43,11 @@ targets:
           - CFBundleURLName: xyz.pocketpass.auth
             CFBundleURLSchemes:
               - pocketpass
+        # Opportunistic background sync via BGTaskScheduler; the identifier
+        # must match IosBackgroundRefresh.TASK_IDENTIFIER.
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers:
+          - xyz.pocketpass.refresh
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

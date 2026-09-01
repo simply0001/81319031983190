@@ -84,6 +84,7 @@ kotlin {
             api(libs.supabase.storage)
             api(libs.androidx.room.runtime)
             implementation(libs.kotlinx.io.core)
+            implementation(libs.ktor.client.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

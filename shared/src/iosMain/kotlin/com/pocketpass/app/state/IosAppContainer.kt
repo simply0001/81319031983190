@@ -13,6 +13,7 @@ import com.pocketpass.app.data.UserDefaultsSettingsRepository
 import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.local.buildPocketPassDatabase
 import com.pocketpass.app.data.local.clearAllPocketPassTables
+import com.pocketpass.app.data.pretendo.KtorPretendoMiiSource
 import com.pocketpass.app.data.repository.FixtureData
 import com.pocketpass.app.data.repository.FixtureRepositoryBundle
 import com.pocketpass.app.data.repository.PendingOperationScheduler
@@ -72,8 +73,8 @@ import com.pocketpass.app.security.KeychainSecureStringStore
 import com.pocketpass.app.security.KeystoreSupabaseCodeVerifierCache
 import com.pocketpass.app.security.KeystoreSupabaseSessionManager
 import com.pocketpass.app.nearby.NearbyProofOutboxStore
+import com.pocketpass.app.sync.IosNetworkMonitor
 import com.pocketpass.app.sync.OutboxProcessor
-import com.pocketpass.app.sync.RealtimeNetworkState
 import com.pocketpass.app.sync.RealtimeRuntime
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
@@ -200,7 +201,11 @@ class IosAppContainer(
             { accountKey -> restoreMiiSessionFromServer(components.remote, accountKey) }
         },
         ownedHatTypes = ownedHatTypes,
-        pretendoMiiSource = FixturePretendoMiiSource(),
+        pretendoMiiSource = if (fixtureMode) {
+            FixturePretendoMiiSource()
+        } else {
+            KtorPretendoMiiSource(versionName = iosVersionName(), platform = "iOS")
+        },
         deletePortraitFile = { iosDeletePortraitFile(it) },
     )
 
@@ -299,11 +304,7 @@ class IosAppContainer(
     override val appUpdate = DisabledAppUpdate
 
     private val appForeground = MutableStateFlow(true)
-    private val networkState = MutableStateFlow(
-        // NWPathMonitor is not wired yet; the realtime channels' own retry
-        // loops absorb offline periods, they just retry a little more eagerly.
-        RealtimeNetworkState(available = true, networkHandle = null, generation = 0L),
-    )
+    private val networkMonitor = IosNetworkMonitor()
 
     private val realtimeRuntime = backend?.let { components ->
         RealtimeRuntime(
@@ -317,7 +318,7 @@ class IosAppContainer(
             soundEffects = soundEffects,
             settingsRepository = settingsRepository,
             appForeground = appForeground,
-            networkState = networkState,
+            networkState = networkMonitor.state,
             observeSelfTyping = { messages.observeSelfTyping(it) },
             onAppUpdateSignal = {},
             onNearbyEncounterNotification = { _, _ -> },
@@ -333,6 +334,7 @@ class IosAppContainer(
             miiEditor.activateAccount(FixtureData.CurrentUserId.value)
         } else {
             registerForegroundObservers()
+            networkMonitor.start()
             realtimeRuntime?.start()
             applicationScope.launch {
                 activeAccountId.collectLatest { accountId ->
@@ -466,6 +468,26 @@ class IosAppContainer(
 
     override suspend fun handleAuthCallback(callbackUri: String): RepositoryResult<SessionState> =
         repositories.session.handleAuthCallback(callbackUri)
+
+    /** One best-effort reconcile pass for BGTaskScheduler refreshes. */
+    internal suspend fun performBackgroundSync(): Boolean {
+        val components = backend ?: return true
+        val accountId = activeAccountId.value ?: return true
+        var healthy = true
+        suspend fun attempt(block: suspend () -> Unit) {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                healthy = false
+            }
+        }
+        attempt { repositories.sync.synchronize(accountId) }
+        attempt { components.bundle.outboxProcessor.drain(accountId) }
+        attempt { miiPublishCallback?.drain(accountId.value) }
+        return healthy
+    }
 
     override suspend fun resetSettings() {
         settings.resetSettings()
@@ -660,6 +682,11 @@ class IosAppContainer(
         const val MII_PUBLICATION_RETRY_MILLIS = 60_000L
     }
 }
+
+private fun iosVersionName(): String =
+    platform.Foundation.NSBundle.mainBundle.infoDictionary
+        ?.get("CFBundleShortVersionString") as? String
+        ?: ""
 
 private fun iosDatabasePath(): String {
     val applicationSupport =
