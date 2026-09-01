@@ -28,10 +28,6 @@ import android.util.Log
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.RepositoryResult
 import java.nio.ByteBuffer
-import java.security.KeyPair
-import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import java.util.ArrayDeque
 import java.util.UUID
@@ -89,19 +85,29 @@ internal class NearbyBleEngine(
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val serviceData = result.scanRecord?.getServiceData(SERVICE_UUID) ?: return
-            if (
-                serviceData.size != SERVICE_DATA_BYTES ||
-                serviceData[0].toInt() != NearbyWireProtocol.VERSION
-            ) {
-                return
-            }
-            val remoteNonce = ByteBuffer.wrap(serviceData, 1, Long.SIZE_BYTES).long
-            if (
-                remoteNonce == invitationNonce ||
-                java.lang.Long.compareUnsigned(invitationNonce, remoteNonce) <= 0
-            ) {
-                return
+            val record = result.scanRecord ?: return
+            val serviceData = record.getServiceData(SERVICE_UUID)
+            val remoteNonce: Long?
+            if (serviceData != null) {
+                if (
+                    serviceData.size != SERVICE_DATA_BYTES ||
+                    serviceData[0].toInt() != NearbyWireProtocol.VERSION
+                ) {
+                    return
+                }
+                val nonce = ByteBuffer.wrap(serviceData, 1, Long.SIZE_BYTES).long
+                if (
+                    nonce == invitationNonce ||
+                    java.lang.Long.compareUnsigned(invitationNonce, nonce) <= 0
+                ) {
+                    return
+                }
+                remoteNonce = nonce
+            } else {
+                // iOS cannot put service data in its advertisements, so a bare
+                // PocketPass service UUID is an iPhone; this side initiates.
+                if (record.serviceUuids?.contains(SERVICE_UUID) != true) return
+                remoteNonce = null
             }
             val address = result.device.address
             val now = System.currentTimeMillis()
@@ -142,7 +148,11 @@ internal class NearbyBleEngine(
                         GattSession(
                             device = device,
                             role = Role.Peripheral,
-                            advertisedPeerNonce = null,
+                            machine = NearbyHandshakeSession(
+                                role = NearbyLinkRole.Peripheral,
+                                invitationNonce = invitationNonce,
+                                advertisedPeerNonce = null,
+                            ),
                         )
                     }
                     scope.launch {
@@ -302,8 +312,7 @@ internal class NearbyBleEngine(
                 failSession(session, "Encrypted response notifications could not be enabled.")
                 return
             }
-            session.transportReady = true
-            maybeProgress(session)
+            dispatchEvents(session, session.machine.onTransportReady())
         }
 
         @Deprecated("Deprecated in Android 13")
@@ -400,12 +409,16 @@ internal class NearbyBleEngine(
         scope.cancel()
     }
 
-    private fun connectAsCentral(device: BluetoothDevice, remoteNonce: Long) {
+    private fun connectAsCentral(device: BluetoothDevice, remoteNonce: Long?) {
         if (stopped || sessions.containsKey(device.address)) return
         val session = GattSession(
             device = device,
             role = Role.Central,
-            advertisedPeerNonce = remoteNonce,
+            machine = NearbyHandshakeSession(
+                role = NearbyLinkRole.Central,
+                invitationNonce = invitationNonce,
+                advertisedPeerNonce = remoteNonce,
+            ),
         )
         sessions[device.address] = session
         publishState()
@@ -422,7 +435,7 @@ internal class NearbyBleEngine(
     }
 
     private suspend fun prepareCredential(session: GattSession): Boolean {
-        if (session.credential != null) return true
+        if (session.credentialAttached) return true
         return when (val result = credentialPool.acquire(accountId)) {
             is RepositoryResult.Failure -> {
                 failSession(
@@ -433,25 +446,10 @@ internal class NearbyBleEngine(
             }
 
             is RepositoryResult.Success -> {
-                if (!result.value.isUsableAt(Clock.System.now())) {
-                    failSession(session, "The anonymous encounter pass expired.")
-                    false
-                } else {
-                    session.credential = result.value
-                    session.agreementKeyPair = NearbyCrypto.generateAgreementKeyPair()
-                    session.localHello = NearbyWireProtocol.helloPacket(
-                        NearbyHello(
-                            invitationNonce = invitationNonce,
-                            credentialToken = result.value.token,
-                            signingPublicKey = result.value.signingPublicKey,
-                            agreementPublicKey =
-                                requireNotNull(session.agreementKeyPair).public.encoded,
-                            challenge = NearbyCrypto.randomBytes(NearbyHello.CHALLENGE_BYTES),
-                        ),
-                    )
-                    maybeProgress(session)
-                    true
-                }
+                session.credentialAttached = true
+                val events = session.machine.attachCredential(result.value)
+                dispatchEvents(session, events)
+                events.none { it is NearbyHandshakeSession.Event.Failed }
             }
         }
     }
@@ -473,152 +471,33 @@ internal class NearbyBleEngine(
             }
             ?: return
         scope.launch {
-            processPacket(session, packet)
+            dispatchEvents(session, session.machine.onPacket(packet))
         }
     }
 
-    private fun processPacket(session: GattSession, packet: ByteArray) {
-        try {
-            when (NearbyWireProtocol.packetType(packet)) {
-                PACKET_HELLO -> {
-                    val hello = NearbyWireProtocol.decodeHelloPacket(packet)
-                    if (
-                        session.advertisedPeerNonce != null &&
-                        hello.hello.invitationNonce != session.advertisedPeerNonce
-                    ) {
-                        throw IllegalArgumentException("Invitation nonce mismatch")
-                    }
-                    session.remoteHello = hello
-                }
+    private fun dispatchEvents(
+        session: GattSession,
+        events: List<NearbyHandshakeSession.Event>,
+    ) {
+        events.forEach { event ->
+            when (event) {
+                is NearbyHandshakeSession.Event.SendPacket ->
+                    enqueuePacket(session, event.packet)
 
-                PACKET_SIGNATURE -> {
-                    val signature = NearbyWireProtocol.decodeSignature(packet)
-                    val transcriptHash = requireNotNull(session.transcriptHash)
-                    val remoteKey = NearbyCrypto.signingPublicKey(
-                        requireNotNull(session.remoteHello).hello.signingPublicKey,
-                    )
-                    require(NearbyCrypto.verify(remoteKey, transcriptHash, signature))
-                    session.remoteSignature = signature
-                }
+                is NearbyHandshakeSession.Event.Failed ->
+                    failSession(session, event.message)
 
-                PACKET_ENCRYPTED -> {
-                    val remoteHello = requireNotNull(session.remoteHello).hello
-                    val localHello = requireNotNull(session.localHello).hello
-                    val transcriptHash = requireNotNull(session.transcriptHash)
-                    val key = requireNotNull(session.sessionKey)
-                    val plaintext = NearbyCrypto.decrypt(
-                        key = key,
-                        packet = NearbyWireProtocol.decodeEncrypted(packet),
-                        aad = NearbyCrypto.confirmationAad(
-                            transcriptHash,
-                            remoteHello.invitationNonce,
-                        ),
+                is NearbyHandshakeSession.Event.ProofReady -> {
+                    onProof(event.proof)
+                    onState(
+                        NearbyRuntimeStatus.Running,
+                        null,
+                        sessions.size,
+                        event.proof.occurredAt,
                     )
-                    val confirmation = NearbyWireProtocol.decodeConfirmation(plaintext)
-                    require(confirmation.ownToken.contentEquals(remoteHello.credentialToken))
-                    require(confirmation.peerToken.contentEquals(localHello.credentialToken))
-                    require(confirmation.transcriptHash.contentEquals(transcriptHash))
-                    require(
-                        (Clock.System.now() - confirmation.occurredAt).absoluteValue <=
-                            MAX_CLOCK_SKEW,
-                    )
-                    session.remoteConfirmation = confirmation
+                    closeSession(session.device.address)
                 }
-
-                else -> throw IllegalArgumentException("Unknown packet type")
             }
-            maybeProgress(session)
-        } catch (_: Throwable) {
-            failSession(session, "The encrypted PocketPass handshake was rejected.")
-        }
-    }
-
-    private fun maybeProgress(session: GattSession) {
-        val localHelloPacket = session.localHello ?: return
-        if (session.role == Role.Central && !session.transportReady) return
-        val remoteHelloPacket = session.remoteHello
-
-        if (!session.localHelloSent) {
-            if (session.role == Role.Central || remoteHelloPacket != null) {
-                session.localHelloSent = true
-                enqueuePacket(session, localHelloPacket.bytes)
-            } else {
-                return
-            }
-        }
-        if (remoteHelloPacket == null) return
-        val localHello = localHelloPacket.hello
-        val remoteHello = remoteHelloPacket.hello
-
-        if (session.transcriptHash == null) {
-            session.transcriptHash = NearbyCrypto.sha256(
-                NearbyCrypto.transcript(localHelloPacket, remoteHelloPacket),
-            )
-        }
-        val transcriptHash = requireNotNull(session.transcriptHash)
-        if (session.localSignature == null) {
-            val credential = requireNotNull(session.credential)
-            session.localSignature = NearbyCrypto.sign(
-                NearbyCrypto.signingPrivateKey(credential.signingPrivateKey),
-                transcriptHash,
-            )
-            enqueuePacket(
-                session,
-                NearbyWireProtocol.encodeSignature(requireNotNull(session.localSignature)),
-            )
-        }
-        if (session.remoteSignature == null) return
-
-        if (session.sessionKey == null) {
-            session.sessionKey = NearbyCrypto.deriveSessionKey(
-                ownPrivateKey = requireNotNull(session.agreementKeyPair).private,
-                peerPublicKey = NearbyCrypto.agreementPublicKey(
-                    remoteHello.agreementPublicKey,
-                ),
-                transcriptHash = transcriptHash,
-            )
-        }
-        if (!session.localConfirmationSent) {
-            session.localConfirmationSent = true
-            val confirmation = NearbyWireProtocol.encodeConfirmation(
-                ownToken = localHello.credentialToken,
-                peerToken = remoteHello.credentialToken,
-                occurredAt = Clock.System.now(),
-                transcriptHash = transcriptHash,
-            )
-            val encrypted = NearbyCrypto.encrypt(
-                key = requireNotNull(session.sessionKey),
-                plaintext = confirmation,
-                aad = NearbyCrypto.confirmationAad(
-                    transcriptHash,
-                    localHello.invitationNonce,
-                ),
-            )
-            enqueuePacket(session, NearbyWireProtocol.encodeEncrypted(encrypted))
-        }
-        if (session.remoteConfirmation != null && !session.proofEmitted) {
-            session.proofEmitted = true
-            val occurredAt = requireNotNull(session.remoteConfirmation).occurredAt
-            val proof = NearbyEncounterProof(
-                encounterId = UUID.randomUUID().toString(),
-                ownToken = localHello.credentialToken,
-                peerToken = remoteHello.credentialToken,
-                ownSigningPublicKey = localHello.signingPublicKey,
-                peerSigningPublicKey = remoteHello.signingPublicKey,
-                ownTranscriptSignature = requireNotNull(session.localSignature),
-                peerTranscriptSignature = requireNotNull(session.remoteSignature),
-                transcriptHash = transcriptHash,
-                occurredAt = occurredAt,
-            )
-            onProof(proof)
-            onState(
-                NearbyRuntimeStatus.Running,
-                null,
-                sessions.size,
-                occurredAt,
-            )
-            session.sessionKey?.fill(0)
-            closeSession(session.device.address)
         }
     }
 
@@ -706,6 +585,10 @@ internal class NearbyBleEngine(
                         byteArrayOf(0xFF.toByte()),
                     )
                     .build(),
+                // iOS peers advertise the service UUID with no service data.
+                ScanFilter.Builder()
+                    .setServiceUuid(SERVICE_UUID)
+                    .build(),
             )
         }
         val settings = ScanSettings.Builder()
@@ -728,7 +611,7 @@ internal class NearbyBleEngine(
 
     private fun closeSession(address: String) {
         val session = sessions.remove(address) ?: return
-        session.sessionKey?.fill(0)
+        session.machine.close()
         session.gatt?.runCatching {
             disconnect()
             close()
@@ -815,26 +698,14 @@ internal class NearbyBleEngine(
     private data class GattSession(
         val device: BluetoothDevice,
         val role: Role,
-        val advertisedPeerNonce: Long?,
+        val machine: NearbyHandshakeSession,
         val reassembler: NearbyBleFraming.Reassembler = NearbyBleFraming.Reassembler(),
         val outbound: ArrayDeque<ByteArray> = ArrayDeque(),
         var gatt: BluetoothGatt? = null,
         var characteristic: BluetoothGattCharacteristic? = null,
         var mtu: Int = MINIMUM_MTU,
-        var transportReady: Boolean = false,
         var sending: Boolean = false,
-        var credential: NearbyCredential? = null,
-        var agreementKeyPair: KeyPair? = null,
-        var localHello: NearbyHelloPacket? = null,
-        var remoteHello: NearbyHelloPacket? = null,
-        var localHelloSent: Boolean = false,
-        var transcriptHash: ByteArray? = null,
-        var localSignature: ByteArray? = null,
-        var remoteSignature: ByteArray? = null,
-        var sessionKey: ByteArray? = null,
-        var localConfirmationSent: Boolean = false,
-        var remoteConfirmation: NearbyConfirmation? = null,
-        var proofEmitted: Boolean = false,
+        var credentialAttached: Boolean = false,
     )
 
     private enum class Role {
@@ -856,10 +727,6 @@ internal class NearbyBleEngine(
         private const val MINIMUM_MTU = 23
         private const val PREFERRED_MTU = 247
         private const val ATT_PROTOCOL_OVERHEAD = 3
-        private const val PACKET_HELLO = 1
-        private const val PACKET_SIGNATURE = 2
-        private const val PACKET_ENCRYPTED = 4
         private const val CONNECTION_RETRY_WINDOW_MILLIS = 5 * 60 * 1_000L
-        private val MAX_CLOCK_SKEW = 5.minutes
     }
 }

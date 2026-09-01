@@ -45,7 +45,7 @@ class IosSoundEffectPlayer : SoundEffectSink {
         }
 
     override fun play(effect: SoundEffect) {
-        val level = volume.coerceIn(0f, 1f)
+        val level = (volume * effect.gain()).coerceIn(0f, 1f)
         if (level <= 0f) return
         val now = nowMillis()
         val last = lastStartedAt[effect]

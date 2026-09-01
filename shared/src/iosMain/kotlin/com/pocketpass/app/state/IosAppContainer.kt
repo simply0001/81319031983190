@@ -28,6 +28,7 @@ import com.pocketpass.app.data.supabase.SupabaseBackendConfig
 import com.pocketpass.app.data.supabase.SupabaseProductionRemoteDataSources
 import com.pocketpass.app.data.supabase.realtime.SupabaseRealtimeGateway
 import com.pocketpass.app.domain.model.ConversationId
+import com.pocketpass.app.domain.model.EncounterId
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
@@ -72,7 +73,14 @@ import com.pocketpass.app.model.StatusInfo
 import com.pocketpass.app.security.KeychainSecureStringStore
 import com.pocketpass.app.security.KeystoreSupabaseCodeVerifierCache
 import com.pocketpass.app.security.KeystoreSupabaseSessionManager
+import com.pocketpass.app.nearby.IosNearbyController
+import com.pocketpass.app.nearby.NearbyCredentialPool
+import com.pocketpass.app.nearby.NearbyEncounterProof
 import com.pocketpass.app.nearby.NearbyProofOutboxStore
+import com.pocketpass.app.nearby.NearbyReceiptOutcome
+import com.pocketpass.app.nearby.NearbyReceiptVerdict
+import com.pocketpass.app.nearby.NearbyReceiptVerdictBus
+import com.pocketpass.app.nearby.postEncounterNotification
 import com.pocketpass.app.sync.IosNetworkMonitor
 import com.pocketpass.app.sync.OutboxProcessor
 import com.pocketpass.app.sync.RealtimeRuntime
@@ -300,7 +308,24 @@ class IosAppContainer(
         scope = applicationScope,
     )
     override val settings = SettingsStateHolder(settingsRepository, applicationScope)
-    override val nearby = InactiveNearby
+    override val nearby: NearbyActions = backend?.let { components ->
+        IosNearbyController(
+            scope = applicationScope,
+            settingsRepository = settingsRepository,
+            settings = settings.settings,
+            activeAccountId = activeAccountId,
+            credentialPool = components.nearbyCredentialPool,
+            submitProof = { accountId, proof -> submitNearbyProof(accountId, proof) },
+            onEncounter = {
+                applicationScope.launch {
+                    soundEffects.play(SoundEffect.Notification)
+                    if (settingsRepository.settings.first().encounterAlertsEnabled) {
+                        postEncounterNotification()
+                    }
+                }
+            },
+        )
+    } ?: InactiveNearby
     override val appUpdate = DisabledAppUpdate
 
     private val appForeground = MutableStateFlow(true)
@@ -469,6 +494,21 @@ class IosAppContainer(
     override suspend fun handleAuthCallback(callbackUri: String): RepositoryResult<SessionState> =
         repositories.session.handleAuthCallback(callbackUri)
 
+    private suspend fun submitNearbyProof(
+        accountId: UserId,
+        proof: NearbyEncounterProof,
+    ): NearbyReceiptVerdict {
+        val components = backend ?: return NearbyReceiptVerdict.NotQueued
+        if (!components.nearbyProofOutboxStore.enqueue(accountId, proof)) {
+            return NearbyReceiptVerdict.NotQueued
+        }
+        applicationScope.launch {
+            runCatching { components.bundle.outboxProcessor.drain(accountId) }
+        }
+        return components.nearbyReceiptVerdicts.await(EncounterId(proof.encounterId))?.verdict
+            ?: NearbyReceiptVerdict.Unknown
+    }
+
     /** One best-effort reconcile pass for BGTaskScheduler refreshes. */
     internal suspend fun performBackgroundSync(): Boolean {
         val components = backend ?: return true
@@ -546,11 +586,20 @@ class IosAppContainer(
             secureStore = nearbySecureStore,
             scheduler = scheduler,
         )
+        val nearbyReceiptVerdicts = NearbyReceiptVerdictBus()
         val bundle = ProductionRepositoryBundle.create(
             database = database,
             remote = remote.sources,
             nearbySecureStore = nearbySecureStore,
             nearbyProofOutboxStore = nearbyProofOutboxStore,
+            onEncounterSubmitted = { command, encounter ->
+                nearbyReceiptVerdicts.report(
+                    NearbyReceiptOutcome(
+                        submittedEncounterId = command.encounterId,
+                        resolvedEncounterId = encounter?.id,
+                    ),
+                )
+            },
             pendingOperationScheduler = scheduler,
         )
         outboxProcessor = bundle.outboxProcessor
@@ -592,6 +641,13 @@ class IosAppContainer(
             presence = presence,
             realtimeGateway = SupabaseRealtimeGateway(client),
             repositories = graph,
+            nearbyProofOutboxStore = nearbyProofOutboxStore,
+            nearbyReceiptVerdicts = nearbyReceiptVerdicts,
+            nearbyCredentialPool = NearbyCredentialPool(
+                dao = database.nearbyEncounterDao(),
+                remote = remote.sources.encounters,
+                secureStore = nearbySecureStore,
+            ),
         )
     }
 
@@ -676,6 +732,9 @@ class IosAppContainer(
         val presence: RealtimePresenceRepository,
         val realtimeGateway: SupabaseRealtimeGateway,
         val repositories: PocketPassRepositoryGraph,
+        val nearbyProofOutboxStore: NearbyProofOutboxStore,
+        val nearbyReceiptVerdicts: NearbyReceiptVerdictBus,
+        val nearbyCredentialPool: NearbyCredentialPool,
     )
 
     private companion object {

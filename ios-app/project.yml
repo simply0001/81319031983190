@@ -43,9 +43,14 @@ targets:
           - CFBundleURLName: xyz.pocketpass.auth
             CFBundleURLSchemes:
               - pocketpass
-        # Opportunistic background sync via BGTaskScheduler; the identifier
-        # must match IosBackgroundRefresh.TASK_IDENTIFIER.
-        UIBackgroundModes: [fetch]
+        # fetch: opportunistic background sync via BGTaskScheduler (the
+        # identifier must match IosBackgroundRefresh.TASK_IDENTIFIER).
+        # bluetooth-central/peripheral: street-pass keeps exchanging passes
+        # with the phone pocketed.
+        UIBackgroundModes: [fetch, bluetooth-central, bluetooth-peripheral]
+        NSBluetoothAlwaysUsageDescription:
+          PocketPass exchanges anonymous encounter passes with nearby players
+          over Bluetooth, including while the app is in the background.
         BGTaskSchedulerPermittedIdentifiers:
           - xyz.pocketpass.refresh
         UIRequiredDeviceCapabilities: [arm64]

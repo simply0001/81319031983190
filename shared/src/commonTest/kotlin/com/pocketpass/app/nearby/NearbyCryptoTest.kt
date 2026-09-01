@@ -1,11 +1,11 @@
 package com.pocketpass.app.nearby
 
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.time.Instant
-import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
 
 class NearbyCryptoTest {
     @Test
@@ -13,7 +13,7 @@ class NearbyCryptoTest {
         val first = NearbyWireProtocol.helloPacket(hello(invitationNonce = 4))
         val second = NearbyWireProtocol.helloPacket(hello(invitationNonce = 9))
 
-        assertArrayEquals(
+        assertContentEquals(
             NearbyCrypto.transcript(first, second),
             NearbyCrypto.transcript(second, first),
         )
@@ -28,10 +28,10 @@ class NearbyCryptoTest {
         )
 
         assertEquals(original.hello.invitationNonce, extended.hello.invitationNonce)
-        assertArrayEquals(original.hello.credentialToken, extended.hello.credentialToken)
-        assertArrayEquals(original.hello.signingPublicKey, extended.hello.signingPublicKey)
-        assertArrayEquals(original.hello.agreementPublicKey, extended.hello.agreementPublicKey)
-        assertArrayEquals(original.hello.challenge, extended.hello.challenge)
+        assertContentEquals(original.hello.credentialToken, extended.hello.credentialToken)
+        assertContentEquals(original.hello.signingPublicKey, extended.hello.signingPublicKey)
+        assertContentEquals(original.hello.agreementPublicKey, extended.hello.agreementPublicKey)
+        assertContentEquals(original.hello.challenge, extended.hello.challenge)
         assertFalse(
             NearbyCrypto.transcript(peer, original)
                 .contentEquals(NearbyCrypto.transcript(peer, extended)),
@@ -47,46 +47,46 @@ class NearbyCryptoTest {
         val first = NearbyWireProtocol.helloPacket(
             hello(
                 invitationNonce = 3,
-                signingPublicKey = firstSigning.public.encoded,
-                agreementPublicKey = firstAgreement.public.encoded,
+                signingPublicKey = firstSigning.publicKeyDer,
+                agreementPublicKey = firstAgreement.publicKeyDer,
             ),
         )
         val second = NearbyWireProtocol.helloPacket(
             hello(
                 invitationNonce = 7,
-                signingPublicKey = secondSigning.public.encoded,
-                agreementPublicKey = secondAgreement.public.encoded,
+                signingPublicKey = secondSigning.publicKeyDer,
+                agreementPublicKey = secondAgreement.publicKeyDer,
             ),
         )
         val transcriptHash = NearbyCrypto.sha256(NearbyCrypto.transcript(first, second))
-        val firstSignature = NearbyCrypto.sign(firstSigning.private, transcriptHash)
-        val secondSignature = NearbyCrypto.sign(secondSigning.private, transcriptHash)
+        val firstSignature = NearbyCrypto.sign(firstSigning.privateKeyDer, transcriptHash)
+        val secondSignature = NearbyCrypto.sign(secondSigning.privateKeyDer, transcriptHash)
 
-        assertTrue(NearbyCrypto.verify(firstSigning.public, transcriptHash, firstSignature))
-        assertTrue(NearbyCrypto.verify(secondSigning.public, transcriptHash, secondSignature))
+        assertTrue(NearbyCrypto.verify(firstSigning.publicKeyDer, transcriptHash, firstSignature))
+        assertTrue(NearbyCrypto.verify(secondSigning.publicKeyDer, transcriptHash, secondSignature))
         assertFalse(
             NearbyCrypto.verify(
-                secondSigning.public,
+                secondSigning.publicKeyDer,
                 transcriptHash,
                 firstSignature,
             ),
         )
-        assertArrayEquals(
+        assertContentEquals(
             firstSignature,
             NearbyWireProtocol.decodeSignature(NearbyWireProtocol.encodeSignature(firstSignature)),
         )
 
         val firstKey = NearbyCrypto.deriveSessionKey(
-            firstAgreement.private,
-            secondAgreement.public,
+            firstAgreement.privateKeyDer,
+            secondAgreement.publicKeyDer,
             transcriptHash,
         )
         val secondKey = NearbyCrypto.deriveSessionKey(
-            secondAgreement.private,
-            firstAgreement.public,
+            secondAgreement.privateKeyDer,
+            firstAgreement.publicKeyDer,
             transcriptHash,
         )
-        assertArrayEquals(firstKey, secondKey)
+        assertContentEquals(firstKey, secondKey)
 
         val occurredAt = Instant.fromEpochSeconds(123)
         val plaintext = NearbyWireProtocol.encodeConfirmation(
@@ -102,17 +102,17 @@ class NearbyCryptoTest {
         val confirmation = NearbyWireProtocol.decodeConfirmation(
             NearbyCrypto.decrypt(secondKey, encrypted, aad),
         )
-        assertArrayEquals(first.hello.credentialToken, confirmation.ownToken)
-        assertArrayEquals(second.hello.credentialToken, confirmation.peerToken)
+        assertContentEquals(first.hello.credentialToken, confirmation.ownToken)
+        assertContentEquals(second.hello.credentialToken, confirmation.peerToken)
         assertEquals(occurredAt, confirmation.occurredAt)
-        assertArrayEquals(transcriptHash, confirmation.transcriptHash)
+        assertContentEquals(transcriptHash, confirmation.transcriptHash)
     }
 
     private fun hello(
         invitationNonce: Long,
-        signingPublicKey: ByteArray = NearbyCrypto.generateSigningKeyPair().public.encoded,
+        signingPublicKey: ByteArray = NearbyCrypto.generateSigningKeyPair().publicKeyDer,
         agreementPublicKey: ByteArray =
-            NearbyCrypto.generateAgreementKeyPair().public.encoded,
+            NearbyCrypto.generateAgreementKeyPair().publicKeyDer,
     ): NearbyHello = NearbyHello(
         invitationNonce = invitationNonce,
         credentialToken = NearbyCrypto.randomBytes(NearbyCredential.TOKEN_BYTES),

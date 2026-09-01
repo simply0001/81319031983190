@@ -54,7 +54,7 @@ class SoundEffectPlayer(context: Context) : SoundEffectSink {
     }
 
     override fun play(effect: SoundEffect) {
-        val level = volume.coerceIn(0f, 1f)
+        val level = (volume * effect.gain()).coerceIn(0f, 1f)
         if (!foreground || level <= 0f) return
         val sample = samples[effect] ?: return
         if (sample !in loaded) return

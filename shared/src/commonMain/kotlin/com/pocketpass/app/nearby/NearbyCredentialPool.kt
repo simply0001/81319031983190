@@ -8,7 +8,6 @@ import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.security.SecureStringStore
 import kotlin.time.Clock
 import kotlin.time.Instant
-import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -72,7 +71,7 @@ class NearbyCredentialPool(
 
         val requested = (TARGET_POOL_SIZE - available).coerceIn(1, MAX_ISSUE_BATCH)
         val keyPairs = List(requested) { NearbyCrypto.generateSigningKeyPair() }
-        val publicKeys = keyPairs.map { pair -> encode(pair.public.encoded) }
+        val publicKeys = keyPairs.map { pair -> encode(pair.publicKeyDer) }
         val issued = when (
             val result = remote.issueCredentials(accountId, publicKeys)
         ) {
@@ -82,11 +81,11 @@ class NearbyCredentialPool(
         }
         if (issued.size != keyPairs.size) return unavailable()
 
-        val keyByPublic = keyPairs.associateBy { pair -> encode(pair.public.encoded) }
+        val keyByPublic = keyPairs.associateBy { pair -> encode(pair.publicKeyDer) }
         val rows = mutableListOf<NearbyCredentialEntity>()
         issued.forEach { credential ->
             val pair = keyByPublic[credential.signingPublicKey] ?: return unavailable()
-            val tokenBytes = uuidToBytes(UUID.fromString(credential.token))
+            val tokenBytes = NearbyEncoding.uuidStringToBytes(credential.token)
             val tokenHash = encode(NearbyCrypto.sha256(tokenBytes))
             val secureEntryKey = secureEntryKey(accountId, tokenHash)
             secureStore.put(
@@ -94,8 +93,8 @@ class NearbyCredentialPool(
                 encodeCredential(
                     NearbyCredential(
                         token = tokenBytes,
-                        signingPublicKey = pair.public.encoded,
-                        signingPrivateKey = pair.private.encoded,
+                        signingPublicKey = pair.publicKeyDer,
+                        signingPrivateKey = pair.privateKeyDer,
                         expiresAt = credential.expiresAt,
                     ),
                 ),
@@ -133,7 +132,7 @@ class NearbyCredentialPool(
     }
 
     private fun secureEntryKey(accountId: UserId, tokenHash: String): String =
-        "nearby.${encode(NearbyCrypto.sha256(accountId.value.toByteArray())).take(22)}." +
+        "nearby.${encode(NearbyCrypto.sha256(accountId.value.encodeToByteArray())).take(22)}." +
             tokenHash.take(43)
 
     private fun unavailable(): RepositoryResult.Failure = RepositoryResult.Failure(
@@ -144,12 +143,6 @@ class NearbyCredentialPool(
     )
 
     companion object {
-        fun uuidToBytes(uuid: UUID): ByteArray =
-            NearbyEncoding.uuidStringToBytes(uuid.toString())
-
-        fun bytesToUuid(bytes: ByteArray): UUID =
-            UUID.fromString(NearbyEncoding.bytesToUuidString(bytes))
-
         fun encode(bytes: ByteArray): String = NearbyEncoding.encode(bytes)
 
         fun decode(value: String): ByteArray = NearbyEncoding.decode(value)
