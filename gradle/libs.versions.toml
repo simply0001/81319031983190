@@ -12,6 +12,7 @@ coroutines = "1.10.2"
 kotlinxIo = "0.9.0"
 serialization = "1.9.0"
 coil = "3.3.0"
+glance = "1.2.0"
 room = "2.8.4"
 sqlite = "2.6.2"
 work = "2.11.2"
@@ -63,6 +64,7 @@ androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.r
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 supabase-bom = { module = "io.github.jan-tennert.supabase:bom", version.ref = "supabase" }
 supabase-auth = { module = "io.github.jan-tennert.supabase:auth-kt" }
 supabase-postgrest = { module = "io.github.jan-tennert.supabase:postgrest-kt" }

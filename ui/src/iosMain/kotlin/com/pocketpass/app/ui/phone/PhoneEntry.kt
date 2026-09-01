@@ -26,6 +26,7 @@ import com.pocketpass.app.state.IosAppContainer
 import com.pocketpass.app.state.IosBackgroundRefresh
 import com.pocketpass.app.state.IosStatusFeed
 import com.pocketpass.app.state.PocketPassStore
+import com.pocketpass.app.widget.IosWidgetReload
 import com.pocketpass.app.ui.LocalAppVersionName
 import com.pocketpass.app.ui.PocketPassTheme
 import platform.Foundation.NSBundle
@@ -60,10 +61,20 @@ fun PhoneAppViewController(): UIViewController = ComposeUIViewController {
 }
 
 // Called from the Swift AppDelegate when the app is opened through its URL
-// scheme; the callback policy ignores anything that is not a sign-in response.
+// scheme. Only the sign-in callback carries anything to act on; widget taps
+// (pocketpass://home) just bring the app forward.
 fun PhoneAppHandleUrl(url: String) {
-    store.handleAuthCallback(url)
+    if (url.startsWith(AUTH_CALLBACK_PREFIX, ignoreCase = true)) {
+        store.handleAuthCallback(url)
+    }
 }
+
+// WidgetKit is Swift-only, so the AppDelegate registers the reload call here.
+fun PhoneAppSetWidgetReloader(reloader: () -> Unit) {
+    IosWidgetReload.handler = reloader
+}
+
+private const val AUTH_CALLBACK_PREFIX = "pocketpass://auth/callback"
 
 @Composable
 private fun IosPhoneApp() {

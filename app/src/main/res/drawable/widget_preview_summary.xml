@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static picker preview echoing the Home backdrop and pocket frame. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="310dp"
+    android:height="110dp"
+    android:viewportWidth="310"
+    android:viewportHeight="110">
+    <path
+        android:pathData="M18,2 H292 A16,16 0 0 1 308,18 V92 A16,16 0 0 1 292,108 H18 A16,16 0 0 1 2,92 V18 A16,16 0 0 1 18,2 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#D9D9D9">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="2"
+                android:endX="0"
+                android:endY="108">
+                <item android:offset="0" android:color="#FFE9F6F4" />
+                <item android:offset="0.35" android:color="#FFE9F6F4" />
+                <item android:offset="1" android:color="#FF92EBAE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M20,26 H68 V56 H20 Z"
+        android:fillColor="#1D596B" />
+    <path
+        android:pathData="M20,66 H120 V74 H20 Z"
+        android:fillColor="#8A8A8A" />
+    <path
+        android:pathData="M20,88 H150 V96 H20 Z"
+        android:fillColor="#26706A" />
+    <path
+        android:pathData="M226,16 H290 A10,10 0 0 1 300,26 A10,10 0 0 1 290,36 H226 A10,10 0 0 1 216,26 A10,10 0 0 1 226,16 Z"
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeColor="#D9D9D9" />
+    <path
+        android:pathData="M228,26 m-3.5,0 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0"
+        android:fillColor="#51FF85" />
+</vector>

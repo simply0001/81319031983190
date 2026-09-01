@@ -209,6 +209,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.glance.appwidget)
 
     val supabaseBom = platform(libs.supabase.bom)
     implementation(supabaseBom)

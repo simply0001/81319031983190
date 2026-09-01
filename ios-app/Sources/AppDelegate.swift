@@ -1,4 +1,5 @@
 import UIKit
+import WidgetKit
 import PocketPassUi
 
 @main
@@ -12,6 +13,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Registers the BGTaskScheduler background-refresh handler; must run
         // before this method returns.
         PhoneEntryKt.PhoneAppDidLaunch()
+        // WidgetKit is Swift-only, so Kotlin hands widget refreshes back here.
+        PhoneEntryKt.PhoneAppSetWidgetReloader {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = PhoneEntryKt.PhoneAppViewController()
         window.makeKeyAndVisible()

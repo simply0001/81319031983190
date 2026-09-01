@@ -84,6 +84,8 @@ import com.pocketpass.app.nearby.postEncounterNotification
 import com.pocketpass.app.sync.IosNetworkMonitor
 import com.pocketpass.app.sync.OutboxProcessor
 import com.pocketpass.app.sync.RealtimeRuntime
+import com.pocketpass.app.widget.IosWidgetSnapshotSink
+import com.pocketpass.app.widget.WidgetSnapshotPublisher
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -328,6 +330,18 @@ class IosAppContainer(
     } ?: InactiveNearby
     override val appUpdate = DisabledAppUpdate
 
+    private val widgetPublisher = WidgetSnapshotPublisher(
+        scope = applicationScope,
+        activeAccountId = activeAccountId,
+        homeProfile = homeProfile.state,
+        notifications = notifications.state,
+        friends = friends.state,
+        nearby = nearby.state,
+        miiEditor = miiEditor.state,
+        settings = settings.settings,
+        sink = IosWidgetSnapshotSink(),
+    )
+
     private val appForeground = MutableStateFlow(true)
     private val networkMonitor = IosNetworkMonitor()
 
@@ -390,6 +404,7 @@ class IosAppContainer(
         applicationScope.launch {
             settingsRepository.settings.collect { soundEffects.volume = it.sfxLevel }
         }
+        widgetPublisher.start()
     }
 
     override fun consumeRequestedAppUpdate() = Unit
@@ -526,6 +541,7 @@ class IosAppContainer(
         attempt { repositories.sync.synchronize(accountId) }
         attempt { components.bundle.outboxProcessor.drain(accountId) }
         attempt { miiPublishCallback?.drain(accountId.value) }
+        attempt { widgetPublisher.publishNow() }
         return healthy
     }
 

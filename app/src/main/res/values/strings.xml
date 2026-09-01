@@ -18,4 +18,8 @@
     <string name="update_available_title">Update available</string>
     <string name="update_available_text">PocketPass %1$s is ready to install.</string>
     <string name="update_available_action">View</string>
+    <string name="widget_summary_label">Street-pass</string>
+    <string name="widget_summary_description">Encounters today, your last pass and who is around.</string>
+    <string name="widget_profile_label">Profile card</string>
+    <string name="widget_profile_description">Your Mii, name and greeting, PocketPass style.</string>
 </resources>

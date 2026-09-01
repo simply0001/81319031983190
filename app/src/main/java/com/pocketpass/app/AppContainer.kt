@@ -115,6 +115,8 @@ import com.pocketpass.app.update.AppUpdateStateHolder
 import com.pocketpass.app.update.UPDATE_MANIFEST_URL
 import com.pocketpass.app.update.OkHttpUpdateTransport
 import com.pocketpass.app.update.UpdateNotifications
+import com.pocketpass.app.widget.AndroidWidgetSnapshotSink
+import com.pocketpass.app.widget.WidgetSnapshotPublisher
 import io.github.jan.supabase.SupabaseClient
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -455,6 +457,18 @@ class AppContainer(
         )
     }
 
+    private val widgetPublisher = WidgetSnapshotPublisher(
+        scope = applicationScope,
+        activeAccountId = activeAccountId,
+        homeProfile = homeProfile.state,
+        notifications = notifications.state,
+        friends = friends.state,
+        nearby = nearby.state,
+        miiEditor = miiEditor.state,
+        settings = settings.settings,
+        sink = AndroidWidgetSnapshotSink(context),
+    )
+
     val authRemoteDataSource: SupabaseAuthRemoteDataSource?
         get() = backendComponents?.authRemote
 
@@ -491,6 +505,7 @@ class AppContainer(
             repositories.session.initialize()
         }
         appUpdate.checkOnLaunch()
+        widgetPublisher.start()
         realtimeRuntime?.let { runtime ->
             registerRealtimeNetworkCallback()
             runtime.start()

@@ -58,6 +58,15 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+    # The widget shares its data through this group; the same identifier is
+    # declared on the extension target below.
+    entitlements:
+      path: Sources/PocketPass.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.xyz.pocketpass
+    dependencies:
+      - target: PocketPassWidget
     settings:
       base:
         FRAMEWORK_SEARCH_PATHS:
@@ -73,3 +82,33 @@ targets:
         script: |
           cd "$SRCROOT/.."
           ./gradlew :ui:embedAndSignAppleFrameworkForXcode
+
+  # Pure-Swift WidgetKit extension: it never links the Kotlin framework and
+  # only reads the JSON snapshot the app writes into the App Group.
+  PocketPassWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Widget
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: PocketPass
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # Rubik faces copied from ui/src/commonMain/composeResources/font.
+        UIAppFonts:
+          - rubik_500.ttf
+          - rubik_600.ttf
+          - rubik_700.ttf
+          - rubik_800.ttf
+    entitlements:
+      path: Widget/PocketPassWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.xyz.pocketpass
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: xyz.pocketpass.PocketPass.widget
+        SWIFT_VERSION: "5.9"

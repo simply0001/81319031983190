@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static picker preview echoing the profile hero card. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="310dp"
+    android:height="120dp"
+    android:viewportWidth="310"
+    android:viewportHeight="120">
+    <path
+        android:pathData="M18,2 H292 A16,16 0 0 1 308,18 V102 A16,16 0 0 1 292,118 H18 A16,16 0 0 1 2,102 V18 A16,16 0 0 1 18,2 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#D9D9D9">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="2"
+                android:endX="0"
+                android:endY="118">
+                <item android:offset="0" android:color="#FFE9F6F4" />
+                <item android:offset="0.35" android:color="#FFE9F6F4" />
+                <item android:offset="1" android:color="#FF92EBAE" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M60,60 m-44,0 a44,44 0 1 0 88,0 a44,44 0 1 0 -88,0"
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="4.3"
+        android:strokeColor="#5E9AAC" />
+    <path
+        android:pathData="M120,40 H230 V56 H120 Z"
+        android:fillColor="#1D596B" />
+    <path
+        android:pathData="M120,66 H280 V74 H120 Z"
+        android:fillColor="#26706A" />
+    <path
+        android:pathData="M120,80 H250 V88 H120 Z"
+        android:fillColor="#26706A" />
+</vector>

@@ -156,7 +156,7 @@ class NearbyCredentialPool(
     }
 }
 
-internal fun cachedCredentialFallback(
+fun cachedCredentialFallback(
     available: Int,
     failure: RepositoryResult.Failure,
 ): RepositoryResult<Unit> {
