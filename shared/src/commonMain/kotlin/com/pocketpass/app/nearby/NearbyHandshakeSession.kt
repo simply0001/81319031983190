@@ -122,6 +122,9 @@ class NearbyHandshakeSession(
         sessionKey = null
     }
 
+    /** The attached pass while its token has not been sent to anyone yet. */
+    fun unexposedCredential(): NearbyCredential? = if (localHelloSent) null else credential
+
     @OptIn(ExperimentalUuidApi::class)
     private fun progress(): List<Event> {
         val events = mutableListOf<Event>()

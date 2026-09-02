@@ -581,6 +581,9 @@ class IosNearbyBleEngine(
 
     private fun closeLink(key: String) {
         val link = links.remove(key) ?: return
+        link.machine.unexposedCredential()?.let { credential ->
+            scope.launch { credentialPool.release(accountId, credential) }
+        }
         link.machine.close()
         heldPeripherals.remove(key)?.let { peripheral ->
             centralManager?.cancelPeripheralConnection(peripheral)

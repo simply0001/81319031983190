@@ -1,8 +1,5 @@
 package com.pocketpass.app.ui.phone
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -57,7 +54,6 @@ import com.pocketpass.app.domain.model.Message
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.model.MessageComposerAction
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensionTarget
 import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
@@ -85,7 +81,6 @@ import kotlinx.coroutines.delay
 private const val MESSAGE_ROW_HEIGHT = 187f
 private const val MESSAGE_ROW_INSET = 13f
 private const val COMPOSER_HEIGHT = 161.5f
-private const val RAIL_EXPANDED_HEIGHT = 330f
 
 @Composable
 fun PhoneMessagesTab(
@@ -538,11 +533,6 @@ private fun PhoneComposer(
     val canSend = state.messageDraft.trim().isNotEmpty() &&
         state.messageDraft.length <= 4_000 &&
         !state.messageSendInProgress
-    val railProgress by animateFloatAsState(
-        targetValue = if (state.messageActionRailExpanded) 1f else 0f,
-        animationSpec = tween(260, easing = FastOutSlowInEasing),
-        label = "messageActionRail",
-    )
     val send = { if (canSend) dispatch(PocketPassEvent.SendMessage) }
     val editing = state.editingMessageId != null
     Column(Modifier.padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN))) {
@@ -605,29 +595,23 @@ private fun PhoneComposer(
                     ),
             )
             Spacer(Modifier.width(metrics.dp(20f)))
-            PhoneActionRail(
+            PhoneAttachButton(
                 metrics = metrics,
-                progress = { railProgress },
-                expanded = state.messageActionRailExpanded,
-                onToggle = { dispatch(PocketPassEvent.ToggleMessageActions) },
-                onAction = { action ->
-                    dispatch(PocketPassEvent.SelectMessageAction(action))
-                    if (action == MessageComposerAction.File) {
-                        extensions.open(PocketPassExtensionTarget.MessageComposer(conversationId, action))
-                    }
-                },
+                onClick = { dispatch(PocketPassEvent.SelectMessageAction(MessageComposerAction.Image)) },
             )
         }
     }
 }
 
+/**
+ * Phones get a plain attach button. The expanding action rail was designed for
+ * the dual-screen composer; on a single screen the picker could not be reached
+ * from it, so tapping here opens the image picker directly.
+ */
 @Composable
-private fun PhoneActionRail(
+private fun PhoneAttachButton(
     metrics: DesignMetrics,
-    progress: () -> Float,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    onAction: (MessageComposerAction) -> Unit,
+    onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(metrics.dp(79.226f))
     val fill = Brush.verticalGradient(
@@ -637,79 +621,28 @@ private fun PhoneActionRail(
             1f to pocketPalette.tint(Color(0xFFBDF8CB)),
         ),
     )
-    val height = COMPOSER_HEIGHT + (RAIL_EXPANDED_HEIGHT - COMPOSER_HEIGHT) * progress()
-    val lift = height - RAIL_EXPANDED_HEIGHT
     Box(
         Modifier
             .width(metrics.dp(158.452f))
-            .height(metrics.dp(COMPOSER_HEIGHT)),
-        contentAlignment = Alignment.BottomCenter,
+            .height(metrics.dp(COMPOSER_HEIGHT))
+            .clip(shape)
+            .pocketFrame(
+                fill,
+                metrics.dp(18f),
+                Brush.verticalGradient(listOf(Color(0xFF5A96A9), Color(0xFF286C81))),
+                shape,
+            )
+            .testTag("message_actions")
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        run {
-            Box(
-                Modifier
-                    .width(metrics.dp(158.452f))
-                    .height(metrics.dp(height))
-                    .clip(shape)
-                    .pocketFrame(
-                        fill,
-                        metrics.dp(18f),
-                        Brush.verticalGradient(listOf(Color(0xFF5A96A9), Color(0xFF286C81))),
-                        shape,
-                    ),
-            ) {
-                val handover = { (progress() / 0.45f).coerceIn(0f, 1f) }
-                FigmaAsset(
-                    resource = Assets.MessageActionImage,
-                    modifier = Modifier
-                        .offset(x = metrics.dp(38.07f), y = metrics.dp(lift + 40f))
-                        .requiredSize(metrics.dp(81.86f))
-                        .graphicsLayer { alpha = handover() }
-                        .testTag("message_action_image")
-                        .clickable(
-                            enabled = expanded,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onAction(MessageComposerAction.Image) },
-                )
-                FigmaAsset(
-                    resource = Assets.MessageActionFile,
-                    modifier = Modifier
-                        .offset(x = metrics.dp(41f), y = metrics.dp(lift + 160f))
-                        .requiredSize(metrics.dp(76f), metrics.dp(94f))
-                        .graphicsLayer { alpha = handover() }
-                        .testTag("message_action_file")
-                        .clickable(
-                            enabled = expanded,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onAction(MessageComposerAction.File) },
-                )
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(metrics.dp(COMPOSER_HEIGHT))
-                        .testTag("message_actions")
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggle,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    FigmaAsset(
-                        resource = Assets.MessageActionAdd,
-                        modifier = Modifier
-                            .requiredSize(metrics.dp(66.111f), metrics.dp(67.535f))
-                            .graphicsLayer {
-                                val p = progress()
-                                rotationZ = 45f * p
-                                alpha = 1f - 0.35f * p
-                            },
-                    )
-                }
-            }
-        }
+        FigmaAsset(
+            resource = Assets.MessageActionAdd,
+            modifier = Modifier.requiredSize(metrics.dp(66.111f), metrics.dp(67.535f)),
+        )
     }
 }

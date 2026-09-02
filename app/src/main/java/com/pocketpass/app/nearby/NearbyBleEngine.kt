@@ -636,6 +636,9 @@ internal class NearbyBleEngine(
 
     private fun closeSession(address: String) {
         val session = sessions.remove(address) ?: return
+        session.machine.unexposedCredential()?.let { credential ->
+            scope.launch { credentialPool.release(accountId, credential) }
+        }
         session.machine.close()
         session.gatt?.runCatching {
             disconnect()

@@ -746,6 +746,19 @@ interface NearbyEncounterDao {
 
     @Query(
         """
+        UPDATE nearby_credentials
+        SET claimedAtEpochMillis = NULL
+        WHERE accountId = :accountId
+          AND tokenHash = :tokenHash
+        """,
+    )
+    suspend fun releaseCredential(
+        accountId: String,
+        tokenHash: String,
+    ): Int
+
+    @Query(
+        """
         SELECT * FROM nearby_credentials
         WHERE accountId = :accountId
           AND (expiresAtEpochMillis <= :nowEpochMillis OR claimedAtEpochMillis IS NOT NULL)
