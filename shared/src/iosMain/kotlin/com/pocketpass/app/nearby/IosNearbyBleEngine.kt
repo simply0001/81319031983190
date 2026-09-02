@@ -44,8 +44,11 @@ import platform.Foundation.NSError
 import platform.Foundation.NSNumber
 import platform.Foundation.create
 import platform.Foundation.timeIntervalSince1970
+import platform.darwin.DISPATCH_TIME_NOW
 import platform.darwin.NSObject
+import platform.darwin.dispatch_after
 import platform.darwin.dispatch_queue_create
+import platform.darwin.dispatch_time
 import platform.posix.memcpy
 
 /**
@@ -114,6 +117,7 @@ class IosNearbyBleEngine(
         val outbound: ArrayDeque<ByteArray> = ArrayDeque(),
         var sending: Boolean = false,
         var credentialAttached: Boolean = false,
+        var closeWhenDrained: Boolean = false,
         var peripheral: CBPeripheral? = null,
         var characteristic: CBCharacteristic? = null,
         var subscribedCentral: CBCentral? = null,
@@ -468,10 +472,42 @@ class IosNearbyBleEngine(
                         links.size,
                         event.proof.occurredAt,
                     )
-                    closeLink(link.key)
+                    closeAfterDrain(link)
                 }
             }
         }
+    }
+
+    // Same race as on Android: the proof is ready while the final encrypted
+    // confirmation may still be in flight. CoreBluetooth only reports an
+    // indication as queued, never as delivered, so the peripheral also gives
+    // the last one a moment to land before disconnecting.
+    private fun closeAfterDrain(link: Link) {
+        link.closeWhenDrained = true
+        if (!link.sending && link.outbound.isEmpty()) {
+            finishDrain(link)
+        } else {
+            scheduleClose(link, DRAIN_CLOSE_TIMEOUT_MILLIS)
+        }
+    }
+
+    private fun finishDrain(link: Link) {
+        if (!link.closeWhenDrained) return
+        scheduleClose(
+            link,
+            if (link.role == NearbyLinkRole.Peripheral) PERIPHERAL_DRAIN_GRACE_MILLIS else 0L,
+        )
+    }
+
+    private fun scheduleClose(link: Link, delayMillis: Long) {
+        if (delayMillis <= 0L) {
+            closeLink(link.key)
+            return
+        }
+        dispatch_after(
+            dispatch_time(DISPATCH_TIME_NOW, delayMillis * 1_000_000L),
+            queue,
+        ) { closeLink(link.key) }
     }
 
     private fun enqueuePacket(link: Link, packet: ByteArray) {
@@ -494,7 +530,10 @@ class IosNearbyBleEngine(
         if (link.sending) return
         when (link.role) {
             NearbyLinkRole.Central -> {
-                val fragment = link.outbound.removeFirstOrNull() ?: return
+                val fragment = link.outbound.removeFirstOrNull() ?: run {
+                    finishDrain(link)
+                    return
+                }
                 val peripheral = link.peripheral
                 val characteristic = link.characteristic
                 if (peripheral == null || characteristic == null) {
@@ -518,7 +557,10 @@ class IosNearbyBleEngine(
                     return
                 }
                 while (true) {
-                    val fragment = link.outbound.firstOrNull() ?: return
+                    val fragment = link.outbound.firstOrNull() ?: run {
+                        finishDrain(link)
+                        return
+                    }
                     val accepted = manager.updateValue(
                         fragment.toNSData(),
                         characteristic,
@@ -616,5 +658,7 @@ class IosNearbyBleEngine(
         const val TRANSFER_CHARACTERISTIC_UUID_STRING = "9b40e2f9-7543-4e62-9b4d-8672d18514c7"
         const val SERVICE_DATA_BYTES = 1 + Long.SIZE_BYTES
         const val CONNECTION_RETRY_WINDOW_MILLIS = 5 * 60 * 1_000L
+        const val DRAIN_CLOSE_TIMEOUT_MILLIS = 4_000L
+        const val PERIPHERAL_DRAIN_GRACE_MILLIS = 1_500L
     }
 }

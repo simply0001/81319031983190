@@ -37,6 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @SuppressLint("MissingPermission")
@@ -495,9 +496,29 @@ internal class NearbyBleEngine(
                         sessions.size,
                         event.proof.occurredAt,
                     )
-                    closeSession(session.device.address)
+                    closeAfterDrain(session)
                 }
             }
+        }
+    }
+
+    // The peripheral's proof is ready the moment it queues its own encrypted
+    // confirmation; tearing the link down right then races the indication still
+    // in flight, the central never confirms, and the pair ends the day with two
+    // receipts for two different handshakes. Close only once every fragment has
+    // been acknowledged, or after a deadline if the ack never comes.
+    private fun closeAfterDrain(session: GattSession) {
+        val drained = synchronized(session) {
+            session.closeWhenDrained = true
+            !session.sending && session.outbound.isEmpty()
+        }
+        if (drained) {
+            closeSession(session.device.address)
+            return
+        }
+        scope.launch {
+            delay(DRAIN_CLOSE_TIMEOUT_MILLIS)
+            closeSession(session.device.address)
         }
     }
 
@@ -519,9 +540,13 @@ internal class NearbyBleEngine(
     private fun sendNextFragment(session: GattSession) {
         val fragment = synchronized(session) {
             if (session.sending) return
-            val next = session.outbound.pollFirst() ?: return
-            session.sending = true
+            val next = session.outbound.pollFirst()
+            if (next != null) session.sending = true
             next
+        }
+        if (fragment == null) {
+            if (session.closeWhenDrained) closeSession(session.device.address)
+            return
         }
         val started = when (session.role) {
             Role.Central -> {
@@ -706,6 +731,7 @@ internal class NearbyBleEngine(
         var mtu: Int = MINIMUM_MTU,
         var sending: Boolean = false,
         var credentialAttached: Boolean = false,
+        var closeWhenDrained: Boolean = false,
     )
 
     private enum class Role {
@@ -728,5 +754,6 @@ internal class NearbyBleEngine(
         private const val PREFERRED_MTU = 247
         private const val ATT_PROTOCOL_OVERHEAD = 3
         private const val CONNECTION_RETRY_WINDOW_MILLIS = 5 * 60 * 1_000L
+        private const val DRAIN_CLOSE_TIMEOUT_MILLIS = 3_000L
     }
 }
