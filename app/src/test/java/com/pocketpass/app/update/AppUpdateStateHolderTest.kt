@@ -57,6 +57,8 @@ class AppUpdateStateHolderTest {
             store.value = store.value.copy(lastSeenMinSupportedVersionCode = versionCode)
         }
 
+        override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) = Unit
+
         override suspend fun resetSettings() = Unit
     }
 

@@ -1,14 +1,18 @@
 <svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="142.65" height="142.65" viewBox="0 0 142.65 142.65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
+<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#ringTeal)" stroke-width="9"/>
+<!-- Google Material Symbols Rounded "footprint" (Apache 2.0), outer contours only so the prints render solid, 960-unit grid scaled to 76px. -->
+<path id="Vector" transform="translate(33.325 109.325) scale(0.0791667)" d="M315-240q-77 0-117-57t-38-128l-18-27q-11-17-36.5-77T80-680q0-103 51-171.5T260-920q85 0 132.5 75.5T440-680q0 58-16 107t-28 79l8 13q8 14 22 44.5t14 63.5q0 57-35.5 95T315-240ZM645-40q-54 0-89.5-38T520-173q0-33 14-63.5t22-44.5l8-13q-12-30-28-79t-16-107q0-89 47.5-164.5T700-720q78 0 129 68.5T880-480q0 91-25.5 150.5T818-253l-18 28q1 71-38.5 128T645-40Z" fill="url(#paint0_linear_steps)"/>
+</g>
 <defs>
-<linearGradient id="stepsRingTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
-<stop stop-color="#74BBD1"/>
-<stop offset="1" stop-color="#2B7A93"/>
+<linearGradient id="ringTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5E9AAC"/>
+<stop offset="1" stop-color="#21677B"/>
+</linearGradient>
+<linearGradient id="paint0_linear_steps" x1="480" y1="-920" x2="480" y2="-40" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B7D90"/>
+<stop offset="1" stop-color="#1B5363"/>
 </linearGradient>
 </defs>
-<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
-<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#stepsRingTeal)" stroke-width="9"/>
-<!-- Google Material Symbols Rounded "footprint" (Apache 2.0), 960-unit grid scaled to 76px. -->
-<g transform="translate(33.325 109.325) scale(0.0791667)">
-<path fill="#1D596B" d="M260-840q-45 0-72.5 50T160-680q0 63 17.5 111.5T210-496l110-22q13-32 26.5-73t13.5-89q0-60-27.5-110T260-840Zm55 520q19 0 32-14t13-39q0-17-8-35t-16-32l-96 20q0 40 17.5 70t57.5 30Zm385-320q-45 0-72.5 50T600-480q0 48 13.5 88.5T640-318l110 22q15-24 32.5-72T800-480q0-60-27.5-110T700-640Zm-55 520q40 0 57.5-30t17.5-70l-96-20q-8 14-16 32t-8 35q0 20 12.5 36.5T645-120ZM315-240q-77 0-117-57t-38-128l-18-27q-11-17-36.5-77T80-680q0-103 51-171.5T260-920q85 0 132.5 75.5T440-680q0 58-16 107t-28 79l8 13q8 14 22 44.5t14 63.5q0 57-35.5 95T315-240ZM645-40q-54 0-89.5-38T520-173q0-33 14-63.5t22-44.5l8-13q-12-30-28-79t-16-107q0-89 47.5-164.5T700-720q78 0 129 68.5T880-480q0 91-25.5 150.5T818-253l-18 28q1 71-38.5 128T645-40Z"/>
-</g>
 </svg>

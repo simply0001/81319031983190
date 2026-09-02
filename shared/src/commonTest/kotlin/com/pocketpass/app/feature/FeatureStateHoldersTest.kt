@@ -1415,6 +1415,12 @@ class FeatureStateHoldersTest {
             )
         }
 
+        override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) {
+            mutableSettings.value = mutableSettings.value.copy(
+                nearbyAlertsSeenThroughEpochMillis = epochMillis,
+            )
+        }
+
         override suspend fun resetSettings() {
             mutableSettings.value = LocalSettings()
         }

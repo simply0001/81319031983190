@@ -459,27 +459,39 @@ private fun TextKeys(
     val topPadding = 22f * scale
     val bottomY = topPadding + 3f * (keyHeight + gap)
     val backspaceX = if (submitLabel != null) BACKSPACE_X else BACKSPACE_X_NO_SUBMIT
-    // The emoji key takes the shift slot on the symbols page and the slot
-    // after shift on the letters page; space gives up the room.
+    // The ?123/ABC key sits at the left of the third row, so the bottom row
+    // runs shift, emoji, space, backspace, submit with room for the space bar.
     val showEmojiKey = emojiKey && !emailKeys
-    val emojiX = if (symbols) 222f else 366f
+    val emojiX = if (symbols) MODE_KEY_X else MODE_KEY_X + 130f + KEY_ROW_GAP
     val spaceX = when {
         showEmojiKey -> emojiX + 130f + KEY_ROW_GAP
-        symbols -> 222f
-        else -> 366f
+        symbols -> MODE_KEY_X
+        else -> MODE_KEY_X + 130f + KEY_ROW_GAP
+    }
+    val modeKeyY = topPadding + MODE_KEY_ROW * (keyHeight + gap)
+    val rowStart = { rowIndex: Int, row: String ->
+        if (rowIndex == MODE_KEY_ROW) {
+            MODE_KEY_ROW_START
+        } else {
+            (1240f - (row.length * keyWidth + (row.length - 1) * gap)) / 2f
+        }
     }
     val spaceWidth = backspaceX - KEY_ROW_GAP - spaceX
     val shortcutWidth = (spaceWidth - KEY_ROW_GAP) / 2f
 
-    val letterSlots = rows.map { row ->
-        val startX = (1240f - (row.length * keyWidth + (row.length - 1) * gap)) / 2f
-        row.mapIndexed { index, character ->
+    val letterSlots = rows.mapIndexed { rowIndex, row ->
+        val startX = rowStart(rowIndex, row)
+        val keys = row.mapIndexed { index, character ->
             KeySlot("key_$character", startX + index * (keyWidth + gap) + keyWidth / 2f)
+        }
+        if (rowIndex == MODE_KEY_ROW) {
+            listOf(KeySlot("key_symbols", MODE_KEY_X + MODE_KEY_WIDTH / 2f)) + keys
+        } else {
+            keys
         }
     }
     val bottomSlots = buildList {
-        add(KeySlot("key_symbols", 40f + 168f / 2f))
-        if (!symbols) add(KeySlot("key_shift", 222f + 130f / 2f))
+        if (!symbols) add(KeySlot("key_shift", MODE_KEY_X + 130f / 2f))
         if (showEmojiKey) add(KeySlot("key_emoji", emojiX + 130f / 2f))
         if (emailKeys) {
             EMAIL_SHORTCUTS.forEachIndexed { index, shortcut ->
@@ -499,8 +511,7 @@ private fun TextKeys(
     val neighbors = wrapNeighbors(letterSlots + listOf(bottomSlots), LocalKeyboardTopRowUp.current)
 
     rows.forEachIndexed { rowIndex, row ->
-        val rowWidth = row.length * keyWidth + (row.length - 1) * gap
-        val startX = (1240f - rowWidth) / 2f
+        val startX = rowStart(rowIndex, row)
         val y = topPadding + rowIndex * (keyHeight + gap)
         row.forEachIndexed { index, character ->
             val label = if (shifted && !symbols) {
@@ -532,9 +543,9 @@ private fun TextKeys(
         metrics = metrics,
         palette = palette,
         focusLayer = focusLayer,
-        x = 40f,
-        y = bottomY,
-        width = 168f,
+        x = MODE_KEY_X,
+        y = modeKeyY,
+        width = MODE_KEY_WIDTH,
         height = keyHeight,
         label = if (symbols) "ABC" else "?123",
         fontSize = 34f,
@@ -548,7 +559,7 @@ private fun TextKeys(
             metrics = metrics,
             palette = palette,
             focusLayer = focusLayer,
-            x = 222f,
+            x = MODE_KEY_X,
             y = bottomY,
             width = 130f,
             height = keyHeight,
@@ -877,6 +888,10 @@ private fun PocketKeyButton(
 }
 
 private const val KEY_ROW_GAP = 14f
+private const val MODE_KEY_X = 40f
+private const val MODE_KEY_WIDTH = 168f
+private const val MODE_KEY_ROW = 2
+private const val MODE_KEY_ROW_START = MODE_KEY_X + MODE_KEY_WIDTH + KEY_ROW_GAP
 private const val KEY_CORNER_RADIUS = 26f
 
 fun firstKeyTag(layout: PocketKeyboardLayout): String = when (layout) {

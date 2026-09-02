@@ -31,6 +31,9 @@ class UserDefaultsSettingsRepository(
     private fun int(name: String, fallback: Int): Int =
         if (defaults.objectForKey(key(name)) == null) fallback else defaults.integerForKey(key(name)).toInt()
 
+    private fun long(name: String, fallback: Long): Long =
+        if (defaults.objectForKey(key(name)) == null) fallback else defaults.integerForKey(key(name))
+
     private fun string(name: String): String? = defaults.stringForKey(key(name))
 
     private inline fun <reified T : Enum<T>> enum(name: String, fallback: T): T =
@@ -55,6 +58,7 @@ class UserDefaultsSettingsRepository(
             stepRewardsEnabled = bool("stepRewardsEnabled", base.stepRewardsEnabled),
             lastNotifiedUpdateVersionCode = int("lastNotifiedUpdateVersionCode", base.lastNotifiedUpdateVersionCode),
             lastSeenMinSupportedVersionCode = int("lastSeenMinSupportedVersionCode", base.lastSeenMinSupportedVersionCode),
+            nearbyAlertsSeenThroughEpochMillis = long("nearbyAlertsSeenThrough", base.nearbyAlertsSeenThroughEpochMillis),
             leaderboardScope = enum("leaderboardScope", base.leaderboardScope),
             recentInteractionsSort = enum("recentInteractionsSort", base.recentInteractionsSort),
             friendsSort = enum("friendsSort", base.friendsSort),
@@ -83,6 +87,7 @@ class UserDefaultsSettingsRepository(
         defaults.setBool(settings.stepRewardsEnabled, key("stepRewardsEnabled"))
         defaults.setInteger(settings.lastNotifiedUpdateVersionCode.toLong(), key("lastNotifiedUpdateVersionCode"))
         defaults.setInteger(settings.lastSeenMinSupportedVersionCode.toLong(), key("lastSeenMinSupportedVersionCode"))
+        defaults.setInteger(settings.nearbyAlertsSeenThroughEpochMillis, key("nearbyAlertsSeenThrough"))
         defaults.setObject(settings.leaderboardScope.name, key("leaderboardScope"))
         defaults.setObject(settings.recentInteractionsSort.name, key("recentInteractionsSort"))
         defaults.setObject(settings.friendsSort.name, key("friendsSort"))
@@ -124,6 +129,9 @@ class UserDefaultsSettingsRepository(
 
     override suspend fun setLastSeenMinSupportedVersionCode(versionCode: Int) =
         mutate { it.copy(lastSeenMinSupportedVersionCode = versionCode) }
+
+    override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) =
+        mutate { it.copy(nearbyAlertsSeenThroughEpochMillis = epochMillis) }
 
     override suspend fun setLeaderboardScope(scope: LeaderboardScope) =
         mutate { it.copy(leaderboardScope = scope) }

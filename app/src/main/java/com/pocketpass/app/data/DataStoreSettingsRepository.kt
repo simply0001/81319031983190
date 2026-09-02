@@ -1,5 +1,6 @@
 package com.pocketpass.app.data
 
+import androidx.datastore.preferences.core.longPreferencesKey
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -38,6 +39,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             intPreferencesKey("last_notified_update_version_code")
         val lastSeenMinSupportedVersionCode =
             intPreferencesKey("last_seen_min_supported_version_code")
+        val nearbyAlertsSeenThrough = longPreferencesKey("nearby_alerts_seen_through")
         val leaderboardScope = stringPreferencesKey("leaderboard_scope")
         val recentInteractionsSort =
             stringPreferencesKey("recent_interactions_sort")
@@ -76,6 +78,8 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
                     preferences[Keys.lastNotifiedUpdateVersionCode] ?: 0,
                 lastSeenMinSupportedVersionCode =
                     preferences[Keys.lastSeenMinSupportedVersionCode] ?: 0,
+                nearbyAlertsSeenThroughEpochMillis =
+                    preferences[Keys.nearbyAlertsSeenThrough] ?: 0L,
                 leaderboardScope = preferences[Keys.leaderboardScope]
                     ?.let { stored ->
                         LeaderboardScope.entries.firstOrNull { it.key == stored }
@@ -164,6 +168,10 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.pocketPassDataStore.edit {
             it[Keys.lastSeenMinSupportedVersionCode] = versionCode
         }
+    }
+
+    override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) {
+        context.pocketPassDataStore.edit { it[Keys.nearbyAlertsSeenThrough] = epochMillis }
     }
 
     override suspend fun setLeaderboardScope(scope: LeaderboardScope) {

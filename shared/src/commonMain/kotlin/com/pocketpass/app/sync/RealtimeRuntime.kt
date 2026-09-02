@@ -1,5 +1,6 @@
 package com.pocketpass.app.sync
 
+import kotlin.time.Clock
 import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.repository.ProductionRepositoryBundle
 import com.pocketpass.app.data.repository.RealtimePresenceRepository
@@ -402,22 +403,31 @@ class RealtimeRuntime(
     }
 
     private suspend fun postUnreadNearbyNotifications(accountId: UserId) {
-        val alertsEnabled = settingsRepository.settings.first().encounterAlertsEnabled
-        database.notificationDao()
-            .getUnreadNearbyForAccount(accountId.value)
-            .forEach { notification ->
-                if (
-                    postedNearbyNotificationIds.add(notification.notificationId) &&
-                    alertsEnabled
-                ) {
-                    onNearbyEncounterNotification(
-                        notification.actorDisplayName
-                            ?.takeIf(String::isNotBlank)
-                            ?: "Someone",
-                        notification.notificationId,
-                    )
-                }
+        val settings = settingsRepository.settings.first()
+        // Passes are announced once, when they arrive; a reinstall or cold start
+        // records the unread backlog as seen instead of replaying it, just as
+        // the encounter list never resurfaces old passes.
+        val plan = planNearbyAlerts(
+            unread = database.notificationDao().getUnreadNearbyForAccount(accountId.value),
+            seenThroughEpochMillis = settings.nearbyAlertsSeenThroughEpochMillis,
+            nowEpochMillis = Clock.System.now().toEpochMilliseconds(),
+        )
+        if (plan.seenThroughEpochMillis != settings.nearbyAlertsSeenThroughEpochMillis) {
+            settingsRepository.setNearbyAlertsSeenThrough(plan.seenThroughEpochMillis)
+        }
+        plan.announce.forEach { notification ->
+            if (
+                postedNearbyNotificationIds.add(notification.notificationId) &&
+                settings.encounterAlertsEnabled
+            ) {
+                onNearbyEncounterNotification(
+                    notification.actorDisplayName
+                        ?.takeIf(String::isNotBlank)
+                        ?: "Someone",
+                    notification.notificationId,
+                )
             }
+        }
     }
 
     private suspend fun refreshConversationsForNotifications(accountId: UserId) {

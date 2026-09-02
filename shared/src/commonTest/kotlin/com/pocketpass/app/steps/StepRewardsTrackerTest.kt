@@ -91,6 +91,7 @@ class StepRewardsTrackerTest {
         }
         override suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) = Unit
         override suspend fun setLastSeenMinSupportedVersionCode(versionCode: Int) = Unit
+        override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) = Unit
         override suspend fun setLeaderboardScope(scope: LeaderboardScope) = Unit
         override suspend fun setRecentInteractionsSort(sort: RecentInteractionsSort) = Unit
         override suspend fun setFriendsSort(sort: RecentInteractionsSort) = Unit
