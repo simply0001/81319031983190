@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.SystemClock
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -79,7 +80,11 @@ class AndroidStepCounterSource(
                 manager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_NORMAL)
                 continuation.invokeOnCancellation { manager.unregisterListener(listener) }
             }
-        } ?: return null
+        }
+        if (counter == null) {
+            Log.d(TAG, "Step counter delivered nothing within ${SAMPLE_TIMEOUT_MILLIS}ms (background?)")
+            return null
+        }
         return record(counter)
     }
 
@@ -137,6 +142,7 @@ class AndroidStepCounterSource(
             dayStartEpochMillis = startOfLocalDayEpochMillis(now),
         )
         saveLedger(next)
+        Log.d(TAG, "Step counter $counter → ${next.stepsToday} steps today (${localDayKey(now)})")
         StepSample(
             localDay = localDayKey(now),
             utcOffsetMinutes = localUtcOffsetMinutes(now),
@@ -177,6 +183,7 @@ class AndroidStepCounterSource(
     }
 
     private companion object {
+        const val TAG = "PocketPassSteps"
         const val SAMPLE_TIMEOUT_MILLIS = 5_000L
         const val LIVE_REPORT_LATENCY_MICROS = 5_000_000
     }

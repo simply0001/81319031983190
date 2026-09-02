@@ -23,14 +23,16 @@ internal fun StepRewardsPanel(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val steps = state.stepRewards
+    // The subtitle runs under the toggle past ~30 characters, so keep it short.
     val subtitle = when {
-        !state.stepRewardsEnabled ->
-            "1 token per $STEPS_PER_TOKEN steps, up to $MAX_STEP_TOKENS_PER_DAY a day"
+        !state.stepRewardsEnabled -> "$STEPS_PER_TOKEN steps per token · $MAX_STEP_TOKENS_PER_DAY/day"
 
-        steps.status == StepRewardsStatus.NeedsPermission -> "Allow physical activity access"
+        steps.status == StepRewardsStatus.NeedsPermission -> "Allow activity access"
+
+        steps.claimError != null -> "${formatStepCount(steps.stepsToday)} steps · retrying report"
 
         else ->
-            "Today: ${formatStepCount(steps.stepsToday)} steps · " +
+            "${formatStepCount(steps.stepsToday)} steps · " +
                 "${steps.tokensToday}/$MAX_STEP_TOKENS_PER_DAY tokens"
     }
     PocketPanel(
