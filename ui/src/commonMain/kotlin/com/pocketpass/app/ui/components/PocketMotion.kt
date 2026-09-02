@@ -9,6 +9,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -221,6 +222,7 @@ fun MotionLayer(
     modifier: Modifier = Modifier,
     entrance: EntranceMotion = EntranceMotion.None,
     idle: IdleMotion = IdleMotion.None,
+    idleActive: Boolean = true,
     delayMillis: Int = 0,
     idlePhaseMillis: Int = 0,
     transformOrigin: TransformOrigin = TransformOrigin.Center,
@@ -274,10 +276,18 @@ fun MotionLayer(
         )
     }
 
+    // The idle wave starts at -1, so switching it on would land as a small
+    // jump; fading its amplitude in and out keeps the settle seamless.
+    val idleGain = animateFloatAsState(
+        targetValue = if (idleActive && idle != IdleMotion.None) 1f else 0f,
+        animationSpec = tween(durationMillis = IDLE_GAIN_MILLIS, easing = FastOutSlowInEasing),
+        label = "PocketPass idle gain",
+    )
+
     Box(
         modifier = modifier.graphicsLayer {
             val p = progress.value
-            val wave = idleAmount.value
+            val wave = idleAmount.value * idleGain.value
             val entranceScale = entranceValues.scale + (1f - entranceValues.scale) * p
             val idleScale = 1f + idleValues.scale * wave
             scaleX = entranceScale * idleScale
@@ -296,4 +306,5 @@ fun MotionLayer(
 
 private const val ACTIVITIES_SPRING_DAMPING_RATIO = 0.86f
 private const val ACTIVITIES_SPRING_STIFFNESS = 180f
-private const val ACTIVITIES_SPRING_VISIBILITY_THRESHOLD = 0.001f
+private const val ACTIVITIES_SPRING_VISIBILITY_THRESHOLD = 0.0002f
+private const val IDLE_GAIN_MILLIS = 450

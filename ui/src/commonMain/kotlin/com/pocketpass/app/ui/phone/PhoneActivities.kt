@@ -431,14 +431,14 @@ private fun PhoneActivitiesHero(
         derivedStateOf { !swapProgress.isRunning && swapProgress.value >= 0.9999f }
     }
     val stepsVisible = state.stepRewards.visible
-    // A third column for steps shrinks the two swapping counters to fit.
-    val artSize = when {
-        big && stepsVisible -> 300f
-        big -> 400f
-        stepsVisible -> 240f
-        else -> 320f
-    }
-    val layerHeight = artSize + 150f
+    val swap = swapProgress.value
+    // Steps join the first page as a third column, which shrinks its two
+    // counters; the shuffled page keeps the full-width pair, so the column
+    // slides away with the first page.
+    val fullArt = if (big) 400f else 320f
+    val compactArt = if (big) 300f else 240f
+    val artSize = if (stepsVisible) compactArt else fullArt
+    val layerHeight = fullArt + 150f
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             Modifier
@@ -448,7 +448,7 @@ private fun PhoneActivitiesHero(
         ) {
         Box(
             Modifier
-                .weight(if (stepsVisible) 2f else 1f)
+                .weight(if (stepsVisible) 2f + swap else 1f)
                 .height(metrics.dp(layerHeight))
                 .clipToBounds(),
         ) {
@@ -469,22 +469,27 @@ private fun PhoneActivitiesHero(
                 leftCount = state.activitySnapshot?.nearbyCount ?: 12,
                 rightCount = state.activitySnapshot?.locationCount ?: 3,
                 idleEnabled = alternateIdle,
-                artSize = artSize,
+                artSize = fullArt,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationY = size.height * (1f - swapProgress.value) },
             )
         }
-            if (stepsVisible) {
+            if (stepsVisible && swap < 0.999f) {
                 StepsCounter(
                     metrics = metrics,
                     state = state,
                     dispatch = dispatch,
-                    artSize = artSize * 484.11f / 496.082f,
+                    artSize = compactArt * 484.11f / 496.082f,
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(end = metrics.dp(PHONE_CONTENT_MARGIN)),
-                    numberSize = if (artSize > 300f) 128f else 96f,
+                        .weight((1f - swap).coerceAtLeast(0.001f))
+                        .padding(end = metrics.dp(PHONE_CONTENT_MARGIN))
+                        .clipToBounds()
+                        .graphicsLayer {
+                            alpha = 1f - swap
+                            translationY = -size.height * swap
+                        },
+                    numberSize = if (compactArt > 300f) 128f else 96f,
                 )
             }
         }
@@ -514,7 +519,8 @@ private fun CounterLayer(
             count = leftCount,
             color = pocketPalette.ink(if (alternate) Color(0xFF33398D) else Color(0xFF803427)),
             entrance = EntranceMotion.ActivityCoinSettle,
-            idle = if (idleEnabled) IdleMotion.CoinRock else IdleMotion.None,
+            idle = IdleMotion.CoinRock,
+            idleActive = idleEnabled,
             artSize = artSize,
             delay = 0,
         )
@@ -524,7 +530,8 @@ private fun CounterLayer(
             count = rightCount,
             color = pocketPalette.ink(if (alternate) Color(0xFF851111) else Color(0xFF11851E)),
             entrance = EntranceMotion.ActivityPuzzleSettle,
-            idle = if (idleEnabled) IdleMotion.PuzzleBob else IdleMotion.None,
+            idle = IdleMotion.PuzzleBob,
+            idleActive = idleEnabled,
             artSize = artSize * 484.11f / 496.082f,
             delay = 70,
         )
@@ -541,12 +548,14 @@ private fun Counter(
     idle: IdleMotion,
     artSize: Float,
     delay: Int,
+    idleActive: Boolean = true,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         MotionLayer(
             modifier = Modifier.requiredSize(metrics.dp(artSize)),
             entrance = entrance,
             idle = idle,
+            idleActive = idleActive,
             delayMillis = delay,
             idlePhaseMillis = if (delay > 0) 900 else 0,
         ) {

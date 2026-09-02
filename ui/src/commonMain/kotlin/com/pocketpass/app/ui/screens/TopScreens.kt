@@ -1825,7 +1825,7 @@ private fun ActivitiesTop(
         )
         ActivitiesVariantLayer(
             metrics = metrics,
-            compact = compact,
+            compact = false,
             alternate = true,
             leftCount = state.activitySnapshot?.nearbyCount ?: 12,
             rightCount = state.activitySnapshot?.locationCount ?: 3,
@@ -1842,25 +1842,41 @@ private fun ActivitiesTop(
         val dividerBrush = Brush.verticalGradient(
             listOf(Color.White.copy(alpha = if (pocketPalette.isDark) 0.28f else 1f), Color.Transparent),
         )
-        val dividerXs = if (compact) listOf(630.5f, 1270.5f) else listOf(956.49f)
-        dividerXs.forEach { x ->
+        val divider: @Composable (Float, () -> Float) -> Unit = { x, alpha ->
             Box(
                 Modifier
                     .designBounds(metrics, x, 182f, 19f, 848f)
+                    .graphicsLayer { this.alpha = alpha() }
                     .clip(RoundedCornerShape(metrics.dp(10f)))
                     .background(dividerBrush),
             )
         }
         if (compact) {
-            Box(Modifier.designBounds(metrics, 1400f, 300f, 400f, 640f)) {
-                StepsCounter(
-                    metrics = metrics,
-                    state = state,
-                    dispatch = dispatch,
-                    artSize = 400f,
-                    numberSize = 100f,
-                )
+            // Three columns on the first page only; the shuffled page keeps
+            // its two, so the steps column travels with the first page.
+            divider(630.5f) { 1f - swapProgress.value }
+            divider(1270.5f) { 1f - swapProgress.value }
+            divider(956.49f) { swapProgress.value }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clipToBounds()
+                    .graphicsLayer {
+                        translationY = -ACTIVITIES_SWAP_DISTANCE * swapProgress.value
+                    },
+            ) {
+                Box(Modifier.designBounds(metrics, 1400f, 300f, 400f, 640f)) {
+                    StepsCounter(
+                        metrics = metrics,
+                        state = state,
+                        dispatch = dispatch,
+                        artSize = 400f,
+                        numberSize = 100f,
+                    )
+                }
             }
+        } else {
+            divider(956.49f) { 1f }
         }
 
         val interactionSource = remember { MutableInteractionSource() }
@@ -1952,7 +1968,8 @@ private fun ActivitiesVariantLayer(
                 Modifier.designBounds(metrics, 254.404f, 256.959f, 496.082f, 496.082f)
             },
             entrance = EntranceMotion.ActivityCoinSettle,
-            idle = if (idleEnabled) IdleMotion.CoinRock else IdleMotion.None,
+            idle = IdleMotion.CoinRock,
+            idleActive = idleEnabled,
         ) {
             FigmaAsset(
                 resource = if (alternate) {
@@ -1992,7 +2009,8 @@ private fun ActivitiesVariantLayer(
                 Modifier.designBounds(metrics, 1181.486f, 262.945f, 484.11f, 484.11f)
             },
             entrance = EntranceMotion.ActivityPuzzleSettle,
-            idle = if (idleEnabled) IdleMotion.PuzzleBob else IdleMotion.None,
+            idle = IdleMotion.PuzzleBob,
+            idleActive = idleEnabled,
             delayMillis = 70,
             idlePhaseMillis = 900,
         ) {

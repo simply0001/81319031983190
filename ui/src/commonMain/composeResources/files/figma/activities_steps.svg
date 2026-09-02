@@ -8,29 +8,15 @@
 <stop stop-color="#74BBD1"/>
 <stop offset="1" stop-color="#2B7A93"/>
 </linearGradient>
-<linearGradient id="stepsInk" x1="224.5" y1="90" x2="224.5" y2="370" gradientUnits="userSpaceOnUse">
+<linearGradient id="stepsInk" x1="0" y1="0" x2="0" y2="1">
 <stop stop-color="#2F8FA8"/>
 <stop offset="1" stop-color="#1D596B"/>
 </linearGradient>
 </defs>
 <rect width="449" height="449" rx="224.5" fill="url(#stepsFill)"/>
 <rect x="11" y="11" width="427" height="427" rx="213.5" stroke="url(#stepsRing)" stroke-width="22"/>
-<g fill="url(#stepsInk)">
-<ellipse cx="166" cy="262" rx="44" ry="64"/>
-<ellipse cx="166" cy="344" rx="31" ry="27"/>
-<circle cx="120" cy="196" r="12"/>
-<circle cx="146" cy="183" r="13"/>
-<circle cx="174" cy="178" r="13"/>
-<circle cx="202" cy="185" r="11"/>
-<circle cx="224" cy="202" r="9"/>
-</g>
-<g fill="url(#stepsInk)" opacity="0.9">
-<ellipse cx="283" cy="176" rx="44" ry="64"/>
-<ellipse cx="283" cy="258" rx="31" ry="27"/>
-<circle cx="237" cy="110" r="12"/>
-<circle cx="263" cy="97" r="13"/>
-<circle cx="291" cy="92" r="13"/>
-<circle cx="319" cy="99" r="11"/>
-<circle cx="341" cy="116" r="9"/>
+<!-- Google Material Symbols Rounded "footprint" (Apache 2.0), 960-unit grid scaled to 270px. -->
+<g transform="translate(89.5 359.5) scale(0.28125)">
+<path fill="url(#stepsInk)" d="M260-840q-45 0-72.5 50T160-680q0 63 17.5 111.5T210-496l110-22q13-32 26.5-73t13.5-89q0-60-27.5-110T260-840Zm55 520q19 0 32-14t13-39q0-17-8-35t-16-32l-96 20q0 40 17.5 70t57.5 30Zm385-320q-45 0-72.5 50T600-480q0 48 13.5 88.5T640-318l110 22q15-24 32.5-72T800-480q0-60-27.5-110T700-640Zm-55 520q40 0 57.5-30t17.5-70l-96-20q-8 14-16 32t-8 35q0 20 12.5 36.5T645-120ZM315-240q-77 0-117-57t-38-128l-18-27q-11-17-36.5-77T80-680q0-103 51-171.5T260-920q85 0 132.5 75.5T440-680q0 58-16 107t-28 79l8 13q8 14 22 44.5t14 63.5q0 57-35.5 95T315-240ZM645-40q-54 0-89.5-38T520-173q0-33 14-63.5t22-44.5l8-13q-12-30-28-79t-16-107q0-89 47.5-164.5T700-720q78 0 129 68.5T880-480q0 91-25.5 150.5T818-253l-18 28q1 71-38.5 128T645-40Z"/>
 </g>
 </svg>
