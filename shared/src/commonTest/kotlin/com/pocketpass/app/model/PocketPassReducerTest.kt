@@ -122,6 +122,21 @@ class PocketPassReducerTest {
     }
 
     @Test
+    fun contributorsRoutePushesOnceAndPopsWithBack() {
+        val settings = PocketPassReducer.reduce(
+            PocketPassUiState(),
+            PocketPassEvent.SelectDestination(PocketPassDestination.Settings),
+        )
+        val opened = PocketPassReducer.reduce(settings, PocketPassEvent.OpenContributors)
+        val openedTwice = PocketPassReducer.reduce(opened, PocketPassEvent.OpenContributors)
+        val back = PocketPassReducer.reduce(opened, PocketPassEvent.Back)
+
+        assertEquals(PocketPassRoute.Contributors, opened.routes.last())
+        assertEquals(opened.routes, openedTwice.routes)
+        assertEquals(settings.routes, back.routes)
+    }
+
+    @Test
     fun appUpdateWorkEventsLeaveStateUntouched() {
         val state = PocketPassUiState()
 

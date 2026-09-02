@@ -1,5 +1,10 @@
 package com.pocketpass.app.ui.screens
 
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import com.pocketpass.app.ui.components.dropLastCodePoint
 import com.pocketpass.app.ui.PocketAsset
 import com.pocketpass.app.ui.LocalAppVersionName
@@ -225,6 +230,7 @@ fun BottomScreen(
             state = state,
             dispatch = dispatch,
         )
+        PocketPassRoute.Contributors -> ContributorsBottom(dispatch = dispatch)
         PocketPassRoute.NotificationSettings -> NotificationSettingsBottom(
             state = state,
             dispatch = dispatch,
@@ -4912,7 +4918,7 @@ private fun SettingsBottom(
         val versionY = stack.place(SETTINGS_ROW_HEIGHT)
         val logoutY = stack.place(SETTINGS_ROW_HEIGHT)
         val deleteY = stack.place(SETTINGS_TALL_HEIGHT)
-        val creditsY = stack.place(CREDITS_PANEL_HEIGHT)
+        val contributorsY = stack.place(SETTINGS_ROW_HEIGHT)
         val reveal = LocalRouteRevealGeneration.current
         val rowBounds = listOfNotNull(
             nearbyY to SETTINGS_ROW_HEIGHT,
@@ -4925,7 +4931,7 @@ private fun SettingsBottom(
             versionY to SETTINGS_ROW_HEIGHT,
             logoutY to SETTINGS_ROW_HEIGHT,
             deleteY to SETTINGS_TALL_HEIGHT,
-            creditsY to CREDITS_PANEL_HEIGHT,
+            contributorsY to SETTINGS_ROW_HEIGHT,
         )
         val revealScroll = remember(reveal) {
             Snapshot.withoutReadObservation { scroll.value.toFloat() }
@@ -5027,8 +5033,10 @@ private fun SettingsBottom(
                             dispatch(PocketPassEvent.OpenDeleteAccount)
                         }
                     }
-                    row(creditsY, CREDITS_PANEL_HEIGHT) {
-                        CreditsPanel(metrics, creditsY)
+                    row(contributorsY, SETTINGS_ROW_HEIGHT) {
+                        ContributorsPanel(metrics, contributorsY) {
+                            dispatch(PocketPassEvent.OpenContributors)
+                        }
                     }
                 }
             }
@@ -5040,7 +5048,11 @@ private const val SETTINGS_PANEL_GAP = 50f
 internal const val SETTINGS_ROW_HEIGHT = 220f
 internal const val SETTINGS_TALL_HEIGHT = 446.65f
 internal const val THEME_PANEL_HEIGHT = 447f
-internal const val CREDITS_PANEL_HEIGHT = 767.6f
+internal val CREDITS_PANEL_HEIGHT: Float
+    get() = CREDITS_PANEL_PADDING * 2f + CREDITS_AVATAR_SIZE + (CreditsRoster.size - 1) * CREDITS_ROW_PITCH
+private const val CREDITS_PANEL_PADDING = 52f
+private const val CREDITS_AVATAR_SIZE = 124.65f
+private const val CREDITS_ROW_PITCH = 179.65f
 
 private class SettingsStack {
     var totalHeight = SETTINGS_PANEL_GAP
@@ -7363,14 +7375,102 @@ internal fun LogoutPanel(
     }
 }
 
+internal data class Credit(val name: String, val role: String, val avatar: PocketAsset)
+
+internal val CreditsRoster: List<Credit> = listOf(
+    Credit("simply", "Creator, Code, UI Integration", Assets.SettingsCreditsAvatarSimply),
+    Credit("BrocoDev", "UI Redesign", Assets.SettingsCreditsAvatarBrocoDev),
+    Credit("ariankordi", "Piip Creator", Assets.SettingsCreditsAvatarAriankordi),
+    Credit("k0o1", "Official Soundtrack", Assets.SettingsCreditsAvatarK0o1),
+    Credit("saby", "Official Soundtrack", Assets.SettingsCreditsAvatarSaby),
+)
+
+@Composable
+internal fun ContributorsPanel(
+    metrics: DesignMetrics,
+    y: Float,
+    onClick: () -> Unit,
+) {
+    PocketPanel(
+        metrics = metrics,
+        x = 50f,
+        y = y,
+        width = 1140f,
+        height = SETTINGS_ROW_HEIGHT,
+        borderColor = pocketPalette.borderGrey,
+        borderWidth = 20.152f,
+        radius = 110f,
+        fillBrush = greyPanelBrush(),
+        tag = "contributors",
+        onClick = onClick,
+    ) {
+        SettingsHeading(
+            metrics = metrics,
+            icon = Assets.SettingsContributors,
+            title = "Contributors",
+            subtitle = "The people behind PocketPass",
+        )
+        FigmaAsset(
+            resource = Assets.SettingsArrow,
+            colorFilter = chevronTint(),
+            modifier = Modifier.anchoredBounds(metrics, 1028f, 75.637f, 40.372f, 68.725f, DesignAnchor.End),
+        )
+    }
+}
+
+@Composable
+private fun ContributorsBottom(dispatch: (PocketPassEvent) -> Unit) {
+    BottomPage(entrance = EntranceMotion.None) { metrics ->
+        SubpageHeader(
+            metrics = metrics,
+            title = "Contributors",
+            subtitle = "The people behind PocketPass.",
+            backTag = "contributors_back",
+        ) { dispatch(PocketPassEvent.Back) }
+        // The roster can outgrow the display, so it scrolls under the header.
+        val scroll = rememberScrollState()
+        val belowHeader = remember(metrics) { BelowSubpageHeaderShape(metrics) }
+        DesignBox(
+            metrics,
+            0f,
+            0f,
+            1240f,
+            1080f,
+            DesignAnchor.Stretch,
+            DesignAnchor.Stretch,
+            modifier = Modifier
+                .clip(belowHeader)
+                .verticalScroll(scroll)
+                .testTag("contributors_scroll"),
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(top = metrics.dp(SUBPAGE_CONTENT_TOP))
+                    .requiredWidth(metrics.dp(1240f + 2f * metrics.overscanX))
+                    .requiredHeight(metrics.dp(CREDITS_PANEL_HEIGHT + 2f * SETTINGS_PANEL_GAP)),
+            ) {
+                SubpagePanelPop(y = SUBPAGE_FIRST_ROW_Y, height = CREDITS_PANEL_HEIGHT, order = 1) {
+                    CreditsPanel(metrics, SETTINGS_PANEL_GAP)
+                }
+            }
+        }
+    }
+}
+
+private class BelowSubpageHeaderShape(private val metrics: DesignMetrics) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline = with(density) {
+        Outline.Rectangle(Rect(0f, metrics.dp(SUBPAGE_CONTENT_TOP).toPx(), size.width, size.height))
+    }
+}
+
+private const val SUBPAGE_CONTENT_TOP = 247f
+
 @Composable
 internal fun CreditsPanel(metrics: DesignMetrics, y: Float) {
-    val names = listOf(
-        "simply" to "Creator, Code, UI Integration",
-        "BrocoDev" to "UI Redesign",
-        "ariankordi" to "Piip Creator",
-        "k0o1" to "Official Soundtrack",
-    )
     PocketPanel(
         metrics = metrics,
         x = 50f,
@@ -7382,19 +7482,15 @@ internal fun CreditsPanel(metrics: DesignMetrics, y: Float) {
         radius = 118f,
         fillBrush = greyPanelBrush(),
     ) {
-        names.forEachIndexed { index, (name, role) ->
-            val rowY = 52f + index * 179.65f
-            val avatarShape = RoundedCornerShape(metrics.dp(62.325f))
+        CreditsRoster.forEachIndexed { index, credit ->
+            val name = credit.name
+            val role = credit.role
+            val rowY = CREDITS_PANEL_PADDING + index * CREDITS_ROW_PITCH
+            val avatarShape = RoundedCornerShape(metrics.dp(CREDITS_AVATAR_SIZE / 2f))
             FigmaAsset(
-                resource = when (name) {
-                    "simply" -> Assets.SettingsCreditsAvatarSimply
-                    "BrocoDev" -> Assets.SettingsCreditsAvatarBrocoDev
-                    "k0o1" -> Assets.SettingsCreditsAvatarK0o1
-                    "ariankordi" -> Assets.SettingsCreditsAvatarAriankordi
-                    else -> Assets.SettingsCreditsAvatar
-                },
+                resource = credit.avatar,
                 modifier = Modifier
-                    .designBounds(metrics, 52f, rowY, 124.65f, 124.65f)
+                    .designBounds(metrics, CREDITS_PANEL_PADDING, rowY, CREDITS_AVATAR_SIZE, CREDITS_AVATAR_SIZE)
                     .clip(avatarShape)
                     .pocketBorder(
                         metrics.dp(9f),
@@ -7421,7 +7517,7 @@ internal fun CreditsPanel(metrics: DesignMetrics, y: Float) {
                 fontSize = metrics.sp(45f),
                 maxLines = 1,
             )
-            if (index < names.lastIndex) {
+            if (index < CreditsRoster.lastIndex) {
                 Box(
                     Modifier
                         .designBounds(metrics, 52f, rowY + 147.65f, 1036f, 9f)

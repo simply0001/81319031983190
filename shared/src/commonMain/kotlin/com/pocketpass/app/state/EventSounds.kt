@@ -106,6 +106,7 @@ fun soundEffectFor(
     PocketPassEvent.OpenNameEditor,
     PocketPassEvent.OpenAccessibility,
     PocketPassEvent.OpenSocial,
+    PocketPassEvent.OpenContributors,
     PocketPassEvent.OpenNotificationSettings,
     PocketPassEvent.OpenAppUpdate,
     PocketPassEvent.OpenDeleteAccount,

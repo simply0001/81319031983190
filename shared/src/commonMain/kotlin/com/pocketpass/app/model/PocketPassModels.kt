@@ -324,6 +324,7 @@ sealed interface PocketPassEvent {
     ) : PocketPassEvent
     data object OpenAccessibility : PocketPassEvent
     data object OpenSocial : PocketPassEvent
+    data object OpenContributors : PocketPassEvent
     data object OpenNotificationSettings : PocketPassEvent
     data object OpenAppUpdate : PocketPassEvent
     data object CheckForAppUpdate : PocketPassEvent

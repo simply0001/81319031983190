@@ -39,6 +39,9 @@ sealed interface PocketPassRoute : NavKeyMarker {
     data object Social : PocketPassRoute
 
     @Serializable
+    data object Contributors : PocketPassRoute
+
+    @Serializable
     data object NotificationSettings : PocketPassRoute
 
     @Serializable
@@ -385,6 +388,12 @@ object PocketPassReducer {
                     state
                 } else {
                     state.copy(routes = state.routes + PocketPassRoute.Social)
+                }
+            PocketPassEvent.OpenContributors ->
+                if (state.routes.lastOrNull() == PocketPassRoute.Contributors) {
+                    state
+                } else {
+                    state.copy(routes = state.routes + PocketPassRoute.Contributors)
                 }
             PocketPassEvent.OpenNotificationSettings ->
                 if (state.routes.lastOrNull() == PocketPassRoute.NotificationSettings) {

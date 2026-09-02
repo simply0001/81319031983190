@@ -53,6 +53,7 @@ import com.pocketpass.app.ui.components.rememberGearRotation
 import com.pocketpass.app.ui.screens.AccessibilityPanel
 import com.pocketpass.app.ui.screens.AppUpdateStatusPanel
 import com.pocketpass.app.ui.screens.CREDITS_PANEL_HEIGHT
+import com.pocketpass.app.ui.screens.ContributorsPanel
 import com.pocketpass.app.ui.screens.CreditsPanel
 import com.pocketpass.app.ui.screens.DeletePanel
 import com.pocketpass.app.ui.screens.ConnectedAppsPanel
@@ -190,8 +191,8 @@ private fun PhoneSettingsList(
         slot(SETTINGS_TALL_HEIGHT) {
             DeletePanel(metrics, 0f) { dispatch(PocketPassEvent.OpenDeleteAccount) }
         }
-        slot(CREDITS_PANEL_HEIGHT) {
-            CreditsPanel(metrics, 0f)
+        slot(SETTINGS_ROW_HEIGHT) {
+            ContributorsPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenContributors) }
         }
     }
 }
@@ -354,6 +355,18 @@ private fun PhoneSettingsSubpage(
             ) { dispatch(PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled)) }
         }
 
+        PocketPassRoute.Contributors -> PhoneSubpage(
+            metrics = metrics,
+            title = "Contributors",
+            subtitle = "The people behind PocketPass.",
+            backTag = "contributors_back",
+            onBack = { dispatch(PocketPassEvent.Back) },
+        ) {
+            PhoneSubpageRow(metrics, order = 0, height = CREDITS_PANEL_HEIGHT) {
+                CreditsPanel(metrics, 0f)
+            }
+        }
+
         PocketPassRoute.AppUpdate -> {
             LaunchedEffect(Unit) {
                 if (state.appUpdate.phase is AppUpdatePhase.Idle) dispatch(PocketPassEvent.CheckForAppUpdate)
@@ -448,12 +461,13 @@ internal fun PhoneSubpage(
 private fun PhoneSubpageRow(
     metrics: DesignMetrics,
     order: Int,
+    height: Float = SETTINGS_ROW_HEIGHT,
     content: @Composable () -> Unit,
 ) {
     MotionLayer(
         modifier = Modifier
             .fillMaxWidth()
-            .height(metrics.dp(SETTINGS_ROW_HEIGHT)),
+            .height(metrics.dp(height)),
         entrance = EntranceMotion.OverlayPop,
         delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + order * OVERLAY_POP_STAGGER_MILLIS,
     ) { content() }

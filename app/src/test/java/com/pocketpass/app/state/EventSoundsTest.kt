@@ -31,6 +31,7 @@ class EventSoundsTest {
     @Test
     fun openingSomethingNavigates() {
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenSocial, PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenContributors, PocketPassDestination.Settings))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenMessage("c1"), PocketPassDestination.Messages))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenNotification("n1"), PocketPassDestination.Home))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenNewGroup, PocketPassDestination.Messages))

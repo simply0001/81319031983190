@@ -454,6 +454,8 @@ object Assets {
     val SettingsCreditsAvatarBrocoDev = figma("settings_credits_avatar_brocodev.png")
     val SettingsCreditsAvatarK0o1 = figma("settings_credits_avatar_k0o1.jpg")
     val SettingsCreditsAvatarAriankordi = figma("settings_credits_avatar_ariankordi.jpg")
+    val SettingsCreditsAvatarSaby = figma("settings_credits_avatar_saby.png")
+    val SettingsContributors = figma("settings_contributors.svg")
     val SettingsDelete = figma("settings_delete.svg")
     val NotificationAccept = figma("notification_accept.svg")
     val NotificationDecline = figma("notification_decline.svg")
