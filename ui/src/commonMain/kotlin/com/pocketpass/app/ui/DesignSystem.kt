@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui
 
+import com.pocketpass.ui.resources.sudofont
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -72,6 +73,10 @@ val GochiHand: FontFamily
 
 val Staatliches: FontFamily
     @Composable get() = FontFamily(Font(Res.font.staatliches, FontWeight.Normal))
+
+/** Sudofont: the Nintendo DS special characters, used for message emoji. */
+val Sudofont: FontFamily
+    @Composable get() = FontFamily(Font(Res.font.sudofont, FontWeight.Normal))
 
 val InstrumentSans: FontFamily
     @Composable get() = FontFamily(
@@ -406,7 +411,6 @@ object Assets {
     val MessageTailOutgoing = figma("message_tail_outgoing.svg")
     val MessagesSendButton = figma("messages_send_button.svg")
     val MessageActionAdd = figma("message_action_add.svg")
-    val MessageActionEmoji = figma("message_action_emoji.svg")
     val MessageActionImage = figma("message_action_image.svg")
     val MessageActionFile = figma("message_action_file.svg")
     val MessagesBadgeComposite = figma("messages_badge_composite.png")

@@ -301,7 +301,7 @@ internal fun NewGroupBottom(
                             )
                         }
 
-                        PocketKey.Alphabet -> Unit
+                        PocketKey.Alphabet, PocketKey.Emoji -> Unit
                     }
                 },
                 modifier = Modifier.graphicsLayer {
@@ -1110,7 +1110,7 @@ internal fun GroupInfoBottomOverlay(
                     PocketKey.Space -> renameDraft = "$draft ".take(GROUP_TITLE_MAX_LENGTH)
                     PocketKey.Backspace -> renameDraft = draft.dropLast(1)
                     PocketKey.Submit -> dispatch(PocketPassEvent.RenameGroup(trimmed))
-                    PocketKey.Alphabet -> Unit
+                    PocketKey.Alphabet, PocketKey.Emoji -> Unit
                 }
             },
             palette = PocketKeyboardPalette.Messages,

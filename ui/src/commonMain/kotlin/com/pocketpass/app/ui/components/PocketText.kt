@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.components
 
+import com.pocketpass.app.ui.Sudofont
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -120,7 +121,7 @@ fun Text(
         ),
     )
     BasicText(
-        text = text,
+        text = withSudofont(text, Sudofont),
         modifier = modifier,
         style = merged,
         onTextLayout = onTextLayout,

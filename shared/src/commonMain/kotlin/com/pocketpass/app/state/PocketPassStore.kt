@@ -413,9 +413,7 @@ class PocketPassStore(
 
             is PocketPassEvent.SelectMessageAction -> when (event.action) {
                 MessageComposerAction.Image -> container.messages.requestImageAttachment()
-                MessageComposerAction.Emoji,
-                MessageComposerAction.File,
-                -> container.messages.closeActionRail()
+                MessageComposerAction.File -> container.messages.closeActionRail()
             }
 
             is PocketPassEvent.OpenMessageActions -> runCatching {

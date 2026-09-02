@@ -292,7 +292,7 @@ private fun SetupNameStep(
                     send(AccountSetupEvent.NameChanged(state.nameDraft + key.value))
                 PocketKey.Backspace ->
                     send(AccountSetupEvent.NameChanged(state.nameDraft.dropLast(1)))
-                PocketKey.Space, PocketKey.Alphabet -> Unit
+                PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
                 PocketKey.Submit -> send(AccountSetupEvent.Continue)
             }
         },
@@ -357,7 +357,7 @@ private fun SetupBioStep(
                     send(AccountSetupEvent.BioChanged(state.bioDraft + " "))
                 PocketKey.Backspace ->
                     send(AccountSetupEvent.BioChanged(state.bioDraft.dropLast(1)))
-                PocketKey.Alphabet -> Unit
+                PocketKey.Alphabet, PocketKey.Emoji -> Unit
                 PocketKey.Submit -> send(AccountSetupEvent.Continue)
             }
         },
@@ -426,7 +426,7 @@ private fun SetupAgeStep(
                     send(AccountSetupEvent.AgeChanged(state.ageDraft + key.value))
                 PocketKey.Backspace ->
                     send(AccountSetupEvent.AgeChanged(state.ageDraft.dropLast(1)))
-                PocketKey.Space, PocketKey.Alphabet -> Unit
+                PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
                 PocketKey.Submit -> send(AccountSetupEvent.Continue)
             }
         },

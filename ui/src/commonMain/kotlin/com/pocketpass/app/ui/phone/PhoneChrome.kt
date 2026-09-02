@@ -1,5 +1,7 @@
 package com.pocketpass.app.ui.phone
 
+import androidx.compose.ui.text.input.VisualTransformation
+import com.pocketpass.app.ui.components.rememberSudofontTransformation
 import com.pocketpass.app.ui.supportsAnimatedPatterns
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -783,6 +785,7 @@ fun PhoneTextField(
     tag: String? = null,
     focusRequester: FocusRequester? = null,
     enabled: Boolean = true,
+    visualTransformation: VisualTransformation = rememberSudofontTransformation(),
 ) {
     val shape = RoundedCornerShape(metrics.dp(radius))
     val style = TextStyle(
@@ -811,6 +814,7 @@ fun PhoneTextField(
         enabled = enabled,
         textStyle = style,
         cursorBrush = SolidColor(textColor),
+        visualTransformation = visualTransformation,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         singleLine = singleLine,

@@ -53,6 +53,7 @@ sealed interface PocketKey {
     data object Space : PocketKey
 
     data object Alphabet : PocketKey
+    data object Emoji : PocketKey
     data object Submit : PocketKey
 }
 
@@ -208,11 +209,9 @@ private val SymbolRows = listOf(
     ".,_+?!'\"",
 )
 
-private val EmojiKeys = listOf(
-    "😀", "😂", "🥹", "😍", "😎", "🤔", "😴", "🙃", "😭", "😡",
-    "👍", "👎", "👋", "🙌", "🙏", "💪", "🔥", "✨", "💯", "🎉",
-    "❤️", "⭐", "🌈", "☀️", "🌙", "⚡", "🎮", "🏆", "🎵", "✅",
-)
+// Only the Nintendo DS characters Sudofont draws; the wrapper Text picks the font.
+private val EmojiKeys: List<String> = SudofontGlyphs.map { it.text }
+private val EmojiKeyLabel: String = SudofontGlyphs.first().text
 
 private val LocalKeyboardTopRowUp = compositionLocalOf<((Float) -> String?)?> { null }
 
@@ -230,6 +229,7 @@ fun PocketKeyboard(
     focusReturnTag: String? = null,
     canBackspace: Boolean = true,
     topRowUpTarget: ((centerX: Float) -> String?)? = null,
+    emojiKey: Boolean = false,
 ) {
     val scale = height / POCKET_KEYBOARD_HEIGHT
     val themed = palette.themed(pocketPalette)
@@ -298,7 +298,16 @@ fun PocketKeyboard(
         CompositionLocalProvider(LocalKeyboardTopRowUp provides topRowUpTarget) {
         when (layout) {
             PocketKeyboardLayout.Text ->
-                TextKeys(metrics, themed, submitLabel, submitEnabled, scale, focusLayer, onKeyWithSound)
+                TextKeys(
+                    metrics,
+                    themed,
+                    submitLabel,
+                    submitEnabled,
+                    scale,
+                    focusLayer,
+                    onKeyWithSound,
+                    emojiKey = emojiKey,
+                )
 
             PocketKeyboardLayout.Email ->
                 TextKeys(
@@ -336,13 +345,13 @@ private fun EmojiKeysGrid(
     val columns = 10
     val keySize = 108f
     val gap = 10f * scale
-    val rowWidth = columns * keySize + (columns - 1) * gap
-    val startX = (1240f - rowWidth) / 2f
+    val rowStartX = { length: Int -> (1240f - (length * keySize + (length - 1) * gap)) / 2f }
     val topPadding = 22f * scale
     val keyHeight = 88f * scale
     val backspaceX = if (submitLabel != null) BACKSPACE_X else BACKSPACE_X_NO_SUBMIT
 
     val emojiSlots = EmojiKeys.indices.chunked(columns).map { rowIndices ->
+        val startX = rowStartX(rowIndices.size)
         rowIndices.map { index ->
             val column = index % columns
             KeySlot("key_emoji_$index", startX + column * (keySize + gap) + keySize / 2f)
@@ -358,12 +367,13 @@ private fun EmojiKeysGrid(
     EmojiKeys.forEachIndexed { index, emoji ->
         val row = index / columns
         val column = index % columns
+        val rowLength = minOf(columns, EmojiKeys.size - row * columns)
         val tag = "key_emoji_$index"
         PocketKeyButton(
             metrics = metrics,
             palette = palette,
             focusLayer = focusLayer,
-            x = startX + column * (keySize + gap),
+            x = rowStartX(rowLength) + column * (keySize + gap),
             y = topPadding + row * (keyHeight + gap),
             width = keySize,
             height = keyHeight,
@@ -437,6 +447,7 @@ private fun TextKeys(
     focusLayer: Int,
     onKey: (PocketKey) -> Unit,
     emailKeys: Boolean = false,
+    emojiKey: Boolean = false,
 ) {
     var shifted by remember { mutableStateOf(false) }
     var symbols by remember { mutableStateOf(false) }
@@ -448,7 +459,15 @@ private fun TextKeys(
     val topPadding = 22f * scale
     val bottomY = topPadding + 3f * (keyHeight + gap)
     val backspaceX = if (submitLabel != null) BACKSPACE_X else BACKSPACE_X_NO_SUBMIT
-    val spaceX = if (symbols) 222f else 366f
+    // The emoji key takes the shift slot on the symbols page and the slot
+    // after shift on the letters page; space gives up the room.
+    val showEmojiKey = emojiKey && !emailKeys
+    val emojiX = if (symbols) 222f else 366f
+    val spaceX = when {
+        showEmojiKey -> emojiX + 130f + KEY_ROW_GAP
+        symbols -> 222f
+        else -> 366f
+    }
     val spaceWidth = backspaceX - KEY_ROW_GAP - spaceX
     val shortcutWidth = (spaceWidth - KEY_ROW_GAP) / 2f
 
@@ -461,6 +480,7 @@ private fun TextKeys(
     val bottomSlots = buildList {
         add(KeySlot("key_symbols", 40f + 168f / 2f))
         if (!symbols) add(KeySlot("key_shift", 222f + 130f / 2f))
+        if (showEmojiKey) add(KeySlot("key_emoji", emojiX + 130f / 2f))
         if (emailKeys) {
             EMAIL_SHORTCUTS.forEachIndexed { index, shortcut ->
                 add(
@@ -538,6 +558,23 @@ private fun TextKeys(
             tag = "key_shift",
             neighbors = neighbors["key_shift"].orEmpty(),
             onClick = { shifted = !shifted },
+        )
+    }
+    if (showEmojiKey) {
+        PocketKeyButton(
+            metrics = metrics,
+            palette = palette,
+            focusLayer = focusLayer,
+            x = emojiX,
+            y = bottomY,
+            width = 130f,
+            height = keyHeight,
+            label = EmojiKeyLabel,
+            fontSize = 40f,
+            fill = palette.accentFill,
+            tag = "key_emoji",
+            neighbors = neighbors["key_emoji"].orEmpty(),
+            onClick = { onKey(PocketKey.Emoji) },
         )
     }
     if (emailKeys) {

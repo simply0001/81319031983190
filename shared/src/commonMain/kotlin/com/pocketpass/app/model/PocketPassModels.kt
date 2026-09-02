@@ -45,7 +45,6 @@ enum class RecentInteractionsSort(val key: String) {
 }
 
 enum class MessageComposerAction {
-    Emoji,
     Image,
     File,
 }

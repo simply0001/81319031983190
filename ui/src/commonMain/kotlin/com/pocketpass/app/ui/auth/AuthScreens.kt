@@ -419,7 +419,7 @@ private fun AuthEmail(
                     is PocketKey.Character ->
                         dispatch(AuthEvent.EmailChanged(state.email + key.value))
 
-                    PocketKey.Space, PocketKey.Alphabet -> Unit
+                    PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
                     PocketKey.Backspace ->
                         dispatch(AuthEvent.EmailChanged(state.email.dropLast(1)))
 
@@ -604,7 +604,7 @@ private fun AuthOtp(
                         ),
                     )
 
-                    PocketKey.Space, PocketKey.Alphabet -> Unit
+                    PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
                     PocketKey.Backspace ->
                         dispatch(AuthEvent.OtpChanged(state.otpCode.dropLast(1)))
 

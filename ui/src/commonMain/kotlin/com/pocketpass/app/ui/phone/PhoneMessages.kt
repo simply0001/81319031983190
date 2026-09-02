@@ -1,5 +1,9 @@
 package com.pocketpass.app.ui.phone
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.runtime.setValue
+import com.pocketpass.app.ui.components.SudofontGlyphs
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -533,7 +537,13 @@ private fun PhoneComposer(
     val canSend = state.messageDraft.trim().isNotEmpty() &&
         state.messageDraft.length <= 4_000 &&
         !state.messageSendInProgress
-    val send = { if (canSend) dispatch(PocketPassEvent.SendMessage) }
+    var stripOpen by remember(conversationId) { mutableStateOf(false) }
+    val send = {
+        if (canSend) {
+            dispatch(PocketPassEvent.SendMessage)
+            stripOpen = false
+        }
+    }
     val editing = state.editingMessageId != null
     Column(Modifier.padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN))) {
         if (editing) {
@@ -552,6 +562,12 @@ private fun PhoneComposer(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (stripOpen) {
+            PhoneEmojiStrip(metrics) { glyph ->
+                dispatch(PocketPassEvent.UpdateMessageDraft((state.messageDraft + glyph).take(4_000)))
+            }
+            Spacer(Modifier.height(metrics.dp(16f)))
         }
         Row(verticalAlignment = Alignment.Bottom) {
             PhoneTextField(
@@ -579,6 +595,8 @@ private fun PhoneComposer(
                 verticalPadding = 28f,
                 tag = "message_composer",
             )
+            Spacer(Modifier.width(metrics.dp(20f)))
+            PhoneEmojiButton(metrics, active = stripOpen) { stripOpen = !stripOpen }
             Spacer(Modifier.width(metrics.dp(20f)))
             FigmaAsset(
                 resource = Assets.MessagesSendButton,
@@ -644,5 +662,94 @@ private fun PhoneAttachButton(
             resource = Assets.MessageActionAdd,
             modifier = Modifier.requiredSize(metrics.dp(66.111f), metrics.dp(67.535f)),
         )
+    }
+}
+
+/** Opens the strip of DS glyphs; phones have no on-screen keyboard to host an emoji layout. */
+@Composable
+private fun PhoneEmojiButton(
+    metrics: DesignMetrics,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(metrics.dp(79.226f))
+    val fill = Brush.verticalGradient(
+        colorStops = arrayOf(
+            0f to pocketPalette.surface,
+            0.6265f to pocketPalette.surface,
+            1f to pocketPalette.tint(Color(0xFFBDF8CB)),
+        ),
+    )
+    Box(
+        Modifier
+            .width(metrics.dp(130f))
+            .height(metrics.dp(COMPOSER_HEIGHT))
+            .clip(shape)
+            .pocketFrame(
+                fill,
+                metrics.dp(18f),
+                Brush.verticalGradient(listOf(Color(0xFF5A96A9), Color(0xFF286C81))),
+                shape,
+            )
+            .testTag("message_emoji")
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = SudofontGlyphs.first().text,
+            color = if (active) pocketPalette.teal else pocketPalette.tealSoft,
+            fontFamily = Rubik,
+            fontSize = metrics.sp(64f),
+            maxLines = 1,
+        )
+    }
+}
+
+/** The 29 DS characters as a scrolling row of keys above the composer. */
+@Composable
+private fun PhoneEmojiStrip(
+    metrics: DesignMetrics,
+    onGlyph: (String) -> Unit,
+) {
+    val shape = RoundedCornerShape(metrics.dp(26f))
+    val fill = Brush.verticalGradient(
+        colorStops = arrayOf(
+            0f to pocketPalette.surface,
+            0.6265f to pocketPalette.surface,
+            1f to pocketPalette.tint(Color(0xFFBDF8CB)),
+        ),
+    )
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("message_emoji_strip"),
+        horizontalArrangement = Arrangement.spacedBy(metrics.dp(12f)),
+    ) {
+        itemsIndexed(SudofontGlyphs) { index, glyph ->
+            Box(
+                Modifier
+                    .size(metrics.dp(104f))
+                    .clip(shape)
+                    .pocketFrame(fill, metrics.dp(10f), Color(0xFF5A96A9), shape)
+                    .testTag("strip_emoji_$index")
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { onGlyph(glyph.text) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = glyph.text,
+                    color = pocketPalette.teal,
+                    fontFamily = Rubik,
+                    fontSize = metrics.sp(52f),
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }

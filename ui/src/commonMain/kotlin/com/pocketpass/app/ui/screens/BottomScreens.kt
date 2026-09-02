@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.screens
 
+import com.pocketpass.app.ui.components.dropLastCodePoint
 import com.pocketpass.app.ui.PocketAsset
 import com.pocketpass.app.ui.LocalAppVersionName
 import com.pocketpass.app.ui.platformAnimationsEnabled
@@ -1224,7 +1225,7 @@ private fun AddFriendOverlay(
                             onValueChange(state.friendCodeEntry + key.value)
                         }
                     PocketKey.Backspace -> onValueChange(state.friendCodeEntry.dropLast(1))
-                    PocketKey.Space, PocketKey.Alphabet -> Unit
+                    PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
                     PocketKey.Submit -> submitCode()
                 }
             },
@@ -1505,7 +1506,7 @@ fun BioEditorBottomOverlay(
                     dispatch(PocketPassEvent.UpdateBioDraft(editor.draft.dropLast(1)))
 
                 PocketKey.Submit -> dispatch(PocketPassEvent.SaveBio)
-                PocketKey.Alphabet -> Unit
+                PocketKey.Alphabet, PocketKey.Emoji -> Unit
             }
         },
         modifier = Modifier.graphicsLayer {
@@ -1722,7 +1723,7 @@ fun NameEditorBottomOverlay(
                     dispatch(PocketPassEvent.UpdateNameDraft(editor.draft.dropLast(1)))
 
                 PocketKey.Submit -> dispatch(PocketPassEvent.SaveName)
-                PocketKey.Space, PocketKey.Alphabet -> Unit
+                PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
             }
         },
         modifier = Modifier.graphicsLayer {
@@ -4151,9 +4152,6 @@ private fun MessageDetailBottom(
             onAction = { action ->
                 dispatch(PocketPassEvent.SelectMessageAction(action))
                 when (action) {
-                    MessageComposerAction.Emoji ->
-                        keyboardLayout = PocketKeyboardLayout.Emoji
-
                     MessageComposerAction.Image -> Unit
 
                     MessageComposerAction.File -> extensions.open(
@@ -4173,6 +4171,7 @@ private fun MessageDetailBottom(
             submitEnabled = canSend,
             height = MESSAGE_KEYBOARD_HEIGHT,
             canBackspace = state.messageDraft.isNotEmpty(),
+            emojiKey = true,
             topRowUpTarget = { centerX ->
                 if (centerX < BOTTOM_DESIGN_WIDTH / 2f) "message_field" else "message_send"
             },
@@ -4190,11 +4189,13 @@ private fun MessageDetailBottom(
 
                     PocketKey.Backspace -> dispatch(
                         PocketPassEvent.UpdateMessageDraft(
-                            state.messageDraft.dropLast(1),
+                            state.messageDraft.dropLastCodePoint(),
                         ),
                     )
 
                     PocketKey.Alphabet -> keyboardLayout = PocketKeyboardLayout.Text
+
+                    PocketKey.Emoji -> keyboardLayout = PocketKeyboardLayout.Emoji
 
                     PocketKey.Submit -> if (canSend) {
                         dispatch(PocketPassEvent.SendMessage)
@@ -4583,7 +4584,7 @@ private fun MessageComposer(
     val focus = LocalControllerFocus.current
     LaunchedEffect(railExpanded) {
         if (railExpanded) {
-            focus?.focus("message_action_emoji", reveal = false)
+            focus?.focus("message_action_image", reveal = false)
         } else if (focus?.focusId == null) {
             focus?.focus("message_actions", reveal = false)
         }
@@ -4740,20 +4741,10 @@ private fun MessageComposer(
             }
             RailGlyph(
                 metrics = metrics,
-                resource = Assets.MessageActionEmoji,
-                railHeight = railHeight,
-                x = 38.07f,
-                y = 47f,
-                width = 81.861f,
-                height = 78.396f,
-                alpha = handover,
-            )
-            RailGlyph(
-                metrics = metrics,
                 resource = Assets.MessageActionImage,
                 railHeight = railHeight,
                 x = 38.07f,
-                y = 182.268f,
+                y = 47f,
                 width = 81.86f,
                 height = 81.86f,
                 alpha = handover,
@@ -4763,7 +4754,7 @@ private fun MessageComposer(
                 resource = Assets.MessageActionFile,
                 railHeight = railHeight,
                 x = 41f,
-                y = 321f,
+                y = 185.732f,
                 width = 76f,
                 height = 94f,
                 alpha = handover,
@@ -4783,22 +4774,14 @@ private fun MessageComposer(
             MessageRailHitTarget(
                 metrics,
                 { railHeight() - RAIL_EXPANDED_HEIGHT },
-                151f,
-                "message_action_emoji",
-            ) {
-                onAction(MessageComposerAction.Emoji)
-            }
-            MessageRailHitTarget(
-                metrics,
-                { railHeight() - RAIL_EXPANDED_HEIGHT + 151f },
-                142f,
+                157.732f,
                 "message_action_image",
             ) {
                 onAction(MessageComposerAction.Image)
             }
             MessageRailHitTarget(
                 metrics,
-                { railHeight() - RAIL_EXPANDED_HEIGHT + 293f },
+                { railHeight() - RAIL_EXPANDED_HEIGHT + 157.732f },
                 169f,
                 "message_action_file",
             ) {
@@ -4856,7 +4839,9 @@ private const val COMPOSER_RESTING_Y = 380f
 private const val MESSAGE_KEYBOARD_HEIGHT = 500f
 
 private const val RAIL_COLLAPSED_HEIGHT = 161.5f
-private const val RAIL_EXPANDED_HEIGHT = 462f
+// Two actions (image, file) plus the collapsed pill; the emoji action moved
+// to the keyboard.
+private const val RAIL_EXPANDED_HEIGHT = 326.732f
 private const val RAIL_HANDOVER_PROGRESS = 0.45f
 private const val RAIL_FILL_HOLD = 0.6265f
 
