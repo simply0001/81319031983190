@@ -515,6 +515,12 @@ class PocketPassStore(
                 container.setUpdateAlertsEnabled(event.enabled)
             }
 
+            is PocketPassEvent.SetStepRewardsEnabled ->
+                container.stepRewards.onPreferenceChanged(event.enabled)
+
+            PocketPassEvent.RequestStepRewardsPermission ->
+                container.stepRewards.requestPermission()
+
             PocketPassEvent.ResetSettings -> scope.launch {
                 container.resetSettings()
             }
@@ -595,6 +601,10 @@ class PocketPassStore(
 
     fun onNearbyPermissionResult() {
         container.nearby.onPermissionResult()
+    }
+
+    fun onStepRewardsPermissionResult() {
+        container.stepRewards.onPermissionResult()
     }
 
     private fun collectFeatureState() {
@@ -845,6 +855,7 @@ class PocketPassStore(
                         encounterAlertsEnabled = settings.encounterAlertsEnabled,
                         nearbyRepairAlertsEnabled = settings.nearbyRepairAlertsEnabled,
                         updateAlertsEnabled = settings.updateAlertsEnabled,
+                        stepRewardsEnabled = settings.stepRewardsEnabled,
                     )
                 }
             }
@@ -857,6 +868,11 @@ class PocketPassStore(
                         nearbyPermissionUi = nearby.permissionUi,
                     )
                 }
+            }
+        }
+        scope.launch {
+            container.stepRewards.state.collect { steps ->
+                _state.update { it.copy(stepRewards = steps) }
             }
         }
         scope.launch {

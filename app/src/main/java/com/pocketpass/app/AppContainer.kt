@@ -1,5 +1,12 @@
 package com.pocketpass.app
 
+import com.pocketpass.app.data.repository.FixtureStepRewardsRemoteDataSource
+import com.pocketpass.app.data.repository.remote.StepRewardsRemoteDataSource
+import com.pocketpass.app.steps.AndroidStepCounterSource
+import com.pocketpass.app.steps.StepRewardsScheduler
+import com.pocketpass.app.steps.StepRewardsTracker
+import com.pocketpass.app.steps.StepRewardsWorkerRuntime
+import kotlinx.coroutines.flow.distinctUntilChanged
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -431,6 +438,16 @@ class AppContainer(
         sessionState = repositories.session.sessionState,
         scope = applicationScope,
     )
+    val stepSource = AndroidStepCounterSource(context, applicationScope)
+    val stepRewards = StepRewardsTracker(
+        settingsRepository = settingsRepository,
+        settings = settings.settings,
+        activeAccountId = activeAccountId,
+        source = stepSource,
+        remote = productionComponents?.stepRewardsRemote
+            ?: FixtureStepRewardsRemoteDataSource(),
+        scope = applicationScope,
+    )
 
     private val realtimeRuntime: RealtimeRuntime? = productionComponents?.let { production ->
         RealtimeRuntime(
@@ -506,6 +523,19 @@ class AppContainer(
         }
         appUpdate.checkOnLaunch()
         widgetPublisher.start()
+        StepRewardsWorkerRuntime.install { stepRewards.sampleAndClaim() }
+        applicationScope.launch {
+            settings.settings
+                .map { it.stepRewardsEnabled }
+                .distinctUntilChanged()
+                .collect { enabled ->
+                    if (enabled) {
+                        StepRewardsScheduler.schedule(context)
+                    } else {
+                        StepRewardsScheduler.cancel(context)
+                    }
+                }
+        }
         realtimeRuntime?.let { runtime ->
             registerRealtimeNetworkCallback()
             runtime.start()
@@ -518,6 +548,7 @@ class AppContainer(
     fun setAppForeground(foreground: Boolean) {
         appForeground.value = foreground
         appUpdate.setForeground(foreground)
+        stepRewards.setForeground(foreground)
         if (foreground && !BuildConfig.DEBUG) AppUpdateCheckScheduler.schedule(context)
     }
 
@@ -843,6 +874,7 @@ class AppContainer(
             bundle = bundle,
             presence = presence,
             encounterRemote = remote.sources.encounters,
+            stepRewardsRemote = remote.sources.stepRewards,
             miiPublisher = remote,
             miiFetcher = remote,
             miiActiveSlotPublisher = remote,
@@ -916,6 +948,7 @@ class AppContainer(
         val bundle: ProductionRepositoryBundle,
         val presence: RealtimePresenceRepository,
         val encounterRemote: EncounterRemoteDataSource,
+        val stepRewardsRemote: StepRewardsRemoteDataSource,
         val miiPublisher: MiiProfilePublisher,
         val miiFetcher: MiiProfileFetcher,
         val miiActiveSlotPublisher: MiiActiveSlotPublisher,

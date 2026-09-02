@@ -1,5 +1,6 @@
 package com.pocketpass.app.model
 
+import com.pocketpass.app.steps.StepRewardsState
 import com.pocketpass.app.auth.AuthUiState
 import com.pocketpass.app.domain.model.ActivitySnapshot
 import com.pocketpass.app.domain.model.ConversationId
@@ -64,6 +65,8 @@ data class PocketPassUiState(
     val encounterAlertsEnabled: Boolean = true,
     val nearbyRepairAlertsEnabled: Boolean = true,
     val updateAlertsEnabled: Boolean = true,
+    val stepRewardsEnabled: Boolean = false,
+    val stepRewards: StepRewardsState = StepRewardsState(),
     val accountSetup: AccountSetupUiState = AccountSetupUiState(),
     val profile: UserProfile? = null,
     val homeMood: HomeMood = HomeMood.Happy,
@@ -416,6 +419,10 @@ object PocketPassReducer {
             is PocketPassEvent.SetUpdateAlertsEnabled -> state.copy(
                 updateAlertsEnabled = event.enabled,
             )
+            is PocketPassEvent.SetStepRewardsEnabled -> state.copy(
+                stepRewardsEnabled = event.enabled,
+            )
+            PocketPassEvent.RequestStepRewardsPermission -> state
             PocketPassEvent.ResetSettings -> state.copy(
                 nearbyEnabled = true,
                 soundLevel = 0.45f,
@@ -426,6 +433,7 @@ object PocketPassReducer {
                 encounterAlertsEnabled = true,
                 nearbyRepairAlertsEnabled = true,
                 updateAlertsEnabled = true,
+                stepRewardsEnabled = false,
             )
             PocketPassEvent.SignOut -> state
 

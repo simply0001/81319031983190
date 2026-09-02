@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.phone
 
+import com.pocketpass.app.ui.screens.StepRewardsPanel
 import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -146,6 +147,11 @@ private fun PhoneSettingsList(
         }
         slot(SETTINGS_ROW_HEIGHT) {
             NearbyPanel(metrics, 0f, state.nearbyEnabled) { dispatch(PocketPassEvent.SetNearby(!state.nearbyEnabled)) }
+        }
+        if (state.stepRewards.supported) {
+            slot(SETTINGS_ROW_HEIGHT) {
+                StepRewardsPanel(metrics, 0f, state, dispatch)
+            }
         }
         slot(SOUND_PANEL_HEIGHT) {
             SoundPanel(

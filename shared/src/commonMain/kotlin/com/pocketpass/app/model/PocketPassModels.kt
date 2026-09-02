@@ -335,6 +335,8 @@ sealed interface PocketPassEvent {
     data class SetEncounterAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetNearbyRepairAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetUpdateAlertsEnabled(val enabled: Boolean) : PocketPassEvent
+    data class SetStepRewardsEnabled(val enabled: Boolean) : PocketPassEvent
+    data object RequestStepRewardsPermission : PocketPassEvent
     data object ResetSettings : PocketPassEvent
     data object OpenDeleteAccount : PocketPassEvent
     data object CloseDeleteAccount : PocketPassEvent

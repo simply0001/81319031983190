@@ -4918,6 +4918,7 @@ private fun SettingsBottom(
         val focusViewport = rememberBelowTabBarFocusViewport(metrics)
         val stack = SettingsStack()
         val nearbyY = stack.place(SETTINGS_ROW_HEIGHT)
+        val stepsY = if (state.stepRewards.supported) stack.place(SETTINGS_ROW_HEIGHT) else null
         val soundY = stack.place(SOUND_PANEL_HEIGHT)
         val notificationsY = stack.place(SETTINGS_ROW_HEIGHT)
         val themeY = stack.place(THEME_PANEL_HEIGHT)
@@ -4930,6 +4931,7 @@ private fun SettingsBottom(
         val reveal = LocalRouteRevealGeneration.current
         val rowBounds = listOfNotNull(
             nearbyY to SETTINGS_ROW_HEIGHT,
+            stepsY?.let { it to SETTINGS_ROW_HEIGHT },
             soundY to SOUND_PANEL_HEIGHT,
             notificationsY to SETTINGS_ROW_HEIGHT,
             themeY to THEME_PANEL_HEIGHT,
@@ -4982,6 +4984,11 @@ private fun SettingsBottom(
                     row(nearbyY, SETTINGS_ROW_HEIGHT) {
                         NearbyPanel(metrics, nearbyY, state.nearbyEnabled) {
                             dispatch(PocketPassEvent.SetNearby(!state.nearbyEnabled))
+                        }
+                    }
+                    stepsY?.let { y ->
+                        row(y, SETTINGS_ROW_HEIGHT) {
+                            StepRewardsPanel(metrics, y, state, dispatch)
                         }
                     }
                     row(soundY, SOUND_PANEL_HEIGHT) {

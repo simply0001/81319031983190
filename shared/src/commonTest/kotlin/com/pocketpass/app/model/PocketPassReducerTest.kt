@@ -207,8 +207,10 @@ class PocketPassReducerTest {
         state = PocketPassReducer.reduce(state, PocketPassEvent.SetSoundLevel(3f))
         state = PocketPassReducer.reduce(state, PocketPassEvent.SetSfxLevel(-1f))
         state = PocketPassReducer.reduce(state, PocketPassEvent.SetThemeMode(ThemeMode.Dark))
+        state = PocketPassReducer.reduce(state, PocketPassEvent.SetStepRewardsEnabled(true))
 
         assertFalse(state.nearbyEnabled)
+        assertTrue(state.stepRewardsEnabled)
         assertEquals(1f, state.soundLevel)
         assertEquals(0f, state.sfxLevel)
         assertEquals(ThemeMode.Dark, state.themeMode)
@@ -218,6 +220,7 @@ class PocketPassReducerTest {
         assertEquals(0.45f, state.soundLevel)
         assertEquals(0.6f, state.sfxLevel)
         assertEquals(ThemeMode.System, state.themeMode)
+        assertFalse(state.stepRewardsEnabled)
     }
 
     @Test

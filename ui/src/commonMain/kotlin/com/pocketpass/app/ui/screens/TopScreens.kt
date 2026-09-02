@@ -313,7 +313,7 @@ fun TopShop(
                 text = if (visible && state.shop.purchasingItemIds.isNotEmpty()) {
                     "Purchase pending…"
                 } else {
-                    "Earn by playing games & interacting!"
+                    "Earn by playing games, walking & interacting!"
                 },
                 color = pocketPalette.ink(Color(0xFF803427)).copy(alpha = 0.79f),
                 fontFamily = Rubik,
@@ -1794,6 +1794,7 @@ private fun ActivitiesTop(
 ) {
     TopPage(entrance = EntranceMotion.None) { metrics ->
         val shuffled = state.activityVariant == ActivityVariant.Shuffled
+        val compact = state.stepRewards.visible
         val swapProgress = rememberActivitiesSwapProgress(shuffled)
         val defaultIdle = remember(swapProgress) {
             derivedStateOf {
@@ -1810,6 +1811,7 @@ private fun ActivitiesTop(
 
         ActivitiesVariantLayer(
             metrics = metrics,
+            compact = compact,
             alternate = false,
             leftCount = state.activitySnapshot?.coinCount ?: 22,
             rightCount = state.activitySnapshot?.puzzleCount ?: 3,
@@ -1823,6 +1825,7 @@ private fun ActivitiesTop(
         )
         ActivitiesVariantLayer(
             metrics = metrics,
+            compact = compact,
             alternate = true,
             leftCount = state.activitySnapshot?.nearbyCount ?: 12,
             rightCount = state.activitySnapshot?.locationCount ?: 3,
@@ -1835,16 +1838,30 @@ private fun ActivitiesTop(
                 },
         )
 
-        Box(
-            Modifier
-                .designBounds(metrics, 956.49f, 182f, 19f, 848f)
-                .clip(RoundedCornerShape(metrics.dp(10f)))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color.White.copy(alpha = if (pocketPalette.isDark) 0.28f else 1f), Color.Transparent),
-                    ),
-                ),
+        // One divider between two counters, two between three.
+        val dividerBrush = Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = if (pocketPalette.isDark) 0.28f else 1f), Color.Transparent),
         )
+        val dividerXs = if (compact) listOf(630.5f, 1270.5f) else listOf(956.49f)
+        dividerXs.forEach { x ->
+            Box(
+                Modifier
+                    .designBounds(metrics, x, 182f, 19f, 848f)
+                    .clip(RoundedCornerShape(metrics.dp(10f)))
+                    .background(dividerBrush),
+            )
+        }
+        if (compact) {
+            Box(Modifier.designBounds(metrics, 1400f, 300f, 400f, 640f)) {
+                StepsCounter(
+                    metrics = metrics,
+                    state = state,
+                    dispatch = dispatch,
+                    artSize = 400f,
+                    numberSize = 100f,
+                )
+            }
+        }
 
         val interactionSource = remember { MutableInteractionSource() }
         val buttonShape = RoundedCornerShape(
@@ -1920,6 +1937,7 @@ private fun ActivitiesTop(
 @Composable
 private fun ActivitiesVariantLayer(
     metrics: DesignMetrics,
+    compact: Boolean,
     alternate: Boolean,
     leftCount: Int,
     rightCount: Int,
@@ -1928,7 +1946,11 @@ private fun ActivitiesVariantLayer(
 ) {
     Box(modifier = modifier) {
         MotionLayer(
-            modifier = Modifier.designBounds(metrics, 254.404f, 256.959f, 496.082f, 496.082f),
+            modifier = if (compact) {
+                Modifier.designBounds(metrics, 120f, 300f, 400f, 400f)
+            } else {
+                Modifier.designBounds(metrics, 254.404f, 256.959f, 496.082f, 496.082f)
+            },
             entrance = EntranceMotion.ActivityCoinSettle,
             idle = if (idleEnabled) IdleMotion.CoinRock else IdleMotion.None,
         ) {
@@ -1943,7 +1965,11 @@ private fun ActivitiesVariantLayer(
         }
 
         MotionLayer(
-            modifier = Modifier.designBounds(metrics, 315f, 802f, 380f, 160f),
+            modifier = if (compact) {
+                Modifier.designBounds(metrics, 130f, 740f, 380f, 160f)
+            } else {
+                Modifier.designBounds(metrics, 315f, 802f, 380f, 160f)
+            },
             entrance = EntranceMotion.ActivityCountRise,
             delayMillis = 80,
         ) {
@@ -1953,14 +1979,18 @@ private fun ActivitiesVariantLayer(
                 color = pocketPalette.ink(if (alternate) Color(0xFF33398D) else Color(0xFF803427)),
                 fontFamily = Rubik,
                 fontWeight = FontWeight.Bold,
-                fontSize = metrics.sp(128f),
+                fontSize = metrics.sp(if (compact) 100f else 128f),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
             )
         }
 
         MotionLayer(
-            modifier = Modifier.designBounds(metrics, 1181.486f, 262.945f, 484.11f, 484.11f),
+            modifier = if (compact) {
+                Modifier.designBounds(metrics, 765f, 305f, 390f, 390f)
+            } else {
+                Modifier.designBounds(metrics, 1181.486f, 262.945f, 484.11f, 484.11f)
+            },
             entrance = EntranceMotion.ActivityPuzzleSettle,
             idle = if (idleEnabled) IdleMotion.PuzzleBob else IdleMotion.None,
             delayMillis = 70,
@@ -1977,7 +2007,11 @@ private fun ActivitiesVariantLayer(
         }
 
         MotionLayer(
-            modifier = Modifier.designBounds(metrics, 1235f, 797f, 380f, 160f),
+            modifier = if (compact) {
+                Modifier.designBounds(metrics, 770f, 740f, 380f, 160f)
+            } else {
+                Modifier.designBounds(metrics, 1235f, 797f, 380f, 160f)
+            },
             entrance = EntranceMotion.ActivityCountRise,
             delayMillis = 150,
         ) {
@@ -1987,7 +2021,7 @@ private fun ActivitiesVariantLayer(
                 color = pocketPalette.ink(if (alternate) Color(0xFF851111) else Color(0xFF11851E)),
                 fontFamily = Rubik,
                 fontWeight = FontWeight.Bold,
-                fontSize = metrics.sp(128f),
+                fontSize = metrics.sp(if (compact) 100f else 128f),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
             )

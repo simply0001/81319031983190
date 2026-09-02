@@ -1,0 +1,36 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="449" height="449" viewBox="0 0 449 449" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="stepsFill" x1="224.5" y1="0" x2="224.5" y2="449" gradientUnits="userSpaceOnUse">
+<stop stop-color="#E4F7FF"/>
+<stop offset="1" stop-color="#8CD3EC"/>
+</linearGradient>
+<linearGradient id="stepsRing" x1="224.5" y1="11" x2="224.5" y2="438" gradientUnits="userSpaceOnUse">
+<stop stop-color="#74BBD1"/>
+<stop offset="1" stop-color="#2B7A93"/>
+</linearGradient>
+<linearGradient id="stepsInk" x1="224.5" y1="90" x2="224.5" y2="370" gradientUnits="userSpaceOnUse">
+<stop stop-color="#2F8FA8"/>
+<stop offset="1" stop-color="#1D596B"/>
+</linearGradient>
+</defs>
+<rect width="449" height="449" rx="224.5" fill="url(#stepsFill)"/>
+<rect x="11" y="11" width="427" height="427" rx="213.5" stroke="url(#stepsRing)" stroke-width="22"/>
+<g fill="url(#stepsInk)">
+<ellipse cx="166" cy="262" rx="44" ry="64"/>
+<ellipse cx="166" cy="344" rx="31" ry="27"/>
+<circle cx="120" cy="196" r="12"/>
+<circle cx="146" cy="183" r="13"/>
+<circle cx="174" cy="178" r="13"/>
+<circle cx="202" cy="185" r="11"/>
+<circle cx="224" cy="202" r="9"/>
+</g>
+<g fill="url(#stepsInk)" opacity="0.9">
+<ellipse cx="283" cy="176" rx="44" ry="64"/>
+<ellipse cx="283" cy="258" rx="31" ry="27"/>
+<circle cx="237" cy="110" r="12"/>
+<circle cx="263" cy="97" r="13"/>
+<circle cx="291" cy="92" r="13"/>
+<circle cx="319" cy="99" r="11"/>
+<circle cx="341" cy="116" r="9"/>
+</g>
+</svg>

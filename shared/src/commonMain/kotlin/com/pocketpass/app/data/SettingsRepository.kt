@@ -18,6 +18,7 @@ data class LocalSettings(
     val encounterAlertsEnabled: Boolean = true,
     val nearbyRepairAlertsEnabled: Boolean = true,
     val updateAlertsEnabled: Boolean = true,
+    val stepRewardsEnabled: Boolean = false,
     val lastNotifiedUpdateVersionCode: Int = 0,
     val lastSeenMinSupportedVersionCode: Int = 0,
     val leaderboardScope: LeaderboardScope = LeaderboardScope.Friends,
@@ -51,6 +52,8 @@ interface SettingsRepository {
     suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean)
 
     suspend fun setUpdateAlertsEnabled(enabled: Boolean)
+
+    suspend fun setStepRewardsEnabled(enabled: Boolean)
 
     suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int)
 

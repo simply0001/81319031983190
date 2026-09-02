@@ -1017,6 +1017,7 @@ class FeatureStateHoldersTest {
         holder.setEncounterLedEnabled(false)
         holder.setEncounterAlertsEnabled(false)
         holder.setNearbyRepairAlertsEnabled(false)
+        holder.setStepRewardsEnabled(true)
         runCurrent()
 
         assertEquals(
@@ -1028,6 +1029,7 @@ class FeatureStateHoldersTest {
                 encounterLedEnabled = false,
                 encounterAlertsEnabled = false,
                 nearbyRepairAlertsEnabled = false,
+                stepRewardsEnabled = true,
             ),
             holder.settings.value,
         )
@@ -1372,6 +1374,12 @@ class FeatureStateHoldersTest {
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) {
             mutableSettings.value = mutableSettings.value.copy(
                 updateAlertsEnabled = enabled,
+            )
+        }
+
+        override suspend fun setStepRewardsEnabled(enabled: Boolean) {
+            mutableSettings.value = mutableSettings.value.copy(
+                stepRewardsEnabled = enabled,
             )
         }
 

@@ -51,6 +51,7 @@ targets:
         NSBluetoothAlwaysUsageDescription:
           PocketPass exchanges anonymous encounter passes with nearby players
           over Bluetooth, including while the app is in the background.
+        NSMotionUsageDescription: PocketPass reads your daily step count to award tokens for walking.
         BGTaskSchedulerPermittedIdentifiers:
           - xyz.pocketpass.refresh
         UIRequiredDeviceCapabilities: [arm64]

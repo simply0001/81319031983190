@@ -75,6 +75,7 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
             override fun onAppOpened(openRepair: Boolean) = container.nearby.onAppOpened(openRepair)
             override fun onPermissionResult() = container.nearby.onPermissionResult()
         }
+        override val stepRewards get() = container.stepRewards
         override val appUpdate = object : AppUpdateActions {
             override val state get() = container.appUpdate.state
             override fun check() = container.appUpdate.check()
@@ -130,6 +131,8 @@ class PocketPassViewModel(
     fun onAppOpened(openNearbyRepair: Boolean) = store.onAppOpened(openNearbyRepair)
 
     fun onNearbyPermissionResult() = store.onNearbyPermissionResult()
+
+    fun onStepRewardsPermissionResult() = store.onStepRewardsPermissionResult()
 
     class Factory(
         private val application: PocketPassApplication,

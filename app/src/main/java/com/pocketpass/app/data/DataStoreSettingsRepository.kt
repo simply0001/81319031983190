@@ -33,6 +33,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         val nearbyRepairAlertsEnabled =
             booleanPreferencesKey("nearby_repair_alerts_enabled")
         val updateAlertsEnabled = booleanPreferencesKey("update_alerts_enabled")
+        val stepRewardsEnabled = booleanPreferencesKey("step_rewards_enabled")
         val lastNotifiedUpdateVersionCode =
             intPreferencesKey("last_notified_update_version_code")
         val lastSeenMinSupportedVersionCode =
@@ -70,6 +71,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
                 nearbyRepairAlertsEnabled =
                     preferences[Keys.nearbyRepairAlertsEnabled] ?: true,
                 updateAlertsEnabled = preferences[Keys.updateAlertsEnabled] ?: true,
+                stepRewardsEnabled = preferences[Keys.stepRewardsEnabled] ?: false,
                 lastNotifiedUpdateVersionCode =
                     preferences[Keys.lastNotifiedUpdateVersionCode] ?: 0,
                 lastSeenMinSupportedVersionCode =
@@ -148,6 +150,10 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         }
     }
 
+    override suspend fun setStepRewardsEnabled(enabled: Boolean) {
+        context.pocketPassDataStore.edit { it[Keys.stepRewardsEnabled] = enabled }
+    }
+
     override suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) {
         context.pocketPassDataStore.edit {
             it[Keys.lastNotifiedUpdateVersionCode] = versionCode
@@ -187,6 +193,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             preferences[Keys.encounterAlertsEnabled] = true
             preferences[Keys.nearbyRepairAlertsEnabled] = true
             preferences[Keys.updateAlertsEnabled] = true
+            preferences[Keys.stepRewardsEnabled] = false
             preferences[Keys.leaderboardScope] = LeaderboardScope.Friends.key
             preferences[Keys.recentInteractionsSort] =
                 RecentInteractionsSort.LatestEncounter.key

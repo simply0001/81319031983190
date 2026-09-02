@@ -1,5 +1,6 @@
 package com.pocketpass.app.ui.phone
 
+import com.pocketpass.app.ui.screens.StepsCounter
 import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -145,7 +146,7 @@ fun PhoneActivitiesTab(
             subtitle = if (state.shop.purchasingItemIds.isNotEmpty()) {
                 "${state.shop.tokenBalance} Tokens · Purchase pending…"
             } else {
-                "${state.shop.tokenBalance} Tokens · Earn by playing games & interacting!"
+                "${state.shop.tokenBalance} Tokens · Earn by playing games, walking & interacting!"
             },
             backTag = "shop_back",
             onBack = { dispatch(PocketPassEvent.CloseShop) },
@@ -429,12 +430,25 @@ private fun PhoneActivitiesHero(
     val alternateIdle by remember(swapProgress) {
         derivedStateOf { !swapProgress.isRunning && swapProgress.value >= 0.9999f }
     }
-    val artSize = if (big) 400f else 320f
+    val stepsVisible = state.stepRewards.visible
+    // A third column for steps shrinks the two swapping counters to fit.
+    val artSize = when {
+        big && stepsVisible -> 300f
+        big -> 400f
+        stepsVisible -> 240f
+        else -> 320f
+    }
     val layerHeight = artSize + 150f
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
+        Row(
             Modifier
                 .fillMaxWidth()
+                .height(metrics.dp(layerHeight + if (stepsVisible) 48f else 0f)),
+            verticalAlignment = Alignment.Top,
+        ) {
+        Box(
+            Modifier
+                .weight(if (stepsVisible) 2f else 1f)
                 .height(metrics.dp(layerHeight))
                 .clipToBounds(),
         ) {
@@ -460,6 +474,19 @@ private fun PhoneActivitiesHero(
                     .fillMaxSize()
                     .graphicsLayer { translationY = size.height * (1f - swapProgress.value) },
             )
+        }
+            if (stepsVisible) {
+                StepsCounter(
+                    metrics = metrics,
+                    state = state,
+                    dispatch = dispatch,
+                    artSize = artSize * 484.11f / 496.082f,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = metrics.dp(PHONE_CONTENT_MARGIN)),
+                    numberSize = if (artSize > 300f) 128f else 96f,
+                )
+            }
         }
         Spacer(Modifier.height(metrics.dp(24f)))
         ShuffleButton(metrics) { dispatch(PocketPassEvent.ShuffleActivities) }

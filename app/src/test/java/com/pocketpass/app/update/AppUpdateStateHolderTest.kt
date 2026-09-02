@@ -35,6 +35,7 @@ class AppUpdateStateHolderTest {
         override suspend fun setEncounterAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) = Unit
+        override suspend fun setStepRewardsEnabled(enabled: Boolean) = Unit
 
         override suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) {
             store.value = store.value.copy(lastNotifiedUpdateVersionCode = versionCode)

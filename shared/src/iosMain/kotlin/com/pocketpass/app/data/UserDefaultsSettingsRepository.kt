@@ -52,6 +52,7 @@ class UserDefaultsSettingsRepository(
             encounterAlertsEnabled = bool("encounterAlertsEnabled", base.encounterAlertsEnabled),
             nearbyRepairAlertsEnabled = bool("nearbyRepairAlertsEnabled", base.nearbyRepairAlertsEnabled),
             updateAlertsEnabled = bool("updateAlertsEnabled", base.updateAlertsEnabled),
+            stepRewardsEnabled = bool("stepRewardsEnabled", base.stepRewardsEnabled),
             lastNotifiedUpdateVersionCode = int("lastNotifiedUpdateVersionCode", base.lastNotifiedUpdateVersionCode),
             lastSeenMinSupportedVersionCode = int("lastSeenMinSupportedVersionCode", base.lastSeenMinSupportedVersionCode),
             leaderboardScope = enum("leaderboardScope", base.leaderboardScope),
@@ -79,6 +80,7 @@ class UserDefaultsSettingsRepository(
         defaults.setBool(settings.encounterAlertsEnabled, key("encounterAlertsEnabled"))
         defaults.setBool(settings.nearbyRepairAlertsEnabled, key("nearbyRepairAlertsEnabled"))
         defaults.setBool(settings.updateAlertsEnabled, key("updateAlertsEnabled"))
+        defaults.setBool(settings.stepRewardsEnabled, key("stepRewardsEnabled"))
         defaults.setInteger(settings.lastNotifiedUpdateVersionCode.toLong(), key("lastNotifiedUpdateVersionCode"))
         defaults.setInteger(settings.lastSeenMinSupportedVersionCode.toLong(), key("lastSeenMinSupportedVersionCode"))
         defaults.setObject(settings.leaderboardScope.name, key("leaderboardScope"))
@@ -113,6 +115,9 @@ class UserDefaultsSettingsRepository(
 
     override suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
         mutate { it.copy(updateAlertsEnabled = enabled) }
+
+    override suspend fun setStepRewardsEnabled(enabled: Boolean) =
+        mutate { it.copy(stepRewardsEnabled = enabled) }
 
     override suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) =
         mutate { it.copy(lastNotifiedUpdateVersionCode = versionCode) }

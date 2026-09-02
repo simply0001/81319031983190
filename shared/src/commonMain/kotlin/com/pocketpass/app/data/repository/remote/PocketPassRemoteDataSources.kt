@@ -233,6 +233,7 @@ data class ProductionRemoteDataSources(
     val achievements: AchievementsRemoteDataSource = EmptyAchievementsRemoteDataSource,
     val worldTour: WorldTourRemoteDataSource = EmptyWorldTourRemoteDataSource,
     val bingo: BingoRemoteDataSource = EmptyBingoRemoteDataSource,
+    val stepRewards: StepRewardsRemoteDataSource = EmptyStepRewardsRemoteDataSource,
 )
 
 object EmptyShopRemoteDataSource : ShopRemoteDataSource {

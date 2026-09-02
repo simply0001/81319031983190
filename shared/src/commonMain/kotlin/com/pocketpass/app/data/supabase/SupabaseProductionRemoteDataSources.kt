@@ -2,6 +2,8 @@ package com.pocketpass.app.data.supabase
 
 import com.pocketpass.app.logPlatformWarning
 import com.pocketpass.app.data.repository.remote.AchievementsRemoteDataSource
+import com.pocketpass.app.data.repository.remote.StepRewardsRemoteDataSource
+import com.pocketpass.app.steps.DailyStepReward
 import com.pocketpass.app.data.repository.remote.BingoRemoteDataSource
 import com.pocketpass.app.data.repository.remote.FriendsRemoteDataSource
 import com.pocketpass.app.data.repository.remote.WorldTourRemoteDataSource
@@ -187,6 +189,7 @@ class SupabaseProductionRemoteDataSources(
     AchievementsRemoteDataSource,
     WorldTourRemoteDataSource,
     BingoRemoteDataSource,
+    StepRewardsRemoteDataSource,
     FriendProfileStatsSource,
     ConnectedAppsSource {
     val sources: ProductionRemoteDataSources = ProductionRemoteDataSources(
@@ -200,6 +203,7 @@ class SupabaseProductionRemoteDataSources(
         achievements = this,
         worldTour = this,
         bingo = this,
+        stepRewards = this,
     )
 
     private fun requireActiveSession(accountId: UserId) {
@@ -334,6 +338,30 @@ class SupabaseProductionRemoteDataSources(
                 expiresAt = parseSupabaseInstant(credential.expiresAt),
             )
         }
+    }
+
+    override suspend fun reportDailySteps(
+        accountId: UserId,
+        localDay: String,
+        steps: Int,
+        utcOffsetMinutes: Int,
+    ): RepositoryResult<DailyStepReward> = remoteResult {
+        requireActiveSession(accountId)
+        val report = client.postgrest.rpc(
+            function = "report_daily_steps",
+            parameters = ReportDailyStepsRpc(
+                localDay = localDay,
+                steps = steps,
+                utcOffsetMinutes = utcOffsetMinutes,
+            ),
+        ).decodeSingle<DailyStepRewardDto>()
+        DailyStepReward(
+            localDay = report.localDay,
+            steps = report.steps,
+            tokensAwarded = report.tokensAwarded,
+            tokensCredited = report.tokensCredited,
+            balance = report.balance,
+        )
     }
 
     override suspend fun fetchEncounters(
@@ -1479,6 +1507,28 @@ private data class ProfileMiiRowDto(
     val avatarPath: String,
     @SerialName("updated_at")
     val updatedAt: String,
+)
+
+@Serializable
+private data class ReportDailyStepsRpc(
+    @SerialName("p_local_day")
+    val localDay: String,
+    @SerialName("p_steps")
+    val steps: Int,
+    @SerialName("p_utc_offset_minutes")
+    val utcOffsetMinutes: Int,
+)
+
+@Serializable
+private data class DailyStepRewardDto(
+    @SerialName("local_day")
+    val localDay: String,
+    val steps: Int,
+    @SerialName("tokens_awarded")
+    val tokensAwarded: Int,
+    @SerialName("tokens_credited")
+    val tokensCredited: Int,
+    val balance: Int,
 )
 
 @Serializable

@@ -2300,6 +2300,9 @@ class SettingsStateHolder(
     suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
         repository.setUpdateAlertsEnabled(enabled)
 
+    suspend fun setStepRewardsEnabled(enabled: Boolean) =
+        repository.setStepRewardsEnabled(enabled)
+
     suspend fun setRecentInteractionsSort(sort: RecentInteractionsSort) =
         repository.setRecentInteractionsSort(sort)
 

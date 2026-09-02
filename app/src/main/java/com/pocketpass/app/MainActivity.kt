@@ -1,5 +1,6 @@
 package com.pocketpass.app
 
+import com.pocketpass.app.steps.StepRewardsPermissionPolicy
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.ActivityManager
@@ -113,6 +114,27 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {}
+    private val stepPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val permission = StepRewardsPermissionPolicy.requiredPermission()
+        if (!granted && permission != null && !shouldShowRequestPermissionRationale(permission)) {
+            // Denied for good: only the app's settings page can grant it now.
+            stepSettingsLauncher.launch(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+            return@registerForActivityResult
+        }
+        viewModel.onStepRewardsPermissionResult()
+    }
+    private val stepSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        viewModel.onStepRewardsPermissionResult()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -161,6 +183,15 @@ class MainActivity : ComponentActivity() {
                     .nearby
                     .permissionRequests
                     .collect { beginNearbyPermissionRequest() }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                (application as PocketPassApplication)
+                    .container
+                    .stepSource
+                    .permissionRequests
+                    .collect { beginStepPermissionRequest() }
             }
         }
         lifecycleScope.launch {
@@ -470,6 +501,15 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { startActivity(intent) }
+    }
+
+    private fun beginStepPermissionRequest() {
+        val permission = StepRewardsPermissionPolicy.requiredPermission()
+        if (permission == null || StepRewardsPermissionPolicy.isGranted(this)) {
+            viewModel.onStepRewardsPermissionResult()
+            return
+        }
+        stepPermissionLauncher.launch(permission)
     }
 
     private fun beginNearbyPermissionRequest() {

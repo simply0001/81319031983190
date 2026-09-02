@@ -1,5 +1,8 @@
 package com.pocketpass.app.state
 
+import com.pocketpass.app.data.repository.FixtureStepRewardsRemoteDataSource
+import com.pocketpass.app.steps.IosPedometerStepSource
+import com.pocketpass.app.steps.StepRewardsTracker
 import com.pocketpass.app.IosBuildConfig
 import com.pocketpass.app.PocketPassRepositoryGraph
 import com.pocketpass.app.audio.IosBackgroundMusicPlayer
@@ -329,6 +332,15 @@ class IosAppContainer(
         )
     } ?: InactiveNearby
     override val appUpdate = DisabledAppUpdate
+    override val stepRewards: StepRewardsActions = StepRewardsTracker(
+        settingsRepository = settingsRepository,
+        settings = settings.settings,
+        activeAccountId = activeAccountId,
+        source = IosPedometerStepSource(),
+        remote = backend?.remote?.sources?.stepRewards
+            ?: FixtureStepRewardsRemoteDataSource(),
+        scope = applicationScope,
+    )
 
     private val widgetPublisher = WidgetSnapshotPublisher(
         scope = applicationScope,
@@ -369,10 +381,13 @@ class IosAppContainer(
             repositories.session.initialize()
         }
         val components = backend
+        registerForegroundObservers()
+        applicationScope.launch {
+            appForeground.collect { foreground -> stepRewards.setForeground(foreground) }
+        }
         if (components == null) {
             miiEditor.activateAccount(FixtureData.CurrentUserId.value)
         } else {
-            registerForegroundObservers()
             networkMonitor.start()
             realtimeRuntime?.start()
             applicationScope.launch {
@@ -542,6 +557,7 @@ class IosAppContainer(
         attempt { components.bundle.outboxProcessor.drain(accountId) }
         attempt { miiPublishCallback?.drain(accountId.value) }
         attempt { widgetPublisher.publishNow() }
+        attempt { if (!stepRewards.sampleAndClaim()) healthy = false }
         return healthy
     }
 

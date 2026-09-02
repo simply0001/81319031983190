@@ -67,6 +67,7 @@ interface PocketPassStoreContainer {
     val bingo: BingoStateHolder
     val settings: SettingsStateHolder
     val nearby: NearbyActions
+    val stepRewards: StepRewardsActions
     val appUpdate: AppUpdateActions
     val requestedAppUpdate: StateFlow<Boolean>
     val requestedConversation: StateFlow<ConversationId?>
