@@ -46,7 +46,10 @@ class NearbyReceiptVerdictBus {
     }
 
     companion object {
-        val DEFAULT_TIMEOUT: Duration = 6.seconds
+        // The LED pulse waits for the server's verdict so a repeat pass on the
+        // same day stays silent; when the receipt takes longer than this to
+        // clear, the pulse fires anyway rather than arriving seconds late.
+        val DEFAULT_TIMEOUT: Duration = 2.5.seconds
         private const val REPLAY = 32
     }
 }

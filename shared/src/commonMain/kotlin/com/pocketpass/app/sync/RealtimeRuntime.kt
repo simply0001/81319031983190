@@ -348,6 +348,11 @@ class RealtimeRuntime(
 
     private suspend fun collectRealtimeEncounterStats(accountId: UserId) {
         suspend fun refreshStats() {
+            // The encounters topic fires for both participants when a pass is
+            // recorded or confirmed, so the encounter list itself must refresh
+            // here too; the device that did not file the receipt otherwise
+            // learns about the pass only at the next full sync.
+            repositories.encounters.refresh(accountId)
             repositories.leaderboard.refresh(accountId, LeaderboardScope.Friends)
             repositories.leaderboard.refresh(accountId, LeaderboardScope.Global)
             repositories.worldTour.refresh(accountId)
