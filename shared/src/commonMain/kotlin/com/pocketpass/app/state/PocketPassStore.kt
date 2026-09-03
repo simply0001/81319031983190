@@ -1,5 +1,6 @@
 package com.pocketpass.app.state
 
+import com.pocketpass.app.domain.model.latestPerPerson
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.MessageId
 import com.pocketpass.app.domain.model.NotificationAction
@@ -631,7 +632,7 @@ class PocketPassStore(
                         nameEditor = feature.nameEditor,
                         recentInteractions = feature.recentInteractions.dataOr(
                             current.recentInteractions,
-                        ),
+                        ).latestPerPerson(),
                     )
                 }
             }

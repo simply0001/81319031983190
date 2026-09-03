@@ -507,6 +507,27 @@ class FeatureStateHoldersTest {
     }
 
     @Test
+    fun profileViewerRecognisesAnExistingFriendOpenedFromRecentInteractions() = runTest {
+        val friend = FixtureData.friends.first()
+        val holder = ProfileViewerStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            profileRepository = FixtureProfileRepository(),
+            friendsRepository = FixtureFriendsRepository(),
+            presenceRepository = FixturePresenceRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        holder.open(friend.profile, ProfileViewerSource.RecentInteraction)
+        runCurrent()
+
+        assertEquals(
+            ProfileFriendRequestState.Friends,
+            holder.state.value.friendRequestState,
+        )
+    }
+
+    @Test
     fun profileViewerRemovesSeedWhenAuthoritativeProfileIsUnavailable() = runTest {
         val holder = ProfileViewerStateHolder(
             accountId = flowOf(FixtureData.CurrentUserId),
