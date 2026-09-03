@@ -3,7 +3,7 @@ package com.pocketpass.app.input
 import android.view.KeyEvent
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.hasDismissableLayer
+import com.pocketpass.app.model.blocksShoulderTabs
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.controller.ControllerFocus
 import com.pocketpass.app.ui.controller.FocusDirection
@@ -105,7 +105,7 @@ fun handleNavigationGamepadKeyEvent(
         keyCode = event.keyCode,
         action = event.action,
         repeatCount = event.repeatCount,
-        hasBlockingOverlay = state.hasDismissableLayer(),
+        hasBlockingOverlay = state.blocksShoulderTabs(),
         hasFocusTargets = focus.hasTargets(),
         hasKeyboardSubmit = focus.keyboardSubmit != null,
         canSwapDisplay = focus.canSwapDisplay(),

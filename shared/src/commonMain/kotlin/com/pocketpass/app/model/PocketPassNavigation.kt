@@ -465,6 +465,28 @@ object PocketPassReducer {
         }
 }
 
+/**
+ * Whether the shoulder buttons should stop switching the main tabs. The
+ * Shop, Games and Leaderboard overlays are exempt: switching tabs simply
+ * closes them, so a player can hop from the shop to Settings with R1. A
+ * dialog inside one of them, or any other layer, still blocks the switch.
+ */
+fun PocketPassUiState.blocksShoulderTabs(): Boolean {
+    if (!hasDismissableLayer()) return false
+    val activitiesOverlayOpen = shop.visible || games.visible || leaderboard.visible
+    if (!activitiesOverlayOpen) return true
+    val nestedDialogOpen = shop.buyPromptItemId != null ||
+        games.bingoGoalIndex != null ||
+        games.worldTourRegionsVisible ||
+        leaderboard.settingsVisible
+    if (nestedDialogOpen) return true
+    return copy(
+        shop = shop.copy(visible = false),
+        games = games.copy(visible = false),
+        leaderboard = leaderboard.copy(visible = false),
+    ).hasDismissableLayer()
+}
+
 fun PocketPassUiState.hasDismissableLayer(): Boolean =
     (accountSetup.resolved && accountSetup.required) ||
         profileViewer.visible ||
