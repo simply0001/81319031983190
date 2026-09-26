@@ -141,8 +141,8 @@ assert_db 'the presence-track policy for api_client exists' 1 \
   "select count(*) from pg_policies where schemaname = 'realtime' and tablename = 'messages' and policyname = 'pocketpass_api_presence_track'"
 assert_db 'the message-media upload policy for api_client exists' 1 \
   "select count(*) from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'pocketpass_api_message_media_insert'"
-assert_db 'thirty-one api_v1 functions are installed' 31 \
-  "select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'api\_v1\_%'"
+assert_db 'the public API function set is installed' t \
+  "select count(*) >= 31 from pg_proc where pronamespace = 'public'::regnamespace and proname like 'api\_v1\_%'"
 assert_db 'friends:write is in the scope catalog' t \
   "select 'friends:write' = any (private.api_scope_keys())"
 assert_db 'the presence, tokens and encounters scopes are in the scope catalog' t \

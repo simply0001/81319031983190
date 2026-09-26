@@ -27,3 +27,10 @@ supplied replacement release notes. This authorizes publishing the beta update
 and its normal update-feed propagation. Build 26 is required so devices on
 build 25 receive the new version. This is not standing approval for subsequent
 releases or deployments.
+
+On 26 September 2026, the user explicitly requested a new public release with
+the notes stored in `releases/0.2.1-beta.md`. They separately approved deploying
+the Block Invites migration and updated privacy notice, and then approved the
+email-privacy migration and SMTP/TLS configuration before publication. These
+approvals cover this release and these prerequisites, not future deployments or
+releases.

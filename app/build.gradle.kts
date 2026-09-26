@@ -99,8 +99,8 @@ android {
         applicationId = "com.pocketpass.app"
         minSdk = 30
         targetSdk = 36
-        versionCode = 26
-        versionName = "0.2.0-beta"
+        versionCode = 27
+        versionName = "0.2.1-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
