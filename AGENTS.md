@@ -1,0 +1,350 @@
+# PocketPass
+
+StreetPass-style social app for Android dual-screen handhelds (AYN Thor first), phones, tablets and iOS. Kotlin Multiplatform + Compose Multiplatform client, self-hosted Supabase backend on one Oracle VM.
+
+This file is the single shared brief for every coding agent on this repo (OpenAI Codex reads it directly; Claude Code loads it through `CLAUDE.md`). It merges Codex's thread history, Claude Code's project memory and the docs as of 2026-09-26. When you learn something durable, update this file instead of a private memory, date the entry, never add secrets, and keep it under 32 KB (Codex truncates beyond that).
+
+## Owner rules
+
+### Approval
+- Ask first and get a fresh, explicit yes for each of these, every time:
+  - publishing a GitHub release, replacing a release APK, or changing the update feed;
+  - any production change: migrations, website, admin console, developer docs, Caddy, Kong, workers, env.
+- One approval covers one action. Approving a release does not approve the migrations it depends on. When you ask, list every pending prerequisite deploy together. "Dont publish without asking me again please" (2026-09-19) came after an unapproved release. The approval log is `docs/release-approval.md`.
+- Standing permission (2026-09-23): build and `adb install -r` onto the owner's Thor without asking. "Push to the thor" means exactly that.
+- Commit or push only when asked. `main` carries untracked work (`video/`, `.claude/`), so never reset, clean, or stage the whole tree.
+- "Push to the githubs" means:
+  - `origin`, plus a snapshot to the public iOS-build mirror;
+  - never the release repo;
+  - never `.claude/` or `video/`.
+- "Make a release APK in Downloads" means build a signed APK with a bumped versionCode, and publish nothing.
+- The website stays a local preview until the owner says "push the website".
+
+### Devices, accounts, data
+- The Thor runs the owner's real account. Install only release-signed production builds. Before each install, check the generated release `BuildConfig`:
+  - `BACKEND_ENABLED=true`
+  - URL `https://api.pocketpass.xyz`
+  - a non-empty publishable key
+  - package `com.pocketpass.app`, signed with the same certificate as the previous production APK
+- Never install a fixture or debug build on the Thor. A custom `GRADLE_USER_HOME` skips `~/.gradle/gradle.properties` and silently produces a fixture build; that happened on 2026-09-23.
+- After installing, confirm `firstInstallTime` is still 2026-09-02 13:43:54. Never uninstall. `connectedDebugAndroidTest` uninstalls the app, so it runs on emulators only.
+- The owner often tests himself. "Just install, no need to test" means exactly that; otherwise do what the current request asks. The physical screen is the truth: don't "fix" things that only look wrong in adb captures.
+- Keep emulator windows visible when the owner wants to watch.
+- Never probe with real users' accounts or emails. Use disposable test accounts and delete them afterwards.
+  - Never message real contacts from the owner's account.
+  - Ask before changing the owner's live settings, and restore them afterwards.
+  - The owner signs in on emulators himself; never ask for a password.
+- Secrets never go into chat, the repo, logs, or an APK.
+  - The owner keeps them in `C:\Users\super\Documents\PocketPass-backups\` (`backend\`, `signing\`, `production-backups\`) and Downloads.
+  - A Resend key once leaked through diagnostic output and had to be rotated.
+- OneDrive is gone (2026-09-26). The only path is `C:\Users\super\Documents\PocketPass`; never recreate `C:\Users\super\OneDrive`.
+
+### Code
+- No code comments: no KDoc, no `//`, no XML/SVG `<!-- -->`. Name things instead. Before finishing, grep your diff for `/**`, `//` and `<!--`. The owner asked for this twice (07-29, 09-04).
+- Kotlin official style, 4 spaces, trailing commas.
+- Naming patterns:
+  - classes: `*StateHolder`, `*UiState`, `*Event`
+  - repositories: `Fixture*` / `Room*` / `Production*` / `Supabase*`
+  - platform code: `Ios*` actuals, `.android.kt` / `.ios.kt` files
+  - test tags: snake_case (`"message_send"`)
+- Applied migrations are immutable; fix mistakes with a new migration. Deploy SQL before an APK that needs it.
+
+### Design and motion
+- Match Figma 1:1 with the real exported assets. Never redraw them, and never swap in platform icons or system emoji. When the owner asks for your own design, don't copy Figma.
+- Match the rest of the app:
+  - glyphs use the round badge;
+  - selected options use the Theme selector's green gradient and border;
+  - conversation rows share one blue style.
+- Motion stays restrained: slide, translate, expand or zoom. No fades, no big pop-ins, no flashes on refresh.
+- Controller highlight:
+  - It never disappears: not on A, B, tab switches, or entering and leaving Shop, Games or Leaderboard.
+  - It animates smoothly, hugs borders rather than text, and moves in visual order.
+  - A/tap on actionable items plays the confirm sound; the nav bar keeps its own sounds.
+- Change only what was asked, and keep everything else exactly the same. Don't touch what was just fixed.
+- For big features, ask many precise multiple-choice questions first. Video work starts with a storyboard and waits for approval.
+
+### Copy
+- Write short, plain sentences with no AI-sounding filler and no "you can" padding. Don't describe what a picture shows; alt text is a few words. Use the owner's exact wording when he gives it.
+- Terms: "Piip", not Mii, in user-facing text. The 8-digit **Friend Code** (shown as `1234 5678`) replaces "account ID".
+- Credits: k0o1, BrocoDev, simply (lowercase), and saby for "Official soundtrack, SFX".
+- Release notes: the owner's text verbatim, formatted like earlier releases (blank line between paragraphs), app changes only unless told otherwise.
+
+## Current state (2026-09-26)
+
+### Android
+Published: **0.2.1-beta, versionCode 27** (2026-09-26, floor `minSupportedVersionCode` 23). Both feeds serve 27. It added:
+- a Show Boards toggle;
+- separate Block Messages and Block Invites;
+- Health Connect steps;
+- confirmation sounds.
+
+Earlier releases:
+| Version | versionCode | Notes |
+| --- | --- | --- |
+| 0.2.0-beta | 26 | 09-23; a rename of 0.1.11-alpha (25) |
+| 0.1.10-alpha | 24 | tag exists, no GitHub release |
+| 0.1.9-alpha | 23 | forced in-place APK replacement |
+| 0.1.8-alpha | 21 | 09-12 |
+| 0.1.7-alpha | 20 | 09-09 |
+
+### Backend
+Migrations are applied through `20260926000200_email_otp_signup_guard` (checked on the VM). The 09-26 changes:
+- `20260925000100_split_social_privacy` and `20260926000100_email_privacy`;
+- Resend SMTP moved to implicit TLS on port 465;
+- privacy notice live at `pocketpass.xyz/privacy`;
+- Kong allows public `POST /auth/v1/signup` only for `@users.pocketpass.xyz`.
+
+The pre-hotfix backup is in `PocketPass-backups\production-backups\`.
+
+### iOS
+Not released; the owner deferred it and wants TestFlight first.
+- Sideload IPAs come from mirror CI.
+- The APNs key is in Firebase.
+- The Distribution certificate and the encrypted signing package are in `PocketPass-backups\backend\apple-signing\`.
+- Missing: App Store Connect provisioning profiles for `xyz.pocketpass.PocketPass` and `.widget` (App Group `group.xyz.pocketpass`).
+- Never tested on an iPhone: street-pass with the Thor, APNs delivery, widgets under Sideloadly signing, and the third-party OAuth callback.
+
+### Unverified
+- End-to-end email sign-up after the OTP hotfix.
+- The consented OAuth `email` flow.
+- A backup restore.
+- Same-account BLE skip on two real devices.
+- Boards push on a real handset.
+- An external OAuth app running the Boards flow.
+
+### Test drift (not regressions)
+- `admin_console.test.sql` expects 8 permissions; there are 18.
+- `public_api_followups.test.sql` has 3 stale expectations.
+- Older pgTAP files assume an empty database.
+- 3 known Ko-fi count failures.
+- `WidgetBindingStoreTest` has 3 failures on Windows.
+- `PuzzleSwapFocusUiTest` compiles but has never run.
+- There is no local Postgres.
+
+### Thor quirks
+- System WebView 109.
+- `PocketPassReducer.reduce` is over the ART compile limit (17,833 instructions).
+
+### Open asks
+- The top-screen notification ticker should scroll a little, then reset (09-12).
+- Declutter the consent/permission review, move it to the top screen, and flag dangerous permissions (09-21).
+- Before any store release: update the privacy policy and declare `READ_STEPS`.
+- Moving Kong to Envoy is not started.
+- The public API cannot read or set Block Invites: `set_invite_privacy` refuses OAuth tokens, and `privacy.get`/`privacy.set` cover Block Messages only.
+
+### Video (`video/pocketpass-presentation`, Remotion + Cavalry, untracked)
+- The opening v5 preview (10.4 s) awaits review.
+- The accepted base is Cavalry v2 (1:34).
+- Rules: real UI only, no fades or full-page slides, Cocoon-style continuous background, upright Thor PNGs.
+
+### Docs
+- `docs/` holds feature notes and dated logs. `docs/2026-09-22-handoff.md` is the detailed log for 22 to 26 September; this file wins where they differ.
+- The docs were brought up to date on 2026-09-26. The corrected developer docs (`infra/supabase/developer/docs.html`, Block Invites wording) are not deployed yet; deploying them needs approval.
+- iOS still defaults to 0.1.8 (build 21) in `ios-app/project.yml` and `APP_STORE.md`. Pick the version at the first TestFlight upload.
+
+## Repos
+- `origin` = `Hinoaaaaaf212/pocketpass`: private source of truth.
+- `mirror` / `public` = `simply0001/81319031983190`: public, the only place CI runs.
+  - It carries the private tree exactly, `infra/` and README included: one commit per private commit, with the same tree and message, and no private history.
+  - Recipe per private commit: `git commit-tree <commit>^{tree} -p mirror/main -m "<same message>"`, then `git push mirror <new>:refs/heads/main`. Before 09-26 the mirror got HEAD minus `infra/` with a blank README.
+  - `.claude/` and `video/` are never committed, so they never reach it. Docs-only commits carry `[skip ci]`.
+- `Hinoaaaaaf212/pocketpass-release`: public releases, written only by `scripts/publish-release.ps1`.
+- Every workflow is guarded by `if: github.repository == 'simply0001/81319031983190'`. Never remove the guard; macOS minutes are billed on the private repo.
+  - `ci.yml`: push/PR; Ubuntu JDK 21 build + tests, macOS simulator tests.
+  - `ios-app.yml`: unsigned IPA.
+  - `ios-smoke.yml`: 30 s simulator launch crash watch. Run it before handing out any IPA.
+  - `ios-distribution.yml`: signed archive, never dispatched.
+  - `ios-spike.yml`.
+
+## Layout
+- `app/`: Android host (`com.pocketpass.app`): activities, `AppContainer` manual DI, BLE, workers, FCM, updater, Glance widgets, the WebView Mii renderer, gamepad input.
+- `shared/`: KMP (androidLibrary, iosArm64, iosSimulatorArm64). Contents:
+  - domain, Room DB (version **22**; schemas in `shared/schemas`), repositories;
+  - Supabase sources, `sync/` (outbox, `RealtimeRuntime`), `nearby/` protocol + crypto;
+  - `feature/` state holders, `boards/`, `steps/`, `widget/`, `state/PocketPassStore`, `model/`.
+- `ui/`: Compose Multiplatform screens:
+  - `PocketPassDisplays.kt`, `DesignSystem.kt`, `screens/`, `phone/`, `controller/ControllerFocus.kt`, `theme/PocketPalette.kt`;
+  - resources in `composeResources/`. `Res` is internal, so anything that reads fonts or assets must live in `:ui`.
+- `ios-app/`: XcodeGen `project.yml`, a UIKit host (`AppDelegate` → `PhoneEntryKt.PhoneAppViewController()`), the Swift WidgetKit `PocketPassWidget`, `scripts/archive.sh`, `APP_STORE.md`.
+- `ios-spike/`: a separate Gradle build (`./gradlew -p ios-spike`), historical.
+- `infra/supabase/`: the backend. `README.md` (58 KB) is the operations manual.
+- `tools/mii-renderer/`: reproducible renderer build.
+- `scripts/`: release and asset helpers.
+- `releases/<version>.md`: release notes (APKs there are ignored).
+- `docs/`: feature notes, the handoff, the approval log.
+- `captures/`: ignored scratch space for review APKs and screenshots.
+- `.toolchains/`: ignored vendored SDK/JDK/emulators.
+
+## Architecture
+- **Displays.** `MainActivity` shows `TopDisplayApp`. `CompanionDisplayPresentation` puts `BottomDisplayApp` on the `DISPLAY_CATEGORY_PRESENTATION` display, preferring 1240x1080.
+  - Design sizes: top 1920x1080, bottom 1240x1080. `DesignSurface` treats Figma coordinates as units.
+  - Without a companion display, the app shows `PhoneApp` (1240 units on the short side). Tablets get a rail + preview + content layout.
+  - `DisplayRoles.BOTTOM_PRIMARY_DEVICES` (Anbernic RG DS) swaps roles.
+  - `PocketPassLauncherActivity` relaunches on the top screen.
+  - On 4:3 panels, full-width cards (`PocketPanel` x 50 / w 1140) stretch, and their children must use `anchoredBounds`.
+- **State.** `PocketPassStore` (shared) owns `PocketPassUiState` and routes `dispatch(PocketPassEvent)` to the pure `PocketPassReducer` or to feature holders. `routes: List<PocketPassRoute>` is a hand-rolled back stack; navigation3 is unused apart from `NavKeyMarker`, which must stay `api()`. Android wraps the store in `PocketPassViewModel`; iOS wraps it in `PhoneEntry.kt`.
+- **Data.** Room is the UI source of truth; DataStore holds preferences only. Offline writes go through an outbox with client operation UUIDs, drained by WorkManager (Android) or BGTaskScheduler (iOS). Realtime is only an invalidation signal: the app reconciles from REST.
+  - Fixture mode is on when `!BACKEND_ENABLED` or the key is blank.
+- **Backend.**
+  - Stack: Oracle VM (OCI eu-stockholm-1), Supabase v0.8.0 pinned `241bb11c`, Postgres 17, Kong, Caddy, `board-media` (Python), `message-push` (compose profile `push`). No Edge Functions.
+  - Hosts:
+    - `pocketpass.xyz`: website + feed mirror
+    - `api.`
+    - `links.`: App Links, auth callback, `/oauth/consent`, update feed
+    - `developer.`: portal + `/docs`
+    - `admin.`: console, 18 permissions; owners are set only via psql
+    - `studio.`: owner-gated
+  - DNS is at Dynadot; keep the Resend records.
+- **Auth.** Three ways to sign in:
+  - email 6-digit OTP (10 min) via Resend;
+  - Discord OAuth, enabled in production (`infra/supabase/config.toml` is the local CLI config, not production);
+  - username accounts, `<username>@users.pocketpass.xyz` with a password (no reset; `/auth/v1/recover` returns 404; link an email in Settings > Account).
+
+  Kong rate-limits OTP, signup, password and friend-code requests. The mobile callback is exactly `pocketpass://auth/callback`.
+- **Public API.**
+  - OAuth 2.1 with PKCE S256 via GoTrue; the token role is `api_client`.
+  - Calls are `POST /v1/<resource>.<action>`, mapped to `api_v1_*` RPCs.
+  - New scopes need re-consent. Staff tools are refused to OAuth identities.
+  - Docs are generated by `infra/supabase/public-api/update-docs.mjs` (`--check`). The Boards contract is `public-api/boards.json`.
+  - Adding a scope means updating the scope assertions in the `public_api_*`, `developer_portal` and `public_api_role` tests, plus the docs and README tables.
+  - Koji ("Sign in with PocketPass") is in beta.
+- **Nearby (raw BLE).**
+  - The advert carries a version + nonce. The handshake is P-256 ECDH + AES-256-GCM, and the server resolves profiles.
+  - The server caps live passes at 64 per account. The client returns unexposed passes to the pool.
+  - Never delete credentials server-side (receipts FK cascade); mark `consumed_at`.
+  - Receipts use PK (encounter_id, reporter_id, transcript_hash).
+  - Same-account devices skip each other via a daily HMAC tag in the low half of the nonce.
+  - iOS cannot advertise service data, so iOS always initiates. Android scanners accept bare-UUID adverts.
+  - Tokens: 30 for a first meeting, then 5 per later day, 1 per pair per UTC day.
+  - On a confirmed encounter the Thor LEDs pulse (`ThorEncounterLedFlasher`, `joystick_light_enabled`); rejected receipts don't pulse.
+- **Steps.** Health Connect is preferred when read access is granted; manual/unknown records are excluded and overlaps de-duplicated. Fallback is `TYPE_STEP_COUNTER`; iOS uses CoreMotion. The Thor has no Health Connect provider.
+  - Server: `report_daily_steps` pays 1 token per 400 steps, up to 25 per day.
+  - The setting defaults to off.
+- **Puzzle Swap.**
+  - The first puzzle is the player's own Piip (4x4); after that come art panels in order.
+  - Pieces come from encounters, from 15 tokens each, or from steps (at 5,000 and 10,000 a day).
+  - To add panels, follow the README "Puzzle Swap" section. Retire a panel with `is_active=false`; the migration cannot be rolled back.
+- **Streaks.** A streak counts local days with an encounter. The weekly recap (`pocketpass-weekly-recap` cron) runs Sunday after 18:00 local, using `private.user_clock_offsets`.
+- **Boards.**
+  - An app-within-the-app inside Messages; L/R cycles Boards, Messages, Activity.
+  - Posts are text or one 4:3 drawing: 800x600 paper, with the pixel pen on a 320x240 grid. Limits: posts 1,000 characters, replies 500.
+  - Private tables behind `boards_query` / `boards_mutate`. The settings table is a singleton, so updates need `WHERE singleton = true`.
+  - Emergency switch: dashboard → Feature controls. Never drop tables or roll back Room.
+  - Retention cron runs 03:23 UTC. Music: `bgm_boards`.
+- **Privacy.** Block Messages rejects new DMs. Block Invites rejects group/board invites and friend requests. Triggers enforce both at the write boundary; the API returns 403 `FRIEND_REQUESTS_BLOCKED`. Show Boards is local only.
+  - Email is visible only to the owner, permissioned admins, and apps granted the `email` scope.
+- **Chat.** Account-wide `chat_bubble_colour` presets. Images and GIFs up to 10 MiB. Push goes through Firebase `pocketpass-e005c` as data-only FCM; iOS alerts are generic.
+  - Emoji are only the Sudofont DS glyphs, plus the added crying face (`ui/.../components/Sudofont.kt`).
+- **Shop/Ko-fi.** Wear equips immediately and rolls back if the server refuses. Ko-fi supporters get a 36-day window; payments match by email or by `@username`/friend code in the message.
+  - The leaderboard server returns 100 players; the app shows 20/50/75/100 (default 20).
+- **Updater.** `AppUpdateCheckWorker` reads `https://links.pocketpass.xyz/updates/latest.json`. The VM poller rewrites that file every 5 minutes from the release repo.
+
+## Build and test on this PC
+- JDK: use the Android Studio JBR (`C:\Program Files\Android\Android Studio\jbr`); the java on PATH is Oracle 25.
+  - PowerShell: `$env:JAVA_HOME=...; .\gradlew.bat ...`
+  - Git Bash: `export JAVA_HOME=...; ./gradlew ...` (`MSYS_NO_PATHCONV=1` breaks the wrapper).
+- Build output is redirected to `%LOCALAPPDATA%\PocketPass\gradle\{app,shared,ui}`. The APKs are at `...\app\outputs\apk\{debug,release}\`, not `app/build`.
+- Production values come from `~/.gradle/gradle.properties` (`POCKETPASS_BACKEND_ENABLED`, `POCKETPASS_SUPABASE_PUBLISHABLE_KEY`).
+  - Fixture build: `-PPOCKETPASS_BACKEND_ENABLED=false` (emulators only; the Petah Griffin profile; the Mii editor is off).
+  - Release: `:app:assembleRelease -PPOCKETPASS_REQUIRE_FIREBASE=true`. Signing comes from `~/.pocketpass/signing/signing.properties`; `google-services.json` from `..\PocketPass-backups\backend\`.
+- Host tests: `:shared:testAndroidHostTest :ui:testAndroidHostTest :app:testDebugUnitTest`.
+  - For shared/ui changes, also run `:shared:compileCommonMainKotlinMetadata :ui:compileCommonMainKotlinMetadata`.
+  - iOS linking and simulator tests need macOS, so use mirror CI.
+  - Lint: `:app:lintRelease`.
+- Instrumented tests: `$env:ANDROID_SERIAL="emulator-5554"; .\gradlew.bat :app:connectedDebugAndroidTest`. For one class: `adb shell am instrument -w -r -e class com.pocketpass.app.<Test> com.pocketpass.app.test/androidx.test.runner.AndroidJUnitRunner`.
+- Backend tests:
+  - pgTAP `infra/supabase/tests/database/*.test.sql` needs the VM.
+  - Boards: `BOARDS_TEST_PUBLIC_API=1 node --test infra/supabase/tests/boards/*.test.mjs` (PGlite via `npm ci` in `push/`).
+  - Push: `npm test` and `python -m unittest -v test_worker.py` in `infra/supabase/push`.
+  - Board media: `python -m unittest discover -s infra/supabase/board-media -p test_server.py`.
+- Tooling quirks:
+  - Bash heredocs mangle large files. Create files with a write tool; do multi-line edits with a Python script file (`newline=''`).
+  - `core.autocrlf=true`, and working-tree endings are mixed. Keep `.sh`, `.sql` and everything under `infra/supabase/**` LF.
+  - `git cherry-pick` has no `-q`.
+  - `adb shell input text` scrambles capitals, so type lowercase. Wait between taps with `adb shell sleep N`.
+
+## Devices and emulators
+- **Thor.** The owner's Thor is `38c90fe5`: Android 13, top 1920x1080, bottom 1240x1080.
+  - Key events go to logical display 0. Read touch and capture ids from `dumpsys display` / `dumpsys SurfaceFlinger --display-id`, because they change.
+  - `run-as` does not work. `scripts/capture-thor-tabs.sh` captures both screens.
+- **Other hardware.** Samsung A54 `RZCW90YL9LV`: USB drops in and out. Other targets: AYANEO Pocket DS (top-primary), Anbernic RG DS (bottom-primary), Odin 3, tablets.
+- **AVDs.** They live in `.toolchains/android-sdk`; start them with `emulator/emulator.exe -avd <name>`.
+  - `pp36`: API 36 with 16 KB pages, Pixel 8, `-port 5554`.
+  - `pp30`: API 30.
+  - `pocketpass_tablet`: Pixel Tablet.
+  - `pocketds`: two displays, 1920x1080 plus 1024x768, `-gpu host -no-snapshot -port 5556`.
+- **pocketds details.**
+  - Bottom is display 2. Tap at (71 + x*0.7111, y*0.7111) via `input -d 2 tap`.
+  - In-app back is `KEYCODE_BUTTON_B`; `KEYCODE_BACK` closes the app.
+  - Scroll by swiping in the side bar: `input -d 2 swipe 20 700 20 200 1200`.
+- **Dual-screen on a phone AVD.** `settings put global overlay_display_devices 1240x1080/240`; read the overlay id each boot. Don't add or remove it while the app runs; it segfaults.
+- **Emulator gotchas.**
+  - QEMU 0xc0000005: use software graphics with Vulkan off.
+  - Emulators have no step sensor.
+  - Non-exported receivers ignore `am broadcast` on API 36.
+  - Install with `adb install -r -g`, then tap Allow Permissions.
+
+## Releasing Android
+1. Feature commits first. Then bump `versionCode`/`versionName` in `app/build.gradle.kts` and put the owner's notes in `releases/<version>.md`.
+2. Apply any backend migrations the build needs, with separate approval.
+3. In PowerShell with `JAVA_HOME` set to the JBR, run `scripts\publish-release.ps1 -NotesFile releases\<v>.md -MinSupportedVersionCode <floor> -DryRun`. It builds, zipaligns, checks 16 KB zip/ELF alignment and stages in `%TEMP%`.
+4. Verify with `aapt2 dump badging` and the BuildConfig checks above.
+5. Rerun with `-SkipBuild` to publish. It needs `gh` auth, and it refuses if the tag already exists.
+6. Always pass the current floor (23 today). `poll-app-update.sh` drops the floor when it's omitted, which silently un-forces old clients.
+7. After at most 5 minutes, check both `links.pocketpass.xyz/updates/latest.json` and `pocketpass.xyz/updates/latest.json` for version, notes and SHA-256.
+8. Push `origin main` yourself; the script never touches the source repo.
+- To replace the APK in an existing release, bump only `versionCode` and keep the name, title and notes. Raise the floor to force the update.
+
+## Backend operations
+- Connect with `ssh pocketpass-vm` (user `ubuntu`, passwordless sudo, in the docker group). fail2ban bans for 1 h after 5 failures in 10 min, so never loop over users or keys.
+- `/opt/pocketpass/app` is a plain file tree, not a git checkout.
+  - To deploy a file: `scp` it to `/tmp/<stage>/`, then `sudo install -m 644` (scripts: `-m 755`).
+  - `.env.production` is root-owned `0600`. Never replace it or copy local secrets over.
+  - Run scripts as root: `cd /opt/pocketpass/app && sudo ENV_FILE=/opt/pocketpass/app/infra/supabase/.env.production infra/supabase/scripts/<script>.sh`.
+  - Run remote scripts from an scp'd file, not a piped heredoc. `migrate.sh` and `psql` read stdin.
+- Deploy pattern:
+  1. `backup.sh`: encrypted `.age` plus a `.sha256`. Copy it off the VM to `PocketPass-backups\production-backups\`.
+  2. Save the files you're about to change under `/opt/pocketpass/deploy-backups/<topic>-<date>/` (older copies are in `/opt/pocketpass/rollback/`).
+  3. Dry run with rollback only: `begin; <migration> <pgTAP> rollback;` into `docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -Atq -f -`.
+  4. `migrate.sh`.
+  5. pgTAP, `health.sh`, `validate-auth-production.sh`, `validate-public-api-production.sh`.
+  6. Record the SHA-256 hashes.
+- Caddy, compose and web changes:
+  - Validate the Caddyfile in a `caddy:2.11.4-alpine` container.
+  - Recreate with `source scripts/common.sh; compose up -d --no-deps --force-recreate --wait caddy`. Caddy runs `admin off`, so there is no reload. The first `health.sh` after a recreate may fail transiently.
+  - The website, admin and developer files are bind-mounted and go live on copy.
+  - After changing `PUBLIC_API_ENABLED`, recreate `auth` and `docker restart supabase-kong`; otherwise requests return 502.
+- Never:
+  - `docker compose down -v` or the upstream reset;
+  - `restore.sh` on the live server;
+  - flush iptables;
+  - add `ports:` for Kong, Supavisor or Studio;
+  - use Watchtower or floating image tags.
+- Timers:
+  - backup 03:30 UTC (7 days kept), off-site pull 04:15;
+  - health every 30 min, update poll every 5 min;
+  - alerts in `/var/log/pocketpass-alerts.log`.
+
+## Subsystem recipes
+- **Mii renderer.**
+  - Built on upstream `ariankordi/mii-creator` at pinned `1cd6b7d`, plus `patches/pocketpass-renderer.patch`, output to `app/src/main/assets/mii_renderer/`. Never auto-update upstream.
+  - Rebuild with `tools\mii-renderer\build.ps1 -BunExecutable C:\Users\super\.bun\bun-windows-x64\bun.exe`:
+    - First rewrite `tools/mii-renderer/src/renderer.ts` and `dist/renderer.js` with LF endings.
+    - Do a two-pass hash update: the build fails with the new hash; put it in `bundle.sha256`; run `-UpdateBundle`; then run once more without flags.
+  - `RENDERER_VERSION` is duplicated in `IosMiiRenderController`; keep it in sync.
+  - Hats: `hat_N.glb` is type N-1. hat_10 is the Halo, hat_11 the Hijab.
+  - Headless check without a device:
+    - Serve the renderer dir over http.
+    - Drive it with puppeteer-core and Chrome (`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`).
+    - Inject `window.PocketPassNative`.
+    - Send base64 JSON via `PocketPassMiiRenderer.receiveBase64`.
+    - The first boot takes about 2.5 minutes.
+- **iOS gotchas.**
+  - Every CMP target needs `CADisableMinimumFrameDurationOnPhone=true` in Info.plist, or it crashes at launch.
+  - `ui/.../files/figma/home_avatar_petah.svg` is really a PNG. Check magic bytes before copying assets into xcassets.
+  - A top-level function added to an existing shared file may not resolve from `:app` (KMP incremental bug). Put it in a new file or make it a member.
+  - The Keychain service is `xyz.pocketpass.securestore`.
+  - Sideloadly's "Remove Extensions" must stay off.
+  - Crash reports: Settings → Privacy & Security → Analytics Data; `lastExceptionBacktrace` names the function.
+- **Glance widgets.** `Res` lives in `:ui`, so bitmap renderers go there. A Glance column holds at most 10 children.
+- **Controller focus.** Horizontal card rows scroll themselves to the focused card via `snapshotFlow`. Check Up/Down/L/R order closely; the owner reports focus bugs often.
