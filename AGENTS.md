@@ -119,6 +119,7 @@ Not released; the owner deferred it and wants TestFlight first.
 - 3 known Ko-fi count failures.
 - `WidgetBindingStoreTest` has 3 failures on Windows.
 - `PuzzleSwapFocusUiTest` compiles but has never run.
+- `:app:lintRelease` stops on 2 `MissingPermission` errors at `notify()` in `push/BoardNotifications.kt` and `push/MessageNotifications.kt`. Both calls are guarded by `allowed()`; the errors predate the 2026-09-27 dependency update.
 - There is no local Postgres.
 
 ### Thor quirks
@@ -130,10 +131,11 @@ Not released; the owner deferred it and wants TestFlight first.
 - Declutter the consent/permission review, move it to the top screen, and flag dangerous permissions (09-21).
 - Before any store release: update the privacy policy and declare `READ_STEPS`.
 - Moving Kong to Envoy is not started.
+- Realtime is pinned to protocol V1 (`vsn` in `PocketPassSupabaseClientFactory`) since the 2026-09-27 move to Supabase 3.8.0 / Kotlin 2.4.20 / AGP 9.4.1 / Gradle 9.7.1. The server (Realtime v2.102.3) also accepts V2, the client default; switch after testing on a device. The Supabase server needed no update for that client.
 - The public API cannot read or set Block Invites: `set_invite_privacy` refuses OAuth tokens, and `privacy.get`/`privacy.set` cover Block Messages only.
 
 ### Video (`video/pocketpass-presentation`, Remotion + Cavalry, untracked)
-- Current review: presentation v8 (1:41.2, 60 fps, true colours, 2026-09-26) = the Remotion `PocketPassOpeningV6` opening + the 60 fps Cavalry body (`cavalry-v6/PocketPass`, rendered as PNGs and packed losslessly), built by `scripts/assemble-presentation-v8.py`. The refined animated background is shared by both halves (`src/opening-v6/background-motion.ts`). See the project README for the rebuild steps.
+- Current review: presentation v9 (1:41.2, 60 fps, true colours, rewritten captions without choppy full stops, 2026-09-27) = the Remotion `PocketPassOpeningV6` opening + the 60 fps Cavalry body (`cavalry-v6/PocketPass`, rendered as PNGs and packed losslessly), built by `scripts/assemble-presentation-v9.py`. The refined animated background is shared by both halves (`src/opening-v6/background-motion.ts`). See the project README for the rebuild steps.
 - The accepted base is Cavalry v2 (1:34).
 - Cavalry's MP4 export encodes BT.601 but labels BT.709, so every Cavalry MP4 here shows reds too hot and greens too dark (v3 included). Render finals from Cavalry as PNG sequences; to read an old Cavalry MP4 in true colours, decode with `scale=in_color_matrix=bt601`.
 - Retiming a Cavalry scene means editing the `.cv` JSON: double `keyframe.timeOffset`, time markers and the composition range. Footage `time` is read as frames at the composition rate, so recorded clips need a `/2` time expression. Thousands of `api.keyframe` calls stall Cavalry; write keyframes into the JSON instead.
@@ -263,6 +265,7 @@ Not released; the owner deferred it and wants TestFlight first.
 - Tooling quirks:
   - Bash heredocs mangle large files. Create files with a write tool; do multi-line edits with a Python script file (`newline=''`).
   - `core.autocrlf=true`, and working-tree endings are mixed. Keep `.sh`, `.sql` and everything under `infra/supabase/**` LF.
+  - `gradlew wrapper` swaps the repo's short, comment-free `gradlew`/`gradlew.bat` for Gradle's stock scripts. To bump Gradle, edit `distributionUrl` in `gradle-wrapper.properties` only.
   - `git cherry-pick` has no `-q`.
   - `adb shell input text` scrambles capitals, so type lowercase. Wait between taps with `adb shell sleep N`.
 
@@ -283,6 +286,7 @@ Not released; the owner deferred it and wants TestFlight first.
 - **Dual-screen on a phone AVD.** `settings put global overlay_display_devices 1240x1080/240`; read the overlay id each boot. Don't add or remove it while the app runs; it segfaults.
 - **Emulator gotchas.**
   - QEMU 0xc0000005: use software graphics with Vulkan off.
+  - With `-gpu swiftshader_indirect`, `pp36` segfaults (exit 139) within minutes, usually on Messages or Settings, whatever the app version. `-gpu host` got through the same screens without a crash (2026-09-27).
   - Emulators have no step sensor.
   - Non-exported receivers ignore `am broadcast` on API 36.
   - Install with `adb install -r -g`, then tap Allow Permissions.
