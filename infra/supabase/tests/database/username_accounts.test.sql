@@ -2,7 +2,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select extensions.plan(14);
+select extensions.plan(16);
 
 insert into auth.users (
   instance_id,
@@ -120,7 +120,7 @@ select extensions.ok(
 
 select pg_catalog.set_config('pocketpass.enforce_signup_guard', 'on', true);
 
-select extensions.throws_ok(
+select extensions.lives_ok(
   $$
     insert into auth.users (
       instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -139,9 +139,13 @@ select extensions.throws_ok(
       now(), now(), '', '', '', ''
     )
   $$,
-  '22023',
-  null,
-  'password sign-ups with a real email address are refused'
+  'GoTrue-generated passwords do not block email OTP sign-ups'
+);
+
+select extensions.is(
+  (select encrypted_password from auth.users where id = '98c00000-0000-4000-8000-000000000004'),
+  '',
+  'email OTP accounts do not retain the generated password hash'
 );
 
 select extensions.throws_ok(
@@ -212,6 +216,11 @@ select extensions.lives_ok(
     )
   $$,
   'valid username sign-ups pass the guard'
+);
+
+select extensions.ok(
+  (select encrypted_password <> '' from auth.users where id = '98c00000-0000-4000-8000-000000000007'),
+  'PocketPass username accounts retain their password hash'
 );
 
 select extensions.lives_ok(

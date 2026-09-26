@@ -108,6 +108,23 @@ for route_name in \
     || fail "kong.yml is missing the ${route_name} route"
 done
 
+source "${INFRA_DIR}/scripts/common.sh"
+publishable_key="$(require_real_value SUPABASE_PUBLISHABLE_KEY)"
+signup_probe="$(
+  curl --silent --show-error \
+    --write-out '\n%{http_code}' \
+    --request POST \
+    --header "apikey: ${publishable_key}" \
+    --header 'Content-Type: application/json' \
+    --data '{"email":"blocked-probe@example.invalid","password":"x"}' \
+    "${API_BASE}/auth/v1/signup"
+)"
+signup_status="${signup_probe##*$'\n'}"
+signup_body="${signup_probe%$'\n'*}"
+[[ "${signup_status}" == 400 && "${signup_body}" == *'"username_signup_required"'* ]] \
+  || fail 'direct email/password sign-up was not stopped at the gateway'
+unset publishable_key signup_probe signup_status signup_body
+
 curl --fail --silent --show-error \
   "${LINKS_BASE}/auth-email/otp.html" >/dev/null
 curl --fail --silent --show-error \

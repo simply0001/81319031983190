@@ -34,3 +34,9 @@ the Block Invites migration and updated privacy notice, and then approved the
 email-privacy migration and SMTP/TLS configuration before publication. These
 approvals cover this release and these prerequisites, not future deployments or
 releases.
+
+Later on 26 September 2026, after reporting that new email sign-ups returned
+"PocketPass sign in is temporarily unavailable," the user explicitly approved
+deploying the focused email-OTP sign-up hotfix after testing and a fresh
+encrypted backup. That approval covers the gateway sign-up restriction and
+`20260926000200_email_otp_signup_guard.sql`, not another public app release.

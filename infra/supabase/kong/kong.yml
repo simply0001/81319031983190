@@ -179,7 +179,7 @@ services:
           fault_tolerant: false
 
   - name: auth-v1-signup
-    _comment: 'Auth: exact POST /auth/v1/signup -> http://auth:9999/signup (username accounts)'
+    _comment: 'Auth: exact POST /auth/v1/signup -> http://auth:9999/signup (username accounts only; email OTP uses /otp)'
     url: http://auth:9999/signup
     routes:
       - name: auth-v1-signup
@@ -212,6 +212,15 @@ services:
           policy: local
           hide_client_headers: false
           fault_tolerant: false
+      - name: post-function
+        config:
+          access:
+            - |
+              local body = kong.request.get_body("application/json")
+              local email = type(body) == "table" and body.email or nil
+              if type(email) ~= "string" or not email:lower():match("^[^@]+@users%.pocketpass%.xyz$") then
+                return kong.response.exit(400, { error = "username_signup_required", error_description = "Use email OTP for an email-address account." })
+              end
 
   - name: auth-v1-token-password
     _comment: 'Auth: exact POST /auth/v1/token?grant_type=password -> http://auth:9999/token'
@@ -406,6 +415,11 @@ services:
         config:
           access:
             - |
+              -- Keep variant signup paths from bypassing the exact username-only route.
+              local path = ngx.unescape_uri(kong.request.get_path()):lower()
+              if kong.request.get_method() == "POST" and path:find("signup", 1, true) then
+                return kong.response.exit(404, { error = "not_found" })
+              end
               local auth = kong.request.get_header("authorization")
               if auth ~= nil and auth ~= "" then
                 local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
