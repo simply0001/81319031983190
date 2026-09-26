@@ -133,8 +133,11 @@ Not released; the owner deferred it and wants TestFlight first.
 - The public API cannot read or set Block Invites: `set_invite_privacy` refuses OAuth tokens, and `privacy.get`/`privacy.set` cover Block Messages only.
 
 ### Video (`video/pocketpass-presentation`, Remotion + Cavalry, untracked)
-- The opening v5 preview (10.4 s) awaits review.
+- Current review: presentation v8 (1:41.2, 60 fps, true colours, 2026-09-26) = the Remotion `PocketPassOpeningV6` opening + the 60 fps Cavalry body (`cavalry-v6/PocketPass`, rendered as PNGs and packed losslessly), built by `scripts/assemble-presentation-v8.py`. The refined animated background is shared by both halves (`src/opening-v6/background-motion.ts`). See the project README for the rebuild steps.
 - The accepted base is Cavalry v2 (1:34).
+- Cavalry's MP4 export encodes BT.601 but labels BT.709, so every Cavalry MP4 here shows reds too hot and greens too dark (v3 included). Render finals from Cavalry as PNG sequences; to read an old Cavalry MP4 in true colours, decode with `scale=in_color_matrix=bt601`.
+- Retiming a Cavalry scene means editing the `.cv` JSON: double `keyframe.timeOffset`, time markers and the composition range. Footage `time` is read as frames at the composition rate, so recorded clips need a `/2` time expression. Thousands of `api.keyframe` calls stall Cavalry; write keyframes into the JSON instead.
+- Cavalry has no command-line runner on this licence (the CLI renderer is Enterprise-only). Drive it with computer use: the JavaScript Editor runs `out/cavalry-check/next.js`, and scripts report back by writing files.
 - Rules: real UI only, no fades or full-page slides, Cocoon-style continuous background, upright Thor PNGs.
 
 ### Docs
