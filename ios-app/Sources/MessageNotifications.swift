@@ -25,7 +25,6 @@ final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificatio
         UNUserNotificationCenter.current().delegate = self
         PhoneEntryKt.PhoneAppSetMessagePushHandler { [weak self] command in
             self?.handle(command)
-            return KotlinUnit()
         }
     }
 

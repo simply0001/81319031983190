@@ -18,7 +18,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // WidgetKit is Swift-only, so Kotlin hands widget refreshes back here.
         PhoneEntryKt.PhoneAppSetWidgetReloader {
             WidgetCenter.shared.reloadAllTimelines()
-            return KotlinUnit()
         }
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = PhoneEntryKt.PhoneAppViewController()
