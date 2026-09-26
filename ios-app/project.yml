@@ -29,9 +29,6 @@ targets:
       - path: Sources
       - path: Resources/Assets.xcassets
       - path: Resources/PrivacyInfo.xcprivacy
-      - path: Config/GoogleService-Info.plist
-        optional: true
-        buildPhase: resources
       - path: Resources/audio
         name: audio
         type: folder
@@ -113,6 +110,14 @@ targets:
         script: |
           cd "$SRCROOT/.."
           ./gradlew :ui:embedAndSignAppleFrameworkForXcode
+    postBuildScripts:
+      - name: Bundle the Firebase config when present
+        basedOnDependencyAnalysis: false
+        script: |
+          config="$SRCROOT/Config/GoogleService-Info.plist"
+          if [ -f "$config" ]; then
+            cp "$config" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/GoogleService-Info.plist"
+          fi
 
   # Pure-Swift WidgetKit extension: it never links the Kotlin framework and
   # only reads the JSON snapshot the app writes into the App Group.
