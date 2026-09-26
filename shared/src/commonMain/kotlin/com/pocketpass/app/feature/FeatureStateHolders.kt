@@ -1,4 +1,5 @@
 package com.pocketpass.app.feature
+import kotlinx.coroutines.CancellationException
 
 import com.pocketpass.app.data.LocalSettings
 import com.pocketpass.app.data.SettingsRepository
@@ -23,6 +24,7 @@ import com.pocketpass.app.domain.model.MAX_GROUP_MEMBERS
 import com.pocketpass.app.domain.model.RemoveGroupMemberCommand
 import com.pocketpass.app.domain.model.RenameGroupConversationCommand
 import com.pocketpass.app.model.GroupComposerState
+import com.pocketpass.app.model.GroupMemberFriendState
 import com.pocketpass.app.domain.model.Friend
 import com.pocketpass.app.domain.model.FriendCode
 import com.pocketpass.app.domain.model.FriendshipStatus
@@ -56,6 +58,7 @@ import com.pocketpass.app.domain.repository.AchievementsRepository
 import com.pocketpass.app.domain.repository.BingoRepository
 import com.pocketpass.app.domain.repository.LeaderboardRepository
 import com.pocketpass.app.domain.repository.WorldTourRepository
+import com.pocketpass.app.domain.repository.PassingStatsRepository
 import com.pocketpass.app.domain.repository.ShopRepository
 import com.pocketpass.app.domain.state.LoadState
 import com.pocketpass.app.domain.state.PendingState
@@ -98,6 +101,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
+import com.pocketpass.app.domain.model.PuzzlePurchaseRejection
+import com.pocketpass.app.domain.repository.PuzzleRepository
 
 private val FeatureSharing = SharingStarted.Eagerly
 
@@ -143,7 +151,22 @@ class HomeProfileStateHolder(
     }
     private val moodPickerExpanded = MutableStateFlow(false)
     private val bioEditor = MutableStateFlow(BioEditorUiState())
+    private val savedBioDraft = MutableStateFlow<com.pocketpass.app.domain.model.BioSaveDraft?>(null)
     private val nameEditor = MutableStateFlow(NameEditorUiState())
+    init {
+        scope.launch {
+            accountId.collectLatest { account ->
+                savedBioDraft.value = null
+                val mutableRepository = profileRepository as? MutableProfileRepository
+                if (account != null && mutableRepository != null) mutableRepository.observeBioDraft(account).collect { draft ->
+                    savedBioDraft.value = draft
+                    if (draft?.error != null) bioEditor.update { editor ->
+                        if (!editor.visible || editor.draft == draft.draft) editor.copy(visible = true, draft = draft.draft, saving = false, error = draft.error) else editor
+                    }
+                }
+            }
+        }
+    }
     private val activeAccountId = accountId.stateIn(
         scope = scope,
         started = FeatureSharing,
@@ -208,7 +231,8 @@ class HomeProfileStateHolder(
         val bio = (state.value.profile as? LoadState.Data)?.value?.bio.orEmpty()
         bioEditor.value = BioEditorUiState(
             visible = true,
-            draft = bio.take(BIO_MAX_LENGTH),
+            draft = (savedBioDraft.value?.draft ?: bio).take(BIO_MAX_LENGTH),
+            error = savedBioDraft.value?.error,
         )
     }
 
@@ -248,7 +272,7 @@ class HomeProfileStateHolder(
             when (result) {
                 is RepositoryResult.Success -> bioEditor.value = BioEditorUiState()
                 is RepositoryResult.Failure -> bioEditor.update {
-                    it.copy(saving = false, error = "Your bio could not be saved.")
+                    it.copy(saving = false, error = result.error.message)
                 }
             }
         }
@@ -491,7 +515,7 @@ class ProfileViewerStateHolder(
     fun sendFriendRequest() {
         val current = _state.value
         if (
-            current.source != ProfileViewerSource.RecentInteraction ||
+            current.source !in setOf(ProfileViewerSource.RecentInteraction, ProfileViewerSource.Board) ||
             current.friendRequestState !in setOf(
                 ProfileFriendRequestState.Available,
                 ProfileFriendRequestState.Failed,
@@ -589,6 +613,7 @@ class ProfileViewerStateHolder(
                     _state.update {
                         it.copy(profile = profile, unavailable = false)
                     }
+                    updateRelationshipState()
                 } else if (observedProfile) {
                     _state.update {
                         it.copy(
@@ -668,6 +693,9 @@ class ProfileViewerStateHolder(
             current.source == ProfileViewerSource.Friend ->
                 ProfileFriendRequestState.Hidden
 
+            activeAccountId.value == userId ->
+                ProfileFriendRequestState.Hidden
+
             relationship?.status == FriendshipStatus.Accepted ->
                 ProfileFriendRequestState.Friends
 
@@ -676,6 +704,9 @@ class ProfileViewerStateHolder(
                 ProfileFriendRequestState.Pending
 
             relationship?.status == FriendshipStatus.Blocked ->
+                ProfileFriendRequestState.Unavailable
+
+            current.profile?.blockInvites == true ->
                 ProfileFriendRequestState.Unavailable
 
             current.friendRequestState == ProfileFriendRequestState.Sending ||
@@ -1033,7 +1064,7 @@ private fun com.pocketpass.app.domain.state.RepositoryFailure.friendCodeMessage(
     }
 
 private fun com.pocketpass.app.domain.state.RepositoryFailure.groupMessage(): String =
-    when (kind) {
+    if (message == com.pocketpass.app.domain.model.GROUP_MESSAGES_BLOCKED) message else when (kind) {
         RepositoryFailureKind.Offline -> "Connect to the internet to manage groups."
         RepositoryFailureKind.Forbidden -> "That change isn't allowed for this group."
         RepositoryFailureKind.Conflict -> "That group is full."
@@ -1053,6 +1084,8 @@ data class MessagesFeatureState(
     val selectedConversationId: ConversationId? = null,
     val selectedConversation: ConversationSummary? = null,
     val messages: LoadState<List<Message>> = LoadState.Data(emptyList()),
+    val previewConversationId: ConversationId? = null,
+    val previewMessages: List<Message> = emptyList(),
     val currentDraft: String = "",
     val actionRailExpanded: Boolean = false,
     val isSending: Boolean = false,
@@ -1065,6 +1098,7 @@ data class MessagesFeatureState(
     val groupInfoOpen: Boolean = false,
     val groupOperationInProgress: Boolean = false,
     val groupOperationError: String? = null,
+    val groupMemberFriendStates: Map<UserId, GroupMemberFriendState> = emptyMap(),
     val conversationNotice: String? = null,
     val selectedMembersById: Map<UserId, ConversationMember> = emptyMap(),
     val isGroupOwner: Boolean = false,
@@ -1089,13 +1123,22 @@ private data class MessageMutationUi(
     val edit: EditSession? = null,
 )
 
+private data class ConversationPreview(val id: ConversationId? = null, val messages: List<Message> = emptyList())
+
 private data class GroupUi(
     val composer: GroupComposerState? = null,
     val infoOpen: Boolean = false,
     val inProgress: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
+    val friendRequests: Map<UserId, GroupMemberFriendState> = emptyMap(),
 )
+
+private fun FriendshipStatus.groupMemberFriendState(): GroupMemberFriendState = when (this) {
+    FriendshipStatus.Accepted -> GroupMemberFriendState.Friends
+    FriendshipStatus.PendingIncoming, FriendshipStatus.PendingOutgoing -> GroupMemberFriendState.Pending
+    FriendshipStatus.Blocked -> GroupMemberFriendState.Unavailable
+}
 
 private fun Message.isEditableBy(account: UserId): Boolean =
     senderId == account && pendingState == PendingState.Synced && deletedAt == null
@@ -1108,6 +1151,8 @@ class MessagesStateHolder(
     presenceRepository: PresenceRepository? = null,
     private val onMessageSent: () -> Unit = {},
     private val onGroupCreated: (ConversationId) -> Unit = {},
+    private val friendsRepository: FriendsRepository? = null,
+    private val profileRepository: ProfileRepository? = null,
 ) {
     private val activeAccountId = accountId.stateIn(
         scope = scope,
@@ -1127,8 +1172,12 @@ class MessagesStateHolder(
     private val operationError = MutableStateFlow<String?>(null)
     private val mutation = MutableStateFlow(MessageMutationUi())
     private val groupUi = MutableStateFlow(GroupUi())
+    private val groupRelationships = MutableStateFlow<List<Friend>?>(null)
+    private var groupRelationshipObservation: Job? = null
     private var selectedConversationObserved = false
     private var messageObservation: Job? = null
+    private val preview = MutableStateFlow(ConversationPreview())
+    private var previewObservation: Job? = null
     private val typingIn = MutableStateFlow<ConversationId?>(null)
     private var typingTimeout: Job? = null
     private val partnerTyping = presenceRepository?.observeTypingConversations()
@@ -1181,13 +1230,29 @@ class MessagesStateHolder(
         baseState,
         groupUi,
         activeAccountId,
-    ) { base, group, account ->
+        groupRelationships,
+        preview,
+    ) { base, group, account, relationships, previewState ->
         val selected = base.selectedConversation
         base.copy(
+            previewConversationId = previewState.id,
+            previewMessages = previewState.messages.takeIf {
+                (base.conversations as? LoadState.Data)?.value?.any { row -> row.id == previewState.id } == true
+            }.orEmpty(),
             groupComposer = group.composer,
             groupInfoOpen = group.infoOpen && selected?.isGroup == true,
             groupOperationInProgress = group.inProgress,
             groupOperationError = group.error,
+            groupMemberFriendStates = selected?.members.orEmpty().associate { member ->
+                member.userId to when {
+                    member.userId == account || relationships == null || friendsRepository !is MutableFriendsRepository ->
+                        GroupMemberFriendState.Unavailable
+                    else -> relationships.firstOrNull { it.profile.userId == member.userId }
+                        ?.status?.groupMemberFriendState()
+                        ?: group.friendRequests[member.userId]
+                        ?: GroupMemberFriendState.Available
+                }
+            },
             conversationNotice = group.notice,
             selectedMembersById = selected?.members.orEmpty().associateBy { it.userId },
             isGroupOwner = selected?.isGroup == true && selected.ownerId == account,
@@ -1207,6 +1272,8 @@ class MessagesStateHolder(
             activeAccountId.collectLatest { account ->
                 selectedConversationId.value = null
                 messageObservation?.cancel()
+                previewObservation?.cancel()
+                preview.value = ConversationPreview()
                 messages.value = LoadState.Data(emptyList())
                 drafts.value = emptyMap()
                 actionRailExpanded.value = false
@@ -1214,13 +1281,23 @@ class MessagesStateHolder(
                 operationError.value = null
                 mutation.value = MessageMutationUi()
                 groupUi.value = GroupUi()
+                groupRelationshipObservation?.cancel()
+                groupRelationships.value = null
                 selectedConversationObserved = false
                 if (account == null) {
                     conversations.value = LoadState.Data(emptyList())
                 } else {
                     conversations.value = LoadState.Loading
+                    groupRelationshipObservation = launch {
+                        friendsRepository?.observeFriends(account)?.collect { rows ->
+                            groupRelationships.value = rows
+                            val resolvedIds = rows.mapTo(mutableSetOf()) { it.profile.userId }
+                            groupUi.update { it.copy(friendRequests = it.friendRequests - resolvedIds) }
+                        }
+                    }
                     conversationRepository.observeConversations(account).collect { rows ->
                         conversations.value = LoadState.Data(rows)
+                        if(preview.value.id != null && rows.none { it.id == preview.value.id }) previewConversation(null)
                         val selected = selectedConversationId.value ?: return@collect
                         if (rows.any { it.id == selected }) {
                             selectedConversationObserved = true
@@ -1321,6 +1398,51 @@ class MessagesStateHolder(
         if (!groupUi.value.infoOpen) return false
         groupUi.update { it.copy(infoOpen = false, error = null) }
         return true
+    }
+
+    fun addGroupMemberFriend(userId: UserId) {
+        val account = activeAccountId.value ?: return
+        val group = selectedGroup() ?: return
+        val member = group.member(userId) ?: return
+        val repository = friendsRepository as? MutableFriendsRepository ?: return
+        val relationships = groupRelationships.value ?: return
+        if (!groupUi.value.infoOpen || userId == account || group.member(account) == null) return
+        if (relationships.any { it.profile.userId == userId }) return
+        if (groupUi.value.friendRequests[userId]?.canSend == false) return
+        groupUi.update { it.copy(friendRequests = it.friendRequests + (userId to GroupMemberFriendState.Sending), error = null) }
+        scope.launch {
+            val profile = profileRepository?.observeProfile(userId)?.first()
+                ?: UserProfile(userId, member.displayName, member.avatar, updatedAt = member.joinedAt)
+            if (activeAccountId.value != account) return@launch
+            val result = repository.sendFriendRequest(
+                SendFriendRequestCommand(accountId = account, addressee = profile, requestedAt = Clock.System.now()),
+            )
+            if (activeAccountId.value != account) return@launch
+            val requestState = when (result) {
+                is RepositoryResult.Success -> result.value.status.groupMemberFriendState()
+                is RepositoryResult.Failure -> when (result.error.kind) {
+                    RepositoryFailureKind.Conflict -> GroupMemberFriendState.Pending
+                    RepositoryFailureKind.Forbidden, RepositoryFailureKind.NotFound -> GroupMemberFriendState.Unavailable
+                    else -> GroupMemberFriendState.Failed
+                }
+            }
+            groupUi.update {
+                it.copy(
+                    friendRequests = if (groupRelationships.value.orEmpty().any { row -> row.profile.userId == userId }) {
+                        it.friendRequests - userId
+                    } else {
+                        it.friendRequests + (userId to requestState)
+                    },
+                    error = if (selectedGroup()?.id == group.id && it.infoOpen) {
+                        when (requestState) {
+                            GroupMemberFriendState.Failed -> (result as RepositoryResult.Failure).error.profileRequestMessage()
+                            GroupMemberFriendState.Unavailable -> "This member can’t receive friend requests."
+                            else -> null
+                        }
+                    } else it.error,
+                )
+            }
+        }
     }
 
     fun addMembersToGroup(userIds: List<UserId>) = runGroupOperation { account, group ->
@@ -1427,7 +1549,30 @@ class MessagesStateHolder(
         openConversation(conversationId)
     }
 
+    /** A highlighted row can be read upstairs without opening it or marking it read. */
+    fun previewConversation(conversationId: ConversationId?) {
+        val account = activeAccountId.value
+        val id = conversationId?.takeIf { account != null && conversationRows().any { row -> row.id == it } }
+        if(preview.value.id == id) return
+        previewObservation?.cancel()
+        preview.value = ConversationPreview(id)
+        if(id == null || account == null) return
+        previewObservation = scope.launch {
+            try {
+                delay(150)
+                if(conversationRepository.refreshMessages(account, id) !is RepositoryResult.Success) return@launch
+                conversationRepository.observeMessages(account, id).collect { rows ->
+                    if(activeAccountId.value == account && preview.value.id == id && conversationRows().any { it.id == id }) {
+                        preview.value = ConversationPreview(id, rows.sortedBy { it.createdAt }.takeLast(3))
+                    }
+                }
+            } catch(e: CancellationException) { throw e }
+            catch(_: Exception) { /* Keep the already available conversation summary. */ }
+        }
+    }
+
     fun openConversation(conversationId: ConversationId) {
+        previewConversation(null)
         val account = activeAccountId.value ?: return
         selectedConversationId.value = conversationId
         selectedConversationObserved = conversationRows().any { it.id == conversationId }
@@ -1439,6 +1584,7 @@ class MessagesStateHolder(
         scope.launch {
             conversationRepository.refreshConversations(account)
             conversationRepository.refreshMessages(account, conversationId)
+            profileRepository?.refreshMessageColours(account, conversationId)
             conversationRepository.markConversationRead(
                 MarkConversationReadCommand(
                     accountId = account,
@@ -1680,6 +1826,10 @@ class MessagesStateHolder(
         }
     }
 
+    fun reportImageAttachmentFailure(message: String) {
+        operationError.value = message
+    }
+
     fun retryMessage(messageId: MessageId) {
         val failed = (messages.value as? LoadState.Data)
             ?.value
@@ -1839,13 +1989,13 @@ class ShopStateHolder(
         val current = state.value
         if (
             itemId in current.ownedItemIds ||
-            itemId in current.unlockedItemIds ||
             itemId in current.purchasingItemIds
         ) {
             return
         }
         val item = current.categories.flatMap(ShopCategory::items).firstOrNull { it.id == itemId }
             ?: return
+        if (item.priceTokens == 0 && itemId in current.unlockedItemIds) return
         mutablePurchasing.update { it + itemId }
         mutablePurchaseError.value = null
         scope.launch {
@@ -1895,6 +2045,8 @@ data class GamesFeatureState(
     val activeGame: GameTarget? = null,
     val bingoGoalIndex: Int? = null,
     val worldTourRegionsVisible: Boolean = false,
+    val puzzleBuyPromptVisible: Boolean = false,
+    val puzzleInfoVisible: Boolean = false,
 )
 
 class GamesStateHolder {
@@ -1942,9 +2094,51 @@ class GamesStateHolder {
         return true
     }
 
+    fun openPuzzleBuyPrompt() {
+        mutableState.update { current ->
+            if (current.activeGame == GameTarget.PuzzleSwap) {
+                current.copy(puzzleBuyPromptVisible = true)
+            } else {
+                current
+            }
+        }
+    }
+
+    fun closePuzzleBuyPrompt(): Boolean {
+        if (!mutableState.value.puzzleBuyPromptVisible) return false
+        mutableState.update { it.copy(puzzleBuyPromptVisible = false) }
+        return true
+    }
+
+    fun openPuzzleInfo() {
+        mutableState.update { current ->
+            if (current.activeGame == GameTarget.PuzzleSwap) {
+                current.copy(puzzleInfoVisible = true, puzzleBuyPromptVisible = false)
+            } else {
+                current
+            }
+        }
+    }
+
+    fun closePuzzleInfo(): Boolean {
+        if (!mutableState.value.puzzleInfoVisible) return false
+        mutableState.update { it.copy(puzzleInfoVisible = false) }
+        return true
+    }
+
     fun close(): Boolean {
         val current = mutableState.value
         return when {
+            current.puzzleInfoVisible -> {
+                mutableState.value = current.copy(puzzleInfoVisible = false)
+                true
+            }
+
+            current.puzzleBuyPromptVisible -> {
+                mutableState.value = current.copy(puzzleBuyPromptVisible = false)
+                true
+            }
+
             current.worldTourRegionsVisible -> {
                 mutableState.value = current.copy(worldTourRegionsVisible = false)
                 true
@@ -1978,6 +2172,7 @@ data class LeaderboardFeatureState(
     val visible: Boolean = false,
     val settingsVisible: Boolean = false,
     val scope: LeaderboardScope = LeaderboardScope.Friends,
+    val globalLimit: Int = 20,
     val entries: List<LeaderboardEntry> = emptyList(),
     val refreshError: String? = null,
 )
@@ -2013,15 +2208,17 @@ class LeaderboardStateHolder(
     val state: StateFlow<LeaderboardFeatureState> = combine(
         mutableVisible,
         mutableSettingsVisible,
-        leaderboardScope,
+        settingsRepository.settings,
         entries,
         mutableRefreshError,
-    ) { visible, settingsVisible, boardScope, boardEntries, error ->
+    ) { visible, settingsVisible, settings, boardEntries, error ->
+        val boardScope = settings.leaderboardScope
         LeaderboardFeatureState(
             visible = visible,
             settingsVisible = settingsVisible,
             scope = boardScope,
-            entries = boardEntries,
+            globalLimit = settings.globalLeaderboardLimit,
+            entries = if (boardScope == LeaderboardScope.Global) boardEntries.take(settings.globalLeaderboardLimit) else boardEntries,
             refreshError = error,
         )
     }.stateIn(
@@ -2044,6 +2241,11 @@ class LeaderboardStateHolder(
         if (!mutableSettingsVisible.value) return false
         mutableSettingsVisible.value = false
         return true
+    }
+
+    fun setGlobalLimit(limit: Int) {
+        if (limit !in com.pocketpass.app.data.GlobalLeaderboardLimits) return
+        scope.launch { settingsRepository.setGlobalLeaderboardLimit(limit) }
     }
 
     fun setScope(newScope: LeaderboardScope) {
@@ -2211,11 +2413,137 @@ class BingoStateHolder(
     }
 }
 
+data class PuzzleFeatureState(
+    val collection: PuzzleCollection = PuzzleCollection.Empty,
+    val viewedIndex: Int? = null,
+    val tokenBalance: Int = 0,
+    val buying: Boolean = false,
+    val refreshError: String? = null,
+    val purchaseError: String? = null,
+)
+
+class PuzzleStateHolder(
+    private val accountId: Flow<UserId?>,
+    private val puzzleRepository: PuzzleRepository,
+    private val shopRepository: ShopRepository,
+    private val scope: CoroutineScope,
+    private val now: () -> Instant = Clock.System::now,
+) {
+    private val mutableViewed = MutableStateFlow<Int?>(null)
+    private val mutableBuying = MutableStateFlow(false)
+    private val mutableRefreshError = MutableStateFlow<String?>(null)
+    private val mutablePurchaseError = MutableStateFlow<String?>(null)
+
+    val state: StateFlow<PuzzleFeatureState> = combine(
+        accountId.switchAccount<PuzzleCollection>(signedOut = PuzzleCollection.Empty) { id ->
+            puzzleRepository.observeCollection(id)
+        },
+        accountId.switchAccount<Int>(signedOut = 0) { id ->
+            shopRepository.observeTokenBalance(id).map { balance -> balance ?: 0 }
+        },
+        mutableViewed,
+        mutableBuying,
+        combine(mutableRefreshError, mutablePurchaseError, ::Pair),
+    ) { collection, tokens, viewed, buying, errors ->
+        PuzzleFeatureState(
+            collection = collection,
+            viewedIndex = resolveViewed(collection, viewed),
+            tokenBalance = tokens,
+            buying = buying,
+            refreshError = errors.first,
+            purchaseError = errors.second,
+        )
+    }.stateIn(
+        scope = scope,
+        started = FeatureSharing,
+        initialValue = PuzzleFeatureState(),
+    )
+
+    private fun resolveViewed(collection: PuzzleCollection, requested: Int?): Int? {
+        val last = collection.lastBrowsableIndex ?: return null
+        return requested?.coerceIn(0, last) ?: collection.currentIndex ?: last
+    }
+
+    fun open() {
+        mutableViewed.value = null
+        mutablePurchaseError.value = null
+        refresh()
+    }
+
+    fun refresh() {
+        scope.launch {
+            val id = accountId.first() ?: return@launch
+            mutableRefreshError.value =
+                when (val result = puzzleRepository.refresh(id)) {
+                    is RepositoryResult.Success -> null
+                    is RepositoryResult.Failure -> result.error.message
+                }
+        }
+    }
+
+    fun browse(step: Int) {
+        val current = state.value
+        val last = current.collection.lastBrowsableIndex ?: return
+        val from = current.viewedIndex ?: return
+        mutableViewed.value = (from + step).coerceIn(0, last)
+    }
+
+    fun buyPiece() {
+        val current = state.value
+        val puzzle = current.collection.current ?: return
+        val price = current.collection.piecePriceTokens
+        if (current.buying || puzzle.isComplete || current.tokenBalance < price) return
+        scope.launch {
+            val id = accountId.first() ?: return@launch
+            mutableBuying.value = true
+            mutablePurchaseError.value = null
+            val result = puzzleRepository.buyPiece(
+                BuyPuzzlePieceCommand(
+                    accountId = id,
+                    priceTokens = price,
+                    requestedAt = now(),
+                ),
+            )
+            mutableBuying.value = false
+            when (result) {
+                is RepositoryResult.Success -> when (val outcome = result.value) {
+                    is PuzzlePiecePurchaseOutcome.Completed -> {
+                        mutableViewed.value = null
+                        shopRepository.refreshTokenBalance(id)
+                    }
+
+                    is PuzzlePiecePurchaseOutcome.Rejected ->
+                        mutablePurchaseError.value = when (outcome.reason) {
+                            PuzzlePurchaseRejection.InsufficientTokens ->
+                                "You need $price tokens for a piece."
+
+                            PuzzlePurchaseRejection.CollectionComplete ->
+                                "Every puzzle is complete."
+                        }
+                }
+
+                is RepositoryResult.Failure ->
+                    mutablePurchaseError.value = result.error.message ?: PIECE_FAILED_MESSAGE
+            }
+        }
+    }
+
+    fun dismissPurchaseError() {
+        mutablePurchaseError.value = null
+    }
+
+    private companion object {
+        const val PIECE_FAILED_MESSAGE = "The piece couldn\u2019t be bought."
+    }
+}
+
 class ActivitiesStateHolder(
     accountId: Flow<UserId?>,
     shopRepository: ShopRepository,
     leaderboardRepository: LeaderboardRepository,
     worldTourRepository: WorldTourRepository,
+    puzzleRepository: PuzzleRepository,
+    passingStatsRepository: PassingStatsRepository,
     scope: CoroutineScope,
     initialVariant: ActivityVariant = ActivityVariant.Default,
 ) {
@@ -2230,16 +2558,20 @@ class ActivitiesStateHolder(
                 shopRepository.observeTokenBalance(id),
                 leaderboardRepository.observeLeaderboard(id, LeaderboardScope.Friends),
                 worldTourRepository.observeRegions(id),
-            ) { tokens, entries, regions ->
+                puzzleRepository.observeCollection(id),
+                passingStatsRepository.observeStats(id),
+            ) { tokens, entries, regions, puzzles, stats ->
                 LoadState.Data(
                     ActivitySnapshot(
                         coinCount = tokens ?: 0,
-                        puzzleCount = 0,
+                        puzzleCount = puzzles.ownedPieceCount,
                         nearbyCount = entries
                             .firstOrNull { entry -> entry.userId == id }
                             ?.encounterCount
                             ?: 0,
                         locationCount = regions.size,
+                        streakDays = stats?.currentStreak ?: 0,
+                        weekPasses = stats?.weekPasses ?: 0,
                         updatedAt = Instant.fromEpochSeconds(0),
                     ),
                 )
@@ -2274,6 +2606,7 @@ class SettingsStateHolder(
     )
 
     suspend fun setNearby(enabled: Boolean) = repository.setNearby(enabled)
+    suspend fun setBoardsVisible(visible: Boolean) = repository.setBoardsVisible(visible)
 
     suspend fun setNearbyOnboardingCompleted(completed: Boolean) =
         repository.setNearbyOnboardingCompleted(completed)
@@ -2299,6 +2632,9 @@ class SettingsStateHolder(
 
     suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
         repository.setUpdateAlertsEnabled(enabled)
+
+    suspend fun setMessageAlertsEnabled(enabled: Boolean) =
+        repository.setMessageAlertsEnabled(enabled)
 
     suspend fun setStepRewardsEnabled(enabled: Boolean) =
         repository.setStepRewardsEnabled(enabled)

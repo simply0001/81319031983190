@@ -96,16 +96,66 @@ class ShopStateHolderTest {
         assertEquals(setOf("fixture-item-baseball_cap"), state.ownedItemIds)
         assertEquals(hatIds - "fixture-item-baseball_cap", state.unlockedItemIds)
         assertEquals(Instant.fromEpochSeconds(0).plus((3_600).seconds), state.supporterUntil)
-        assertEquals((0..9).toSet(), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
-
-        holder.buy("fixture-item-top_hat")
-        runCurrent()
-        assertEquals(500, holder.state.value.tokenBalance)
-        assertEquals(setOf("fixture-item-baseball_cap"), holder.state.value.ownedItemIds)
+        assertEquals((0..10).toSet(), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
     }
 
     @Test
-    fun lapsedSupporterUnlocksNothing() = runTest {
+    fun supporterCanBuyAnIncludedHatAndKeepItAfterExpiry() = runTest {
+        var currentTime = Instant.fromEpochSeconds(0)
+        val repository = FixtureShopRepository(
+            balance = 500,
+            supporterUntil = currentTime.plus((3_600).seconds),
+            now = { currentTime },
+        )
+        val holder = holder(repository)
+        runCurrent()
+
+        holder.buy("fixture-item-top_hat")
+        runCurrent()
+
+        assertEquals(380, holder.state.value.tokenBalance)
+        assertEquals(setOf("fixture-item-baseball_cap", "fixture-item-top_hat"), holder.state.value.ownedItemIds)
+        assertTrue("fixture-item-top_hat" !in holder.state.value.unlockedItemIds)
+        assertNull(holder.state.value.purchaseError)
+        val purchase = repository.observeOwnedItems(FixtureData.CurrentUserId).first()
+            .single { it.itemId == "fixture-item-top_hat" }
+        assertEquals(120, purchase.pricePaid)
+        assertTrue(!purchase.pending)
+
+        holder.buy("fixture-item-top_hat")
+        runCurrent()
+        assertEquals(380, holder.state.value.tokenBalance)
+        assertNull(holder.state.value.purchaseError)
+
+        currentTime = currentTime.plus((3_601).seconds)
+        val reopened = holder(repository)
+        runCurrent()
+        assertEquals(setOf("fixture-item-baseball_cap", "fixture-item-top_hat"), reopened.state.value.ownedItemIds)
+        assertEquals(setOf("fixture-item-hijab"), reopened.state.value.unlockedItemIds)
+        assertEquals(setOf(0, 2, 10), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
+    }
+
+    @Test
+    fun supporterWithoutEnoughTokensKeepsAccessWithoutGainingOwnership() = runTest {
+        val repository = FixtureShopRepository(
+            balance = 100,
+            supporterUntil = Instant.fromEpochSeconds(3_600),
+            now = { Instant.fromEpochSeconds(0) },
+        )
+        val holder = holder(repository)
+        runCurrent()
+
+        holder.buy("fixture-item-top_hat")
+        runCurrent()
+
+        assertEquals(100, holder.state.value.tokenBalance)
+        assertEquals("Not enough tokens", holder.state.value.purchaseError)
+        assertTrue("fixture-item-top_hat" in holder.state.value.unlockedItemIds)
+        assertTrue("fixture-item-top_hat" !in holder.state.value.ownedItemIds)
+    }
+
+    @Test
+    fun lapsedSupporterKeepsOnlyFreeHats() = runTest {
         val repository = FixtureShopRepository(
             balance = 0,
             supporterUntil = Instant.fromEpochSeconds(0).minus((1).seconds),
@@ -114,8 +164,25 @@ class ShopStateHolderTest {
         val holder = holder(repository)
         runCurrent()
 
-        assertTrue(holder.state.value.unlockedItemIds.isEmpty())
-        assertEquals(setOf(0), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
+        assertEquals(setOf("fixture-item-hijab"), holder.state.value.unlockedItemIds)
+        assertEquals(setOf(0, 10), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
+    }
+
+    @Test
+    fun freeHatIsWearableWithoutBuying() = runTest {
+        val repository = FixtureShopRepository(balance = 0, owned = emptyList())
+        val holder = holder(repository)
+        runCurrent()
+
+        val hijab = FixtureData.shopCatalog.flatMap { it.items }.single { it.slug == "hijab" }
+        assertEquals(0, hijab.priceTokens)
+        assertEquals(setOf(hijab.id), holder.state.value.unlockedItemIds)
+        assertEquals(setOf(10), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
+
+        holder.buy(hijab.id)
+        runCurrent()
+        assertTrue(holder.state.value.ownedItemIds.isEmpty())
+        assertNull(holder.state.value.purchaseError)
     }
 
     @Test
@@ -128,7 +195,7 @@ class ShopStateHolderTest {
             ),
         )
 
-        assertEquals(setOf(5), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
+        assertEquals(setOf(5, 10), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
     }
 
     private fun kotlinx.coroutines.test.TestScope.holder(

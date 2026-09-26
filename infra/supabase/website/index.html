@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PocketPass — meet people nearby, keep in touch</title>
+    <meta name="description" content="A friend-finding and messaging app for Android. Your phone swaps passes over Bluetooth with people you walk past, and you can message the ones you meet.">
+    <meta name="theme-color" content="#1d596b">
+    <meta name="color-scheme" content="light dark">
+    <link rel="canonical" href="https://pocketpass.xyz/">
+    <link rel="icon" type="image/png" href="/assets/pocketpass-leaf.png">
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://pocketpass.xyz/">
+    <meta property="og:site_name" content="PocketPass">
+    <meta property="og:title" content="PocketPass — meet people nearby, keep in touch">
+    <meta property="og:description" content="A friend-finding and messaging app for Android.">
+    <meta property="og:image" content="https://pocketpass.xyz/assets/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="stylesheet" href="/site.css">
+    <script src="/backdrop.js" defer></script>
+    <script src="/site.js" defer></script>
+  </head>
+  <body>
+    <canvas id="backdrop" aria-hidden="true"></canvas>
+    <svg class="sprite" aria-hidden="true" focusable="false">
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1Zm-7 13a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5 4h14a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H9.4l-4.2 3.2A1 1 0 0 1 3.6 20.4V7a3 3 0 0 1 1.4-3Zm3 5.5a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Zm4 0a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Zm4 0a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5Z"/></symbol>
+      <symbol id="i-discord" viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.3-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.7-8 11-8 11Z"/></symbol>
+      <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.7 7.3a1 1 0 0 1 0 1.4L5.4 12l3.3 3.3a1 1 0 1 1-1.4 1.4l-4-4a1 1 0 0 1 0-1.4l4-4a1 1 0 0 1 1.4 0Zm6.6 0a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4l3.3-3.3-3.3-3.3a1 1 0 0 1 0-1.4ZM13.9 4a1 1 0 0 1 .9 1.2l-3 14a1 1 0 0 1-2-.4l3-14a1 1 0 0 1 1.1-.8Z"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2 4 5v6c0 5.2 3.4 9.6 8 11 4.6-1.4 8-5.8 8-11V5l-8-3Zm-1.2 13.4-3.2-3.2 1.4-1.4 1.8 1.8 4.8-4.8 1.4 1.4-6.2 6.2Z"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 2l1.9 5.6 5.6 1.9-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2Zm7 12 .9 2.6 2.6.9-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14Z"/></symbol>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 3 2 12h3v8h5v-5h4v5h5v-8h3L12 3Z"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 0 1 6 0v3H9Z"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M13.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 0 1-1.4-1.4l4.3-4.3H4a1 1 0 1 1 0-2h13.6l-4.3-4.3a1 1 0 0 1 0-1.4Z"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Zm0 5h16a1 1 0 1 1 0 2H4a1 1 0 0 1 0-2Z"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-6h2v6Zm0-8h-2V7h2v2Z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Z"/></symbol>
+    </svg>
+    <div class="site-shell">
+      <header class="topbar surface">
+        <a class="brand" href="/">
+          <img src="/assets/pocketpass-leaf.png" alt="" width="34" height="40">
+          <span class="brand-name">PocketPass</span>
+        </a>
+        <nav class="nav" aria-label="Main">
+          <a class="pill is-active" href="/" aria-current="page"><svg class="icon"><use href="#i-home"/></svg>Home</a>
+          <a class="pill" href="#download"><svg class="icon"><use href="#i-download"/></svg>Download</a>
+          <a class="pill" href="#tour"><svg class="icon"><use href="#i-sparkle"/></svg>Tour</a>
+          <a class="pill" href="https://developer.pocketpass.xyz" rel="noopener noreferrer"><svg class="icon"><use href="#i-code"/></svg>Developers</a>
+          <a class="pill" href="/privacy"><svg class="icon"><use href="#i-shield"/></svg>Privacy &amp; Terms</a>
+        </nav>
+        <div class="top-actions">
+          <a class="btn btn-secondary btn-compact" href="https://ko-fi.com/pocketpass" rel="noopener noreferrer"><svg class="icon"><use href="#i-heart"/></svg>Ko-fi</a>
+          <a class="btn btn-discord btn-compact" href="https://discord.gg/pocket" rel="noopener noreferrer"><svg class="icon"><use href="#i-discord"/></svg>Discord</a>
+        </div>
+        <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="mobile-nav" data-menu-button><svg class="icon"><use href="#i-menu"/></svg></button>
+        <nav class="mobile-nav" id="mobile-nav" aria-label="Main" data-mobile-nav>
+          <a class="pill is-active" href="/" aria-current="page"><svg class="icon"><use href="#i-home"/></svg>Home</a>
+          <a class="pill" href="#download"><svg class="icon"><use href="#i-download"/></svg>Download</a>
+          <a class="pill" href="#tour"><svg class="icon"><use href="#i-sparkle"/></svg>Tour</a>
+          <a class="pill" href="https://developer.pocketpass.xyz" rel="noopener noreferrer"><svg class="icon"><use href="#i-code"/></svg>Developers</a>
+          <a class="pill" href="/privacy"><svg class="icon"><use href="#i-shield"/></svg>Privacy &amp; Terms</a>
+          <div class="mobile-actions">
+            <a class="btn btn-secondary btn-compact" href="https://ko-fi.com/pocketpass" rel="noopener noreferrer"><svg class="icon"><use href="#i-heart"/></svg>Ko-fi</a>
+            <a class="btn btn-discord btn-compact" href="https://discord.gg/pocket" rel="noopener noreferrer"><svg class="icon"><use href="#i-discord"/></svg>Discord</a>
+          </div>
+        </nav>
+      </header>
+
+      <main class="page" id="top">
+        <section class="hero surface surface-raised" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <h1 id="hero-title">Meet people nearby. Keep in touch.</h1>
+            <p class="hero-lead">PocketPass is an app for meeting people nearby over Bluetooth and staying in touch through chat.</p>
+            <div class="hero-actions">
+              <a id="download-apk" class="btn btn-primary" data-download-apk href="https://github.com/Hinoaaaaaf212/pocketpass-release/releases/latest" rel="noopener noreferrer"><svg class="icon"><use href="#i-download"/></svg>Download for Android</a>
+              <a class="btn btn-discord" href="https://discord.gg/pocket" rel="noopener noreferrer"><svg class="icon"><use href="#i-discord"/></svg>Join the Discord</a>
+            </div>
+          </div>
+          <div class="hero-art">
+            <div class="phone-mockup hero-phone" role="img" aria-label="PocketPass phone layout, showing Home, Messages, Friends, Activities and Settings">
+              <img class="device-slide" src="/assets/iphone-home.webp" width="884" height="1776" alt="" fetchpriority="high">
+              <img class="device-slide" src="/assets/iphone-messages.webp" width="884" height="1776" alt="" decoding="async">
+              <img class="device-slide" src="/assets/iphone-friends.webp" width="884" height="1776" alt="" decoding="async">
+              <img class="device-slide" src="/assets/iphone-activities.webp" width="884" height="1776" alt="" decoding="async">
+              <img class="device-slide" src="/assets/iphone-settings.webp" width="884" height="1776" alt="" decoding="async">
+            </div>
+            <div class="device" role="img" aria-label="PocketPass on an AYN Thor">
+              <div class="device-screen device-top">
+                <img class="device-slide" src="/assets/thor-home-top.webp" width="1498" height="842" alt="">
+                <img class="device-slide" src="/assets/thor-messages-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async">
+                <img class="device-slide" src="/assets/thor-friends-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async">
+                <img class="device-slide" src="/assets/thor-activities-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async">
+                <img class="device-slide" src="/assets/thor-settings-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async">
+              </div>
+              <div class="device-screen device-bottom">
+                <img class="device-slide" src="/assets/thor-home-bottom.webp" width="818" height="712" alt="">
+                <img class="device-slide" src="/assets/thor-messages-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async">
+                <img class="device-slide" src="/assets/thor-friends-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async">
+                <img class="device-slide" src="/assets/thor-activities-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async">
+                <img class="device-slide" src="/assets/thor-settings-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async">
+              </div>
+              <img class="device-frame" src="/assets/thor-black.webp" width="1848" height="2160" alt="">
+            </div>
+          </div>
+        </section>
+
+        <section id="download" class="release surface" data-state="static" aria-labelledby="download-title">
+          <div>
+            <h2 id="download-title" class="release-title">Latest release</h2>
+            <p id="download-meta" class="release-meta" aria-live="polite">The current alpha build.</p>
+            <dl class="release-facts">
+              <div><dt>Version</dt><dd id="download-version">See the releases page</dd></div>
+              <div><dt>Size</dt><dd id="download-size">Shown with the release</dd></div>
+              <div><dt>Published</dt><dd id="download-date">Shown with the release</dd></div>
+              <div><dt>SHA-256</dt><dd id="download-sha" class="release-sha">Listed in the release's update.json</dd></div>
+            </dl>
+          </div>
+          <div class="release-actions">
+            <a class="btn btn-primary" data-download-apk href="https://github.com/Hinoaaaaaf212/pocketpass-release/releases/latest" rel="noopener noreferrer"><svg class="icon"><use href="#i-download"/></svg>Download the APK</a>
+            <a class="btn btn-secondary" href="https://github.com/Hinoaaaaaf212/pocketpass-release/releases" rel="noopener noreferrer">All releases and changelog<svg class="icon"><use href="#i-arrow"/></svg></a>
+          </div>
+        </section>
+
+        <section id="tour" class="tour surface surface-raised" aria-labelledby="tour-title" data-device="phone">
+          <div class="section-head centered">
+            <h2 id="tour-title">Take a look</h2>
+          </div>
+          <div class="device-picker" role="group" aria-label="Choose a device layout">
+            <button class="device-choice" type="button" data-device-button="phone" aria-pressed="true">Phone</button>
+            <button class="device-choice" type="button" data-device-button="thor" aria-pressed="false">AYN Thor</button>
+          </div>
+          <div class="tabs" role="tablist" aria-label="App tabs">
+            <button class="tab is-active" type="button" role="tab" id="tab-home" aria-label="Home" aria-selected="true" aria-controls="tour-home" data-tab-button="home"><img src="/assets/nav-home.svg" alt="" width="20" height="20"><span>Home</span></button>
+            <button class="tab" type="button" role="tab" id="tab-messages" aria-label="Messages" aria-selected="false" aria-controls="tour-messages" tabindex="-1" data-tab-button="messages"><img src="/assets/nav-messages.svg" alt="" width="20" height="20"><span>Messages</span></button>
+            <button class="tab" type="button" role="tab" id="tab-friends" aria-label="Friends" aria-selected="false" aria-controls="tour-friends" tabindex="-1" data-tab-button="friends"><img src="/assets/nav-friends.svg" alt="" width="20" height="20"><span>Friends</span></button>
+            <button class="tab" type="button" role="tab" id="tab-activities" aria-label="Activities" aria-selected="false" aria-controls="tour-activities" tabindex="-1" data-tab-button="activities"><img src="/assets/nav-activities.svg" alt="" width="20" height="20"><span>Activities</span></button>
+            <button class="tab" type="button" role="tab" id="tab-settings" aria-label="Settings" aria-selected="false" aria-controls="tour-settings" tabindex="-1" data-tab-button="settings"><img src="/assets/nav-settings.svg" alt="" width="20" height="20"><span>Settings</span></button>
+            <button class="tab" type="button" role="tab" id="tab-piip" aria-label="Piip Creator" aria-selected="false" aria-controls="tour-piip" tabindex="-1" data-tab-button="piip" data-thor-only hidden><img src="/assets/nav-piip.svg" alt="" width="20" height="20"><span>Piip Creator</span></button>
+          </div>
+          <div class="stage">
+            <div class="phone-mockup tour-phone" role="img" aria-label="PocketPass phone layout" data-device-view="phone">
+              <img class="device-slide is-active" src="/assets/iphone-home.webp" width="884" height="1776" alt="" data-slide="home" loading="lazy" decoding="async">
+              <img class="device-slide" src="/assets/iphone-messages.webp" width="884" height="1776" alt="" data-slide="messages" loading="lazy" decoding="async">
+              <img class="device-slide" src="/assets/iphone-friends.webp" width="884" height="1776" alt="" data-slide="friends" loading="lazy" decoding="async">
+              <img class="device-slide" src="/assets/iphone-activities.webp" width="884" height="1776" alt="" data-slide="activities" loading="lazy" decoding="async">
+              <img class="device-slide" src="/assets/iphone-settings.webp" width="884" height="1776" alt="" data-slide="settings" loading="lazy" decoding="async">
+            </div>
+            <div class="device" role="img" aria-label="PocketPass on an AYN Thor" data-device-view="thor" hidden>
+              <div class="device-screen device-top">
+                <img class="device-slide is-active" src="/assets/thor-home-top.webp" width="1498" height="842" alt="" data-slide="home">
+                <img class="device-slide" src="/assets/thor-messages-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async" data-slide="messages">
+                <img class="device-slide" src="/assets/thor-friends-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async" data-slide="friends">
+                <img class="device-slide" src="/assets/thor-activities-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async" data-slide="activities">
+                <img class="device-slide" src="/assets/thor-settings-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async" data-slide="settings">
+                <img class="device-slide" src="/assets/thor-piip-top.webp" width="1498" height="842" alt="" loading="lazy" decoding="async" data-slide="piip">
+              </div>
+              <div class="device-screen device-bottom">
+                <img class="device-slide is-active" src="/assets/thor-home-bottom.webp" width="818" height="712" alt="" data-slide="home">
+                <img class="device-slide" src="/assets/thor-messages-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async" data-slide="messages">
+                <img class="device-slide" src="/assets/thor-friends-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async" data-slide="friends">
+                <img class="device-slide" src="/assets/thor-activities-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async" data-slide="activities">
+                <img class="device-slide" src="/assets/thor-settings-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async" data-slide="settings">
+                <img class="device-slide" src="/assets/thor-piip-bottom.webp" width="818" height="712" alt="" loading="lazy" decoding="async" data-slide="piip">
+              </div>
+              <img class="device-frame" src="/assets/thor-black.webp" width="1848" height="2160" alt="" loading="lazy" decoding="async">
+            </div>
+            <div class="stories">
+              <div class="story-set" id="tour-home" role="tabpanel" aria-labelledby="tab-home" data-story-set="home">
+                <article class="story">
+                  <div class="story-head"><span class="story-icon"><img src="/assets/nav-home.svg" alt="" width="22" height="22"></span><h3>Your profile</h3></div>
+                  <p>Put a face to the people you pass. Your profile introduces you to others nearby, and the people you've met stay here so you can find them again.</p>
+                </article>
+              </div>
+              <div class="story-set" id="tour-messages" role="tabpanel" aria-labelledby="tab-messages" data-story-set="messages" hidden>
+                <article class="story">
+                  <div class="story-head"><span class="story-icon"><img src="/assets/nav-messages.svg" alt="" width="22" height="22"></span><h3>Conversations</h3></div>
+                  <p>Keep the conversation going after you've met. Send a quick message, share a photo or bring everyone together in a group chat.</p>
+                </article>
+              </div>
+              <div class="story-set" id="tour-friends" role="tabpanel" aria-labelledby="tab-friends" data-story-set="friends" hidden>
+                <article class="story">
+                  <div class="story-head"><span class="story-icon"><img src="/assets/nav-friends.svg" alt="" width="22" height="22"></span><h3>Friends</h3></div>
+                  <p>Add the people you want to stay in touch with, see who's around and send a wave to say hello.</p>
+                </article>
+              </div>
+              <div class="story-set" id="tour-activities" role="tabpanel" aria-labelledby="tab-activities" data-story-set="activities" hidden>
+                <article class="story">
+                  <div class="story-head"><span class="story-icon"><img src="/assets/nav-activities.svg" alt="" width="22" height="22"></span><h3>Games and rewards</h3></div>
+                  <p>Play a round of Bingo, collect puzzle pieces and see how you're doing on the leaderboard. The tokens you earn can go towards a new hat for your Piip.</p>
+                </article>
+              </div>
+              <div class="story-set" id="tour-settings" role="tabpanel" aria-labelledby="tab-settings" data-story-set="settings" hidden>
+                <article class="story">
+                  <div class="story-head"><span class="story-icon"><img src="/assets/nav-settings.svg" alt="" width="22" height="22"></span><h3>Settings</h3></div>
+                  <p>Make PocketPass feel right for you, from its look and sounds to the notifications you receive. This is also where you manage your account and nearby encounters.</p>
+                </article>
+              </div>
+              <div class="story-set" id="tour-piip" role="tabpanel" aria-labelledby="tab-piip" data-story-set="piip" hidden>
+                <article class="story">
+                  <div class="story-head"><span class="story-icon"><img src="/assets/nav-piip.svg" alt="" width="22" height="22"></span><h3>Your Piip</h3></div>
+                  <p>Make a Piip that looks like you, or try something completely different. Pick its features, play with colours and save a few favourites to switch between.</p>
+                </article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="passes" class="panel section-panel" aria-labelledby="passes-title">
+          <div class="section-head">
+            <span class="head-icon"><img src="/assets/nearby.svg" alt="" width="30" height="30"></span>
+            <div>
+              <span class="eyebrow">How it works</span>
+              <h2 id="passes-title">How passes work</h2>
+              <p>The idea is the same as StreetPass on the Nintendo 3DS.</p>
+            </div>
+          </div>
+          <div class="steps">
+            <article class="step tile">
+              <div class="step-top"><span class="step-num">1</span><img src="/assets/nearby.svg" alt="" width="52" height="52"></div>
+              <h3>Your phone holds a few passes</h3>
+              <p>The app keeps a few single-use passes on your phone. Your data is completely private this way.</p>
+            </article>
+            <article class="step tile">
+              <div class="step-top"><span class="step-num">2</span><img src="/assets/friends.svg" alt="" width="52" height="52"></div>
+              <h3>Passing someone spends one pass</h3>
+              <p>Two devices with PocketPass in Bluetooth LE range automatically send encrypted payloads to eachother using these passes, which means your device identifier data is never compromised</p>
+            </article>
+            <article class="step tile">
+              <div class="step-top"><span class="step-num">3</span><img src="/assets/notifications.svg" alt="" width="52" height="52"></div>
+              <h3>Both of your devices confirm</h3>
+              <p>Once both of your devices confirm the pass, your Piips now show on eachothers devices!</p>
+            </article>
+          </div>
+          <div class="callout"><svg class="icon"><use href="#i-lock"/></svg><p>Passes are anonymous until both sides confirm, and encrypted so they cannot be copied or forged.</p></div>
+        </section>
+
+
+        <section id="tokens" class="panel section-panel" aria-labelledby="tokens-title">
+          <div class="section-head">
+            <span class="head-icon"><img src="/assets/activities.svg" alt="" width="30" height="30"></span>
+            <div>
+              <span class="eyebrow">Tokens</span>
+              <h2 id="tokens-title">Tokens and games</h2>
+              <p>Earn tokens by passing people, playing games and walking. Spend them on hats.</p>
+            </div>
+          </div>
+          <div class="grid-2">
+            <article class="tile">
+              <div class="panel-head"><h3>Earn tokens</h3></div>
+              <dl class="facts">
+                <dt>Encounters</dt>
+                <dd>30 tokens the first time you meet someone, 5 for meeting them again on another day.</dd>
+                <dt>Weekly Bingo</dt>
+                <dd>A new card of goals each week. 25 tokens per completed line, 150 for a full card.</dd>
+                <dt>Puzzle Swap</dt>
+                <dd>Pieces come from passing people and walking, or 15 tokens each.</dd>
+                <dt>Walking</dt>
+                <dd>With Step Rewards on, 1 token per 400 steps, up to 25 tokens a day.</dd>
+              </dl>
+            </article>
+            <article class="tile">
+              <div class="panel-head"><h3>Play</h3></div>
+              <div class="play-icons">
+                <div class="play-icon"><img src="/assets/game-bingo.svg" alt="" width="56" height="56">Bingo</div>
+                <div class="play-icon"><img src="/assets/game-puzzle-swap.svg" alt="" width="56" height="56">Puzzle Swap</div>
+                <div class="play-icon"><img src="/assets/game-world-tour.svg" alt="" width="56" height="56">World Tour</div>
+                <div class="play-icon"><img src="/assets/game-steps.svg" alt="" width="56" height="56">Step Rewards</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="piips" class="split surface" aria-labelledby="piips-title">
+          <div>
+            <div class="panel-head">
+              <span class="eyebrow">Avatars</span>
+              <h2 id="piips-title">Piips</h2>
+              <p class="panel-sub">Your Piip is the avatar other people see when you pass them.</p>
+            </div>
+            <p>Make one in the editor, keep a few in slots, or import a Mii with a Pretendo Network ID. Hats cost tokens in the shop, and a <a href="https://ko-fi.com/pocketpass" rel="noopener noreferrer">Ko-fi membership</a> unlocks all of them for 36 days per payment, matched by your Ko-fi email or the account named in the message.</p>
+          </div>
+          <div class="split-art"><img class="portrait" src="/assets/piip-simply0001.webp" alt="simply0001's Piip" width="190" height="190"></div>
+        </section>
+
+        <section id="developers" class="split split-reverse surface" aria-labelledby="developers-title">
+          <div class="split-art small"><img src="/assets/connected-apps.svg" alt="" width="96" height="96"></div>
+          <div>
+            <div class="panel-head">
+              <span class="eyebrow">Developers</span>
+              <h2 id="developers-title">Developer API</h2>
+              <p class="panel-sub">Sites and apps can connect to PocketPass accounts.</p>
+            </div>
+            <p>Sign users in with PocketPass and use the API for profiles, friends, messages, notifications, tokens and encounters, with live updates. People see what an app asks for and can disconnect it at any time.</p>
+            <div class="split-actions">
+              <a class="btn btn-primary" href="https://developer.pocketpass.xyz" rel="noopener noreferrer"><svg class="icon"><use href="#i-code"/></svg>Developer portal</a>
+              <a class="btn btn-secondary" href="https://developer.pocketpass.xyz/docs" rel="noopener noreferrer">Documentation<svg class="icon"><use href="#i-arrow"/></svg></a>
+            </div>
+          </div>
+        </section>
+
+        <section id="community" class="cta surface surface-raised" aria-labelledby="community-title">
+          <span class="head-icon"><svg class="icon"><use href="#i-chat"/></svg></span>
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2 id="community-title">Community and support</h2>
+            <p>Have any questions or bugs to report? We have a discord for that! Ko-fi memberships help pay for hosting; if you signed up with a username, put @yourusername in the Ko-fi message.</p>
+          </div>
+          <div class="cta-actions">
+            <a class="btn btn-primary" data-download-apk href="https://github.com/Hinoaaaaaf212/pocketpass-release/releases/latest" rel="noopener noreferrer"><svg class="icon"><use href="#i-download"/></svg>Download for Android</a>
+            <a class="btn btn-discord" href="https://discord.gg/pocket" rel="noopener noreferrer"><svg class="icon"><use href="#i-discord"/></svg>Join the Discord</a>
+            <a class="btn btn-secondary" href="https://ko-fi.com/pocketpass" rel="noopener noreferrer"><svg class="icon"><use href="#i-heart"/></svg>Support on Ko-fi</a>
+          </div>
+        </section>
+
+        <footer class="footer surface" aria-label="Credits and links">
+          <div class="footer-brand">
+            <img src="/assets/pocketpass-leaf.png" alt="" width="34" height="40">
+            <div>
+              <strong>PocketPass</strong>
+              <span>A friend-finding and messaging app for Android.</span>
+            </div>
+          </div>
+          <nav class="footer-links" aria-label="Footer">
+            <div>
+              <span class="footer-label">Explore</span>
+              <a href="#download"><svg class="icon"><use href="#i-download"/></svg>Download</a>
+              <a href="https://developer.pocketpass.xyz" rel="noopener noreferrer"><svg class="icon"><use href="#i-code"/></svg>Developers</a>
+              <a href="/privacy"><svg class="icon"><use href="#i-shield"/></svg>Privacy &amp; Terms</a>
+              <a href="/delete-account"><svg class="icon"><use href="#i-trash"/></svg>Delete your account</a>
+            </div>
+            <div>
+              <span class="footer-label">Community</span>
+              <a href="https://discord.gg/pocket" rel="noopener noreferrer"><svg class="icon"><use href="#i-discord"/></svg>Discord</a>
+              <a href="https://ko-fi.com/pocketpass" rel="noopener noreferrer"><svg class="icon"><use href="#i-heart"/></svg>Ko-fi</a>
+              <a href="https://github.com/Hinoaaaaaf212/pocketpass-release/releases" rel="noopener noreferrer"><svg class="icon"><use href="#i-arrow"/></svg>Releases on GitHub</a>
+            </div>
+          </nav>
+          <div class="credits">
+            <div class="credit"><strong>simply</strong><span>Creator, code, UI integration</span></div>
+            <div class="credit"><strong>BrocoDev</strong><span>UI redesign</span></div>
+            <div class="credit"><strong>ariankordi</strong><span>Piip creator and Mii renderer</span></div>
+            <div class="credit"><strong>k0o1</strong><span>Official soundtrack</span></div>
+            <div class="credit"><strong>saby</strong><span>Official soundtrack, SFX</span></div>
+          </div>
+          <p class="footer-copy">© 2026 PocketPass. Not affiliated with Nintendo. Rubik is used under the SIL Open Font License; the DS-style emoji come from Sudofont (MIT).</p>
+        </footer>
+        <p class="footer-note">AYN Thor design by lnkd</p>
+      </main>
+    </div>
+  </body>
+</html>

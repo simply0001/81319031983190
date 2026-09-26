@@ -35,7 +35,9 @@ object StepDayLedger {
             lastSampleEpochMillis = nowEpochMillis,
             stepsToday = stepsToday.coerceAtLeast(0),
         )
-        if (previous == null) return baseline(0)
+        if (previous == null) {
+            return baseline(if (bootEpochMillis >= dayStartEpochMillis) counterNow.toIntSteps() else 0)
+        }
 
         val sameDay = dayStartEpochMillis == previous.dayStartEpochMillis
         val carried = if (sameDay) previous.stepsToday else 0
@@ -56,6 +58,33 @@ object StepDayLedger {
         val elapsed = (nowEpochMillis - previous.lastSampleEpochMillis).coerceAtLeast(1L)
         val afterMidnight = (nowEpochMillis - dayStartEpochMillis).coerceIn(0L, elapsed)
         return baseline((delta.toLong() * afterMidnight / elapsed).toInt())
+    }
+
+    fun bootBaseline(
+        previous: StepLedgerState?,
+        nowEpochMillis: Long,
+        bootEpochMillis: Long,
+        dayStartEpochMillis: Long,
+    ): StepLedgerState {
+        if (
+            previous != null &&
+            abs(bootEpochMillis - previous.bootEpochMillis) <= BOOT_DRIFT_TOLERANCE_MILLIS &&
+            previous.lastCounter > 0L
+        ) {
+            return previous
+        }
+        val carried = if (previous != null && previous.dayStartEpochMillis == dayStartEpochMillis) {
+            previous.stepsToday
+        } else {
+            0
+        }
+        return StepLedgerState(
+            dayStartEpochMillis = dayStartEpochMillis,
+            bootEpochMillis = bootEpochMillis,
+            lastCounter = 0L,
+            lastSampleEpochMillis = nowEpochMillis,
+            stepsToday = carried,
+        )
     }
 
     private fun Long.toIntSteps(): Int = coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()

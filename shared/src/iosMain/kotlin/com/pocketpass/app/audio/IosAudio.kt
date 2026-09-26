@@ -66,6 +66,7 @@ private val BackgroundMusicTrack.fileName: String
     get() = when (this) {
         BackgroundMusicTrack.Home -> "bgm_main"
         BackgroundMusicTrack.MiiMaker -> "bgm_mii"
+        BackgroundMusicTrack.Boards -> "bgm_boards"
     }
 
 /** Looping background music, mirroring the Android MediaPlayer behaviour. */

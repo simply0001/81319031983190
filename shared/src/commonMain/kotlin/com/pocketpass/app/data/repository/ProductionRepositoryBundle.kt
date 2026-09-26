@@ -37,7 +37,8 @@ data class ProductionRepositoryBundle(
             nearbySecureStore: SecureStringStore,
             nearbyProofOutboxStore: NearbyProofOutboxStore,
             onEncounterResolved: (NearbyEncounter) -> Unit = {},
-            onEncounterSubmitted: (SubmitNearbyEncounterCommand, NearbyEncounter?) -> Unit = { _, _ -> },
+            onEncounterSubmitted: (SubmitNearbyEncounterCommand, NearbyEncounter?, Boolean) -> Unit =
+                { _, _, _ -> },
             pendingOperationScheduler: PendingOperationScheduler =
                 PendingOperationScheduler.None,
             clock: Clock = Clock.System,

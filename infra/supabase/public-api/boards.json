@@ -1,0 +1,830 @@
+{
+  "settings": {
+    "operation": "settings",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [],
+    "required": [],
+    "page": ""
+  },
+  "list": {
+    "operation": "directory",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "scope",
+      "search",
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "cursor"
+  },
+  "get": {
+    "operation": "board",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "board_id",
+      "review"
+    ],
+    "required": [
+      "board_id"
+    ],
+    "page": ""
+  },
+  "feed": {
+    "operation": "feed",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "board_id",
+      "sort",
+      "period",
+      "limit",
+      "cursor",
+      "review"
+    ],
+    "required": [
+      "board_id"
+    ],
+    "page": "cursor"
+  },
+  "replies": {
+    "operation": "replies",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "post_id",
+      "limit",
+      "cursor",
+      "review"
+    ],
+    "required": [
+      "post_id"
+    ],
+    "page": "cursor"
+  },
+  "post": {
+    "operation": "post",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "post_id",
+      "reveal",
+      "review"
+    ],
+    "required": [
+      "post_id"
+    ],
+    "page": ""
+  },
+  "preview": {
+    "operation": "preview",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "post_id",
+      "reveal",
+      "review"
+    ],
+    "required": [
+      "post_id"
+    ],
+    "page": ""
+  },
+  "asset": {
+    "operation": "asset",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "asset_id"
+    ],
+    "required": [
+      "asset_id"
+    ],
+    "page": ""
+  },
+  "branding_preview": {
+    "operation": "branding_preview",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "board_id",
+      "kind"
+    ],
+    "required": [
+      "board_id",
+      "kind"
+    ],
+    "page": ""
+  },
+  "drafts": {
+    "operation": "drafts",
+    "mutation": false,
+    "scope": "boards:drafts",
+    "fields": [
+      "board_id",
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "cursor"
+  },
+  "inbox": {
+    "operation": "inbox",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "cursor"
+  },
+  "invitations": {
+    "operation": "invitations",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "array"
+  },
+  "proposals": {
+    "operation": "proposals",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "array"
+  },
+  "notices": {
+    "operation": "notices",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "offset"
+  },
+  "members": {
+    "operation": "members",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "board_id",
+      "limit",
+      "cursor",
+      "review"
+    ],
+    "required": [
+      "board_id"
+    ],
+    "page": "cursor"
+  },
+  "management": {
+    "operation": "management",
+    "mutation": false,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "limit",
+      "cursor"
+    ],
+    "required": [
+      "board_id"
+    ],
+    "page": "offset"
+  },
+  "outgoing_invitations": {
+    "operation": "management",
+    "mutation": false,
+    "scope": "boards:invite",
+    "fields": [
+      "board_id",
+      "limit",
+      "cursor"
+    ],
+    "required": [
+      "board_id"
+    ],
+    "page": "offset"
+  },
+  "history": {
+    "operation": "history",
+    "mutation": false,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "post_id",
+      "limit",
+      "cursor"
+    ],
+    "required": [
+      "board_id"
+    ],
+    "page": "array"
+  },
+  "stationery": {
+    "operation": "stationery",
+    "mutation": false,
+    "scope": "boards:read",
+    "fields": [
+      "limit",
+      "cursor"
+    ],
+    "required": [],
+    "page": "array"
+  },
+  "propose": {
+    "operation": "propose",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "id",
+      "name",
+      "description",
+      "rules",
+      "visibility",
+      "operation_id"
+    ],
+    "required": [
+      "name",
+      "visibility",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "join": {
+    "operation": "join",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "board_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "accept_invitation": {
+    "operation": "accept_invitation",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "join_code": {
+    "operation": "join_code",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "code",
+      "operation_id"
+    ],
+    "required": [
+      "code",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "decline_invitation": {
+    "operation": "revoke_invitation",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "decide_join": {
+    "operation": "decide_join",
+    "mutation": true,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "user_id",
+      "approve",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "user_id",
+      "approve",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "invite": {
+    "operation": "invite",
+    "mutation": true,
+    "scope": "boards:invite",
+    "fields": [
+      "board_id",
+      "user_id",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "user_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "create_code": {
+    "operation": "create_code",
+    "mutation": true,
+    "scope": "boards:invite",
+    "fields": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "revoke_invitation": {
+    "operation": "revoke_invitation",
+    "mutation": true,
+    "scope": "boards:invite",
+    "fields": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "leave": {
+    "operation": "leave",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "board_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "preferences": {
+    "operation": "preferences",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "board_id",
+      "muted",
+      "push_enabled",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "push_preference": {
+    "operation": "push_preference",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "enabled",
+      "operation_id"
+    ],
+    "required": [
+      "enabled",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "update_board": {
+    "operation": "update_board",
+    "mutation": true,
+    "scope": "boards:manage",
+    "fields": [
+      "board_id",
+      "name",
+      "description",
+      "rules",
+      "visibility",
+      "accent",
+      "join_policy",
+      "code_policy",
+      "members_can_invite",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "archive": {
+    "operation": "archive",
+    "mutation": true,
+    "scope": "boards:manage",
+    "fields": [
+      "board_id",
+      "archived",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "archived",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "transfer": {
+    "operation": "transfer",
+    "mutation": true,
+    "scope": "boards:manage",
+    "fields": [
+      "board_id",
+      "user_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "user_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "set_moderator": {
+    "operation": "set_moderator",
+    "mutation": true,
+    "scope": "boards:manage",
+    "fields": [
+      "board_id",
+      "user_id",
+      "moderator",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "user_id",
+      "moderator",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "accept_transfer": {
+    "operation": "accept_transfer",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "board_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "publish": {
+    "operation": "publish",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "id",
+      "thread_id",
+      "reply_to",
+      "body",
+      "drawing",
+      "stationery_id",
+      "spoiler",
+      "draft_id",
+      "draft_revision_id",
+      "draft_base_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "edit": {
+    "operation": "edit",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "post_id",
+      "body",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "post_id",
+      "body",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "delete_post": {
+    "operation": "delete_post",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "post_id",
+      "reason",
+      "review",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "post_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "spoiler": {
+    "operation": "spoiler",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "post_id",
+      "spoiler",
+      "reason",
+      "review",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "post_id",
+      "spoiler",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "react": {
+    "operation": "react",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "post_id",
+      "yeah",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "post_id",
+      "yeah",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "draw_branding": {
+    "operation": "draw_branding",
+    "mutation": true,
+    "scope": "boards:manage",
+    "fields": [
+      "board_id",
+      "kind",
+      "drawing",
+      "draft_id",
+      "draft_revision_id",
+      "draft_base_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "kind",
+      "drawing",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "save_draft": {
+    "operation": "save_draft",
+    "mutation": true,
+    "scope": "boards:drafts",
+    "fields": [
+      "board_id",
+      "draft_id",
+      "revision_id",
+      "base_id",
+      "payload",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "draft_id",
+      "revision_id",
+      "payload",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "discard_draft": {
+    "operation": "discard_draft",
+    "mutation": true,
+    "scope": "boards:drafts",
+    "fields": [
+      "revision_id",
+      "operation_id"
+    ],
+    "required": [
+      "revision_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "report": {
+    "operation": "report",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "post_id",
+      "reason",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "reason",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "resolve_report": {
+    "operation": "resolve_report",
+    "mutation": true,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "id",
+      "reason",
+      "status",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "id",
+      "reason",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "restrict": {
+    "operation": "restrict",
+    "mutation": true,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "user_id",
+      "kind",
+      "reason",
+      "expires_at",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "user_id",
+      "kind",
+      "reason",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "revoke_restriction": {
+    "operation": "revoke_restriction",
+    "mutation": true,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "appeal": {
+    "operation": "appeal",
+    "mutation": true,
+    "scope": "boards:write",
+    "fields": [
+      "board_id",
+      "case_id",
+      "reason",
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "case_id",
+      "reason",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "resolve_appeal": {
+    "operation": "resolve_appeal",
+    "mutation": true,
+    "scope": "boards:moderate",
+    "fields": [
+      "board_id",
+      "id",
+      "reason",
+      "status",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "id",
+      "reason",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "read_event": {
+    "operation": "read_event",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "id",
+      "operation_id"
+    ],
+    "required": [
+      "id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "read_thread": {
+    "operation": "read_thread",
+    "mutation": true,
+    "scope": "boards:membership",
+    "fields": [
+      "board_id",
+      "thread_id",
+      "operation_id"
+    ],
+    "required": [
+      "board_id",
+      "operation_id"
+    ],
+    "page": ""
+  },
+  "buy_stationery": {
+    "operation": "buy_stationery",
+    "mutation": true,
+    "scope": "boards:purchase",
+    "fields": [
+      "stationery_id",
+      "operation_id"
+    ],
+    "required": [
+      "stationery_id",
+      "operation_id"
+    ],
+    "page": ""
+  }
+}

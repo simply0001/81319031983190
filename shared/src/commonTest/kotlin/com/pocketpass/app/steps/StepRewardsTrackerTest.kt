@@ -42,10 +42,14 @@ class StepRewardsTrackerTest {
         var next: StepSample? = null
         var requests = 0
         var liveActive = false
+        var backgroundActive = false
 
         override suspend fun sample(): StepSample? = next
         override fun setLive(active: Boolean) {
             liveActive = active
+        }
+        override fun setBackgroundSampling(active: Boolean) {
+            backgroundActive = active
         }
         override fun requestPermission() {
             requests += 1
@@ -86,15 +90,19 @@ class StepRewardsTrackerTest {
         override suspend fun setEncounterAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) = Unit
+        override suspend fun setMessageAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setStepRewardsEnabled(enabled: Boolean) {
             store.update { it.copy(stepRewardsEnabled = enabled) }
         }
         override suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) = Unit
         override suspend fun setLastSeenMinSupportedVersionCode(versionCode: Int) = Unit
         override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) = Unit
+        override suspend fun setGlobalLeaderboardLimit(limit: Int) = Unit
+
         override suspend fun setLeaderboardScope(scope: LeaderboardScope) = Unit
         override suspend fun setRecentInteractionsSort(sort: RecentInteractionsSort) = Unit
         override suspend fun setFriendsSort(sort: RecentInteractionsSort) = Unit
+        override suspend fun setPendingAccountSetupUserId(userId: String?) = Unit
         override suspend fun resetSettings() = Unit
     }
 
@@ -289,5 +297,17 @@ class StepRewardsTrackerTest {
         tracker.setForeground(false)
         runCurrent()
         assertFalse(source.liveActive)
+    }
+
+    @Test
+    fun trackingKeepsBackgroundSamplingOnUntilTheSettingTurnsOff() = runTest {
+        val source = FakeSource()
+        val tracker = tracker(source)
+        runCurrent()
+        assertTrue(source.backgroundActive)
+
+        tracker.onPreferenceChanged(false)
+        runCurrent()
+        assertFalse(source.backgroundActive)
     }
 }

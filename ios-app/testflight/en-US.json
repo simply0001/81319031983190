@@ -1,0 +1,9 @@
+{
+  "beta_app_description": "Make a Piip, meet nearby players over Bluetooth, and keep in touch through messages and group chats. Try the games, optional Step Rewards and Home Screen widget, and let us know how PocketPass feels on your iPhone.",
+  "what_to_test": "Please focus on message notifications in this first iPhone beta. With Message Alerts enabled, exchange direct and group messages while PocketPass is open, in the background and with your screen locked. Tap an alert and check that it opens the right conversation. Try turning alerts off and back on, and signing out and back in. Also try nearby encounters with another device, photo attachments, the Home Screen widget and Step Rewards. Report crashes, missing alerts or anything that feels awkward through TestFlight feedback, including your iPhone model and what you were doing.",
+  "status": "Draft for the first TestFlight build; no build has been uploaded",
+  "owner_fields_needed": [
+    "Feedback email",
+    "Beta review contact details and a working review account before external testing"
+  ]
+}

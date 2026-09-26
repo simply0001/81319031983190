@@ -13,6 +13,8 @@ import com.pocketpass.app.domain.repository.SessionRepository
 import com.pocketpass.app.domain.repository.ShopRepository
 import com.pocketpass.app.domain.repository.SyncRepository
 import com.pocketpass.app.domain.repository.WorldTourRepository
+import com.pocketpass.app.domain.repository.PassingStatsRepository
+import com.pocketpass.app.domain.repository.PuzzleRepository
 
 data class PocketPassRepositoryGraph(
     val session: SessionRepository,
@@ -24,8 +26,11 @@ data class PocketPassRepositoryGraph(
     val leaderboard: LeaderboardRepository,
     val achievements: AchievementsRepository,
     val worldTour: WorldTourRepository,
+    val passingStats: PassingStatsRepository,
     val bingo: BingoRepository,
+    val puzzle: PuzzleRepository,
     val encounters: EncounterRepository,
     val presence: PresenceRepository,
     val sync: SyncRepository,
+    val boards: com.pocketpass.app.boards.BoardRepository? = null,
 )

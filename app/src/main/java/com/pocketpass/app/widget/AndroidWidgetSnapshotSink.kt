@@ -10,8 +10,8 @@ class AndroidWidgetSnapshotSink(context: Context) : WidgetSnapshotSink {
     override suspend fun publish(snapshot: WidgetSnapshot, portraitSourcePath: String?) {
         try {
             WidgetSnapshotStore.write(appContext, snapshot, portraitSourcePath)
-            StreetPassSummaryWidget().updateAll(appContext)
-            ProfileCardWidget().updateAll(appContext)
+            WidgetRefresh.bump()
+            CustomWidget().updateAll(appContext)
         } catch (error: Exception) {
             Log.w(TAG, "Widget snapshot could not be published", error)
         }

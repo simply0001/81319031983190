@@ -35,12 +35,12 @@
     },
     {
       "path": "patches/pocketpass-renderer.patch",
-      "sha256": "6ceda09c7ca6f9cac0603c1722a59c1b88ae4c6d79232d1a03a1cfc62a0740bb"
+      "sha256": "993b6b6c6bdc8c9e94776a9aef8515309f1fbd567fea2a81e646709d47039d5c"
     }
   ],
   "bundle": {
     "path": "app/src/main/assets/mii_renderer/dist/renderer.js",
-    "sha256": "ec02b636f5aabdd2dc5a417e5856d3e8991badc6d4e3b39ab0e919233096eaf1"
+    "sha256": "77cb351c5f6fdd01cab03e5ce3ff783e2039a27a8099138bdad8ba01b245bfe7"
   },
   "upstreamRuntimeAssets": [
     {
@@ -77,13 +77,21 @@
   "pocketPassRuntimeAssets": [
     {
       "packagedPath": "app/src/main/assets/mii_renderer/assets/models/hat_models_bundle.zip",
-      "sha256": "c2b9f13bd67eda495ed977c832cac9543bba1ed87fbddd9019c124cff384c286",
+      "sha256": "ab25694e92cc1440f4a92579decc7333541090d6fad41f9b804f60b437feaa6a",
       "derivedFrom": {
         "upstreamPath": "public/assets/models/hat_models_bundle.zip",
         "sha256": "fd4f8ce7900fca476e6158090c7870de0ab8ea5ae2a884003cc58574609fc717"
       },
       "additions": [
-        "hat_10.glb"
+        "hat_10.glb",
+        "hat_11.glb"
+      ],
+      "additionSources": [
+        {
+          "file": "hat_11.glb",
+          "upstreamPath": "public/assets/models/hat_8.glb",
+          "sha256": "3abbdec325943a3095f3c9c6d8bb71654888a9833d54a00178e3be405b742642"
+        }
       ]
     }
   ],

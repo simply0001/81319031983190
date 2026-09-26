@@ -22,6 +22,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 object ProductionOperationKinds {
+    const val SET_CHAT_COLOUR = "SET_CHAT_COLOUR"
     const val UPDATE_PROFILE = "UPDATE_PROFILE"
     const val SEND_FRIEND_REQUEST = "SEND_FRIEND_REQUEST"
     const val RESPOND_TO_FRIEND_REQUEST = "RESPOND_TO_FRIEND_REQUEST"
@@ -33,8 +34,24 @@ object ProductionOperationKinds {
     const val PURCHASE_SHOP_ITEM = "PURCHASE_SHOP_ITEM"
 }
 
+@Serializable
+private data class ChatColourWire(val accountId: String, val colour: String, val operationId: String, val changedAt: Long)
+
 object ProductionOperationPayloadCodec {
     const val VERSION = 1
+
+    fun encode(command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand): String = json.encodeToString(
+        ChatColourWire(command.accountId.value, command.colour.key, command.clientOperationId.value, command.changedAt.toEpochMilliseconds()),
+    )
+
+    fun decodeChatColour(payload: String, version: Int): com.pocketpass.app.domain.model.SetChatBubbleColourCommand {
+        requireSupportedVersion(version, ProductionOperationKinds.SET_CHAT_COLOUR)
+        val wire = json.decodeFromString<ChatColourWire>(payload)
+        val colour = com.pocketpass.app.domain.model.ChatBubbleColour.entries.firstOrNull { it.key == wire.colour }
+        requireNotNull(colour) { "Unknown chat colour" }
+        return com.pocketpass.app.domain.model.SetChatBubbleColourCommand(UserId(wire.accountId), colour,
+            Instant.fromEpochMilliseconds(wire.changedAt), ClientOperationId(wire.operationId))
+    }
 
     private val json = Json {
         encodeDefaults = true

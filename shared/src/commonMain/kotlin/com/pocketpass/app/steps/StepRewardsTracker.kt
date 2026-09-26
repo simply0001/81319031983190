@@ -31,6 +31,7 @@ class StepRewardsTracker(
     private val remote: StepRewardsRemoteDataSource,
     private val scope: CoroutineScope,
     private val clock: Clock = Clock.System,
+    private val onPiecesCredited: suspend (UserId) -> Unit = {},
 ) : StepRewardsActions {
     private data class ClaimKey(val accountId: String, val localDay: String)
 
@@ -60,7 +61,7 @@ class StepRewardsTracker(
                 if (status != StepRewardsStatus.Tracking && status != StepRewardsStatus.NeedsPermission) {
                     lock.withLock { clearProgress() }
                 }
-                updateLive()
+                updateSampling()
                 if (changed && status == StepRewardsStatus.Tracking) sampleAndClaim()
             }
         }
@@ -74,12 +75,14 @@ class StepRewardsTracker(
             settingsRepository.setStepRewardsEnabled(enabled)
             if (!enabled) return@launch
             source.refreshPermission()
-            if (source.permission.value.needsPrompt()) source.requestPermission()
+            // The sensor may already be granted while the preferred health
+            // source still needs consent, so let the source choose the prompt.
+            source.requestPermission()
         }
     }
 
     override fun requestPermission() {
-        source.requestPermission()
+        source.requestPermissionAgain()
     }
 
     override fun onPermissionResult() {
@@ -88,7 +91,11 @@ class StepRewardsTracker(
 
     override fun setForeground(foreground: Boolean) {
         this.foreground = foreground
-        updateLive()
+        updateSampling()
+        if (foreground && mutableState.value.status == StepRewardsStatus.Tracking) {
+            source.refreshPermission()
+            source.requestPermission()
+        }
         if (foreground && mutableState.value.status == StepRewardsStatus.Tracking) {
             scope.launch { sampleAndClaim() }
         }
@@ -113,8 +120,10 @@ class StepRewardsTracker(
     private fun StepPermission.needsPrompt(): Boolean =
         this == StepPermission.NotDetermined || this == StepPermission.Denied
 
-    private fun updateLive() {
-        source.setLive(foreground && mutableState.value.status == StepRewardsStatus.Tracking)
+    private fun updateSampling() {
+        val tracking = mutableState.value.status == StepRewardsStatus.Tracking
+        source.setBackgroundSampling(tracking)
+        source.setLive(foreground && tracking)
     }
 
     private fun clearProgress() {
@@ -157,6 +166,9 @@ class StepRewardsTracker(
                     mutableState.update {
                         it.copy(tokensToday = result.value.tokensAwarded, claimError = null)
                     }
+                }
+                if (result.value.piecesCredited > 0) {
+                    scope.launch { onPiecesCredited(account) }
                 }
                 true
             }

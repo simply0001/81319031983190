@@ -1,0 +1,61 @@
+project_id = "pocketpass"
+
+[api]
+enabled = true
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "https://links.pocketpass.xyz"
+additional_redirect_urls = [
+  "https://links.pocketpass.xyz/auth/callback",
+  "pocketpass://auth/callback",
+  "https://developer.pocketpass.xyz/",
+]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 8
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = false
+enable_confirmations = false
+max_frequency = "60s"
+otp_expiry = 600
+otp_length = 6
+
+[auth.email.template.magic_link]
+subject = "Your PocketPass verification code"
+content_path = "./templates/auth-email/otp.html"
+
+[auth.captcha]
+enabled = false
+
+[auth.external.discord]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_DISCORD_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_DISCORD_SECRET)"
+redirect_uri = "https://api.pocketpass.xyz/auth/v1/callback"
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+
+[analytics]
+enabled = false

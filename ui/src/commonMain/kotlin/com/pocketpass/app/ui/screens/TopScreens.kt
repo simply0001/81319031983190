@@ -84,6 +84,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.rememberAsyncImagePainter
 import com.pocketpass.app.ui.components.rememberPocketAssetBytes
 import com.pocketpass.app.domain.model.AvatarReference
+import com.pocketpass.app.domain.model.ChatBubbleColour
 import com.pocketpass.app.domain.model.ConversationSummary
 import com.pocketpass.app.domain.model.Message
 import com.pocketpass.app.domain.state.SessionState
@@ -105,6 +106,7 @@ import com.pocketpass.app.ui.TOP_DESIGN_WIDTH
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.EntranceMotion
 import com.pocketpass.app.ui.components.FigmaAsset
+import com.pocketpass.app.ui.components.PassingStreakPill
 import com.pocketpass.app.ui.components.PatternBackground
 import com.pocketpass.app.ui.components.pocketBorder
 import com.pocketpass.app.ui.components.pocketFrame
@@ -142,7 +144,9 @@ fun TopScreen(
         PocketPassDestination.Home ->
             HomeTop(state, dispatch, extensions, profileViewerPresenting)
         PocketPassDestination.Activities -> ActivitiesTop(state, dispatch)
-        PocketPassDestination.Messages -> MessagesTop(state, threadPresenting)
+        PocketPassDestination.Messages -> if (state.boardsVisible) {
+            if (!threadPresenting) BoardsTop(state)
+        } else MessagesTop(state, threadPresenting)
         PocketPassDestination.Friends -> FriendsTop(state, profileViewerPresenting)
         PocketPassDestination.Settings -> SettingsTop(state)
     }
@@ -190,7 +194,6 @@ fun TopProfileViewer(
     val presenting = state.visible || retainedState != null
     LaunchedEffect(presenting) { onPresentingChanged(presenting) }
     val content = if (state.visible) state else retainedState ?: return
-    val palette = content.source.profilePalette(pocketPalette)
     val blockerInteraction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
@@ -215,11 +218,11 @@ fun TopProfileViewer(
                     scaleY = 0.985f + (0.015f * settled)
                 },
         ) {
-            FriendProfileHero(
-                metrics = metrics,
-                state = content,
-                palette = palette,
-            )
+            if (content.source == ProfileViewerSource.Board) {
+                BoardProfileTop(metrics, content, dispatch)
+            } else {
+                FriendProfileHero(metrics, content, content.source.profilePalette(pocketPalette))
+            }
         }
     }
 }
@@ -288,7 +291,6 @@ fun TopShop(
             holdFraction = 0.5f,
             designWidth = TOP_DESIGN_WIDTH,
             designHeight = TOP_DESIGN_HEIGHT,
-            alpha = { 1f - (translation.value / SHOP_CLOSED_OFFSET).coerceIn(0f, 1f) },
         )
         FigmaAsset(
             resource = Assets.ActivitiesCoinDefault,
@@ -376,7 +378,6 @@ fun TopGames(
             holdFraction = 0.5f,
             designWidth = TOP_DESIGN_WIDTH,
             designHeight = TOP_DESIGN_HEIGHT,
-            alpha = { 1f - (translation.value / SHOP_CLOSED_OFFSET).coerceIn(0f, 1f) },
         )
         FigmaAsset(
             resource = Assets.GamesHero,
@@ -449,7 +450,6 @@ fun TopLeaderboard(
             holdFraction = 0.5f,
             designWidth = TOP_DESIGN_WIDTH,
             designHeight = TOP_DESIGN_HEIGHT,
-            alpha = { 1f - (translation.value / SHOP_CLOSED_OFFSET).coerceIn(0f, 1f) },
         )
         FigmaAsset(
             resource = Assets.LeaderboardTrophyHero,
@@ -560,7 +560,6 @@ fun TopMessageThread(
             holdFraction = 0f,
             designWidth = TOP_DESIGN_WIDTH,
             designHeight = TOP_DESIGN_HEIGHT,
-            alpha = { 1f - (translation.value / MESSAGE_THREAD_CLOSED_OFFSET).coerceIn(0f, 1f) },
         )
 
         LazyColumn(
@@ -609,6 +608,7 @@ fun TopMessageThread(
                     metrics = metrics,
                     message = message,
                     outgoing = mine,
+                    colour = state.messageColour(message.senderId),
                     onRetry = { dispatch(PocketPassEvent.RetryMessage(message.id.value)) },
                     arrivalPop = arrivalPop,
                     onLongPress = if (conversation != null && mine && message.isEditable()) {
@@ -627,11 +627,10 @@ fun TopMessageThread(
             }
             if (partnerTyping) {
                 item(key = "typing_indicator") {
-                    TypingIndicatorBubble(
+                    ConversationTypingIndicators(
                         metrics = metrics,
-                        label = shownConversation
-                            ?.takeIf { it.isGroup }
-                            ?.let { typingNames(it, state.typingUserIds) },
+                        state = state,
+                        conversation = shownConversation,
                     )
                 }
             }
@@ -651,10 +650,25 @@ internal class MessageArrivalTracker {
 }
 
 @Composable
+internal fun ConversationTypingIndicators(
+    metrics: DesignMetrics,
+    state: PocketPassUiState,
+    conversation: ConversationSummary?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(metrics.dp(24f))) {
+        state.typingIndicatorStyles(conversation).forEach { style ->
+            TypingIndicatorBubble(metrics, style.label, style.colour)
+        }
+    }
+}
+
+@Composable
 internal fun TypingIndicatorBubble(
     metrics: DesignMetrics,
     label: String? = null,
+    colour: ChatBubbleColour = ChatBubbleColour.Default,
 ) {
+    val palette = chatBubblePalette(colour, outgoing = false)
     val wave = rememberInfiniteTransition(label = "typing dots").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -669,7 +683,7 @@ internal fun TypingIndicatorBubble(
             Text(
                 text = label,
                 modifier = Modifier.padding(start = metrics.dp(23f), bottom = metrics.dp(10f)),
-                color = pocketPalette.ink(Color(0xFF8C6D0D)),
+                color = pocketPalette.ink(if (colour == ChatBubbleColour.Default) Color(0xFF8C6D0D) else palette.border),
                 fontFamily = Rubik,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = metrics.sp(30f),
@@ -680,17 +694,12 @@ internal fun TypingIndicatorBubble(
         Box(
             modifier = Modifier
                 .requiredSize(metrics.dp(232f), metrics.dp(120f))
+                .testTag("typing_indicator_${colour.key}")
                 .clip(shape)
                 .pocketFrame(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color(0xFFEDD85E),
-                            0.16477f to Color(0xFFEDD85E),
-                            1f to Color(0xFFFF9900),
-                        ),
-                    ),
+                    Brush.verticalGradient(colorStops = palette.fill),
                     metrics.dp(16.122f),
-                    Color(0xFFC2B04B),
+                    palette.border,
                     shape,
                 )
                 .drawBehind {
@@ -706,7 +715,7 @@ internal fun TypingIndicatorBubble(
                             0f
                         }
                         drawCircle(
-                            color = Color.White,
+                            color = palette.text,
                             radius = dotRadius,
                             center = Offset(
                                 spacing * (index + 1),
@@ -767,7 +776,8 @@ private fun FriendProfileHero(
         )
     }
     Box(
-        modifier = Modifier.designBounds(metrics, 740.5f, 484f, 924f, 174f),
+        modifier = Modifier.designBounds(metrics, 740.5f, 484f, 924f, 174f)
+            .testTag("friend_profile_hero"),
         contentAlignment = Alignment.CenterStart,
     ) {
         BasicText(
@@ -1067,7 +1077,7 @@ private fun ProfileFriendRequestButton(
     onClick: () -> Unit,
 ) {
     if (
-        state.source != ProfileViewerSource.RecentInteraction ||
+        state.source !in setOf(ProfileViewerSource.RecentInteraction, ProfileViewerSource.Board) ||
         state.friendRequestState == ProfileFriendRequestState.Hidden
     ) {
         return
@@ -1078,7 +1088,8 @@ private fun ProfileFriendRequestButton(
         ProfileFriendRequestState.Sending -> "Sending…"
         ProfileFriendRequestState.Pending -> "Request pending"
         ProfileFriendRequestState.Friends -> "Friends"
-        ProfileFriendRequestState.Unavailable -> "Unavailable"
+        ProfileFriendRequestState.Unavailable ->
+            if (state.profile?.blockInvites == true) "Friend requests off" else "Unavailable"
         ProfileFriendRequestState.Failed -> "Try Again"
     }
     val enabled =
@@ -1947,6 +1958,7 @@ private fun ActivitiesTop(
                 )
             }
         }
+        PassingStreakPill(metrics, state.activitySnapshot)
     }
 }
 
@@ -2056,7 +2068,7 @@ private fun MessagesTop(state: PocketPassUiState, threadPresenting: Boolean) {
     )
     val badgeGone = remember { derivedStateOf { badgeAlpha <= 0.001f } }
     if (badgeGone.value) return
-    TopPage(entrance = EntranceMotion.MessagePop) { metrics ->
+    TopPage(entrance = EntranceMotion.BoardOpen) { metrics ->
         MotionLayer(
             modifier = Modifier
                 .designBounds(
@@ -2067,7 +2079,7 @@ private fun MessagesTop(state: PocketPassUiState, threadPresenting: Boolean) {
                     597.997f,
                 )
                 .graphicsLayer { alpha = badgeAlpha },
-            idle = IdleMotion.MessageFloat,
+            idle = IdleMotion.None,
         ) {
             Box(
                 modifier = Modifier

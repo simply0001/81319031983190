@@ -9,14 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.key
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +89,8 @@ value class PocketAsset(val path: String)
 
 private fun figma(name: String) = PocketAsset("files/figma/$name")
 
+private fun puzzle(name: String) = PocketAsset("files/puzzles/$name")
+
 @Immutable
 class DesignMetrics(
     private val density: Density,
@@ -123,36 +120,18 @@ fun overscanFor(
     )
 }
 
-@Stable
-class DesignBackdropHost internal constructor() {
-    private val entries = mutableStateListOf<Pair<Any, @Composable () -> Unit>>()
-
-    val layers: List<Pair<Any, @Composable () -> Unit>>
-        get() = entries
-
-    internal fun set(owner: Any, content: @Composable () -> Unit) {
-        val index = entries.indexOfFirst { it.first === owner }
-        if (index >= 0) entries[index] = owner to content else entries += owner to content
-    }
-
-    internal fun clear(owner: Any) {
-        entries.removeAll { it.first === owner }
-    }
-}
-
-val LocalDesignBackdrop = staticCompositionLocalOf<DesignBackdropHost?> { null }
-
 @Composable
 fun DesignSurface(
     designWidth: Float,
     designHeight: Float,
     modifier: Modifier = Modifier,
     background: Color = Color.Transparent,
+    viewportBackground: Color = Color.Black,
     content: @Composable BoxScope.(DesignMetrics) -> Unit,
 ) {
     BoxWithConstraints(
         modifier = modifier
-            .background(Color.Black)
+            .background(viewportBackground)
             .clipToBounds(),
         contentAlignment = Alignment.Center,
     ) {
@@ -167,7 +146,6 @@ fun DesignSurface(
         val metrics = remember(density, designWidth, designHeight, overscan, scale) {
             DesignMetrics(density, designWidth, designHeight, overscan.x, overscan.y, scale)
         }
-        val backdrop = remember { DesignBackdropHost() }
         val panelWidth = designWidth + 2f * overscan.x
         val panelHeight = designHeight + 2f * overscan.y
         val layer = Modifier
@@ -178,21 +156,13 @@ fun DesignSurface(
                 transformOrigin = TransformOrigin.Center
             }
 
-        if (metrics.hasOverscan) {
-            Box(layer) {
-                backdrop.layers.forEach { (owner, content) -> key(owner) { content() } }
-            }
-        }
         Box(layer.clipToBounds()) {
             Box(
                 Modifier
                     .designBounds(metrics, overscan.x, overscan.y, designWidth, designHeight)
                     .background(background),
             ) {
-                CompositionLocalProvider(
-                    LocalDesignBackdrop provides backdrop,
-                    LocalDesignMetrics provides metrics,
-                ) {
+                CompositionLocalProvider(LocalDesignMetrics provides metrics) {
                     content(metrics)
                 }
             }
@@ -203,29 +173,22 @@ fun DesignSurface(
 @Composable
 fun DesignBackdrop(
     metrics: DesignMetrics,
-    alpha: () -> Float = { 1f },
-    key: Any? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val host = LocalDesignBackdrop.current
-    if (host == null || !metrics.hasOverscan) {
-        Box(Modifier.fillMaxSize(), content = content)
-        return
+    val bounds = if (metrics.hasOverscan) {
+        Modifier.anchoredBounds(
+            metrics,
+            0f,
+            0f,
+            metrics.designWidth,
+            metrics.designHeight,
+            DesignAnchor.Stretch,
+            DesignAnchor.Stretch,
+        )
+    } else {
+        Modifier.fillMaxSize()
     }
-    val latest = rememberUpdatedState(content)
-    val latestAlpha = rememberUpdatedState(alpha)
-    val latestKey = rememberUpdatedState(key)
-    val owner = remember { Any() }
-    DisposableEffect(host, owner) {
-        host.set(owner) {
-            if (latestAlpha.value() > 0f) {
-                Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = latestAlpha.value() }) {
-                    key(latestKey.value) { latest.value(this) }
-                }
-            }
-        }
-        onDispose { host.clear(owner) }
-    }
+    Box(bounds, content = content)
 }
 
 val LocalDesignMetrics = staticCompositionLocalOf<DesignMetrics?> { null }
@@ -337,6 +300,7 @@ fun Modifier.designBounds(
 
 object Assets {
     val AuthLeaf = figma("auth_leaf.png")
+    val AuthCheck = figma("auth_check.svg")
     val StatusWifi = figma("status_wifi.svg")
     val StatusBattery = figma("status_battery.svg")
     val NavMessages = figma("nav_messages.svg")
@@ -387,6 +351,7 @@ object Assets {
     val GameWoodBottom = figma("game_wood_bottom.jpg")
     val PuzzleSwapTitle = figma("puzzle_swap_title.svg")
     val PuzzleSwapBottom = figma("puzzle_bottom.jpg")
+    val PuzzlePockiHappy = puzzle("pocki_happy.png")
     val BingoPaper = figma("bingo_paper.png")
     val BingoTitle = figma("bingo_title.svg")
     val BingoNotePaper = figma("bingo_note_paper.png")
@@ -432,6 +397,7 @@ object Assets {
     val SettingsGear = figma("settings_gear_face.svg")
     val SettingsGearShadow = figma("settings_gear_shadow.svg")
     val SettingsNotifications = figma("settings_notifications.svg")
+    val SettingsBackgroundRun = figma("settings_background_run.svg")
     val SettingsArrow = figma("settings_arrow.svg")
     val SettingsTheme = figma("settings_theme.svg")
     val SettingsEditMii = figma("settings_edit_mii.svg")
@@ -456,6 +422,32 @@ object Assets {
     val SettingsCreditsAvatarAriankordi = figma("settings_credits_avatar_ariankordi.jpg")
     val SettingsCreditsAvatarSaby = figma("settings_credits_avatar_saby.png")
     val SettingsContributors = figma("settings_contributors.svg")
+    val SettingsWidgets = figma("settings_widgets.svg")
+    val SettingsChatColours = figma("settings_chat_colours.svg")
+    val SettingsMessagePrivacy = figma("settings_message_privacy.svg")
+    val SettingsApp = figma("settings_app.svg")
+    val SettingsTokens = figma("settings_tokens.svg")
+    val SettingsTrophy = figma("settings_trophy.svg")
+    val SettingsBingo = figma("settings_bingo.svg")
+    val SettingsGlobe = figma("settings_globe.svg")
+    val SettingsPodium = figma("settings_podium.svg")
+    val SettingsFriendCode = figma("settings_friend_code.svg")
+    val SettingsClock = figma("settings_clock.svg")
+    val WidgetPattern = figma("widget_pattern.png")
+    val WidgetGlyphSteps = figma("widget_glyph_steps.svg")
+    val WidgetGlyphTokens = figma("widget_glyph_tokens.svg")
+    val WidgetGlyphEncounters = figma("widget_glyph_encounters.svg")
+    val WidgetGlyphAchievements = figma("widget_glyph_achievements.svg")
+    val WidgetGlyphClock = figma("widget_glyph_clock.svg")
+    val WidgetGlyphNearby = figma("widget_glyph_nearby.svg")
+    val WidgetGlyphSocial = figma("widget_glyph_social.svg")
+    val WidgetGlyphGroups = figma("widget_glyph_groups.svg")
+    val WidgetGlyphNotifications = figma("widget_glyph_notifications.svg")
+    val WidgetGlyphPerson = figma("widget_glyph_person.svg")
+    val WidgetGlyphFriendCode = figma("widget_glyph_friend_code.svg")
+    val WidgetGlyphGlobe = figma("widget_glyph_globe.svg")
+    val WidgetGlyphBingo = figma("widget_glyph_bingo.svg")
+    val WidgetGlyphPodium = figma("widget_glyph_podium.svg")
     val SettingsDelete = figma("settings_delete.svg")
     val NotificationAccept = figma("notification_accept.svg")
     val NotificationDecline = figma("notification_decline.svg")

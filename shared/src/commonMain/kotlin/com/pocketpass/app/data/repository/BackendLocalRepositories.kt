@@ -5,6 +5,7 @@ import com.pocketpass.app.data.local.dao.BingoDao
 import com.pocketpass.app.data.local.dao.LeaderboardDao
 import com.pocketpass.app.data.local.dao.ShopDao
 import com.pocketpass.app.data.local.dao.WorldTourDao
+import com.pocketpass.app.data.local.dao.PassingStatsDao
 import com.pocketpass.app.data.local.entity.AchievementStateEntity
 import com.pocketpass.app.data.local.entity.BingoCellEntity
 import com.pocketpass.app.data.local.entity.LeaderboardEntryEntity
@@ -21,6 +22,7 @@ import com.pocketpass.app.data.repository.remote.BingoRemoteDataSource
 import com.pocketpass.app.data.repository.remote.LeaderboardRemoteDataSource
 import com.pocketpass.app.data.repository.remote.ShopRemoteDataSource
 import com.pocketpass.app.data.repository.remote.WorldTourRemoteDataSource
+import com.pocketpass.app.data.repository.remote.PassingStatsRemoteDataSource
 import com.pocketpass.app.domain.model.AchievementCatalog
 import com.pocketpass.app.domain.model.AchievementState
 import com.pocketpass.app.domain.model.BingoCell
@@ -33,11 +35,14 @@ import com.pocketpass.app.domain.model.PurchaseShopItemCommand
 import com.pocketpass.app.domain.model.ShopCategory
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
 import com.pocketpass.app.domain.repository.AchievementsRepository
 import com.pocketpass.app.domain.repository.BingoRepository
 import com.pocketpass.app.domain.repository.LeaderboardRepository
 import com.pocketpass.app.domain.repository.ShopRepository
 import com.pocketpass.app.domain.repository.WorldTourRepository
+import com.pocketpass.app.steps.localUtcOffsetMinutes
+import com.pocketpass.app.domain.repository.PassingStatsRepository
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
@@ -52,6 +57,17 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transformLatest
+import com.pocketpass.app.data.local.dao.PuzzleDao
+import com.pocketpass.app.data.local.entity.PuzzlePieceEntity
+import com.pocketpass.app.data.repository.remote.PuzzleRemoteDataSource
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleArtwork
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
+import com.pocketpass.app.domain.model.PuzzleProgress
+import com.pocketpass.app.domain.repository.NoPuzzleArtworkStore
+import com.pocketpass.app.domain.repository.PuzzleArtworkStore
+import com.pocketpass.app.domain.repository.PuzzleRepository
 
 class RoomShopRepository(
     private val shopDao: ShopDao,
@@ -88,7 +104,7 @@ class RoomShopRepository(
         shopDao.observeItems(),
         observeSupporterActive(accountId),
     ) { confirmed, items, supporter ->
-        val unlocked = if (supporter) items.mapNotNull(ShopItemEntity::miiHatType) else emptyList()
+        val unlocked = items.filter { supporter || it.priceTokens == 0 }.mapNotNull(ShopItemEntity::miiHatType)
         (confirmed + unlocked).toSet()
     }.distinctUntilChanged()
 
@@ -318,6 +334,115 @@ class RoomWorldTourRepository(
                 RepositoryResult.Success(Unit)
             }
         }
+}
+
+class RoomPassingStatsRepository(
+    private val passingStatsDao: PassingStatsDao,
+    private val remote: PassingStatsRemoteDataSource,
+    private val now: () -> Instant = Clock.System::now,
+    private val utcOffsetMinutes: (Instant) -> Int = { at ->
+        localUtcOffsetMinutes(at.toEpochMilliseconds())
+    },
+) : PassingStatsRepository {
+    override fun observeStats(accountId: UserId): Flow<PassingStats?> =
+        passingStatsDao.observeStats(accountId.value)
+            .map { stats -> stats?.toDomain() }
+            .distinctUntilChanged()
+
+    override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> {
+        val at = now()
+        return when (val stats = remote.fetchStats(accountId, utcOffsetMinutes(at))) {
+            is RepositoryResult.Failure -> stats
+            is RepositoryResult.Success -> {
+                passingStatsDao.upsertStats(stats.value.toEntity(accountId, at))
+                RepositoryResult.Success(Unit)
+            }
+        }
+    }
+}
+
+class RoomPuzzleRepository(
+    private val puzzleDao: PuzzleDao,
+    private val remote: PuzzleRemoteDataSource,
+    private val artworkStore: PuzzleArtworkStore = NoPuzzleArtworkStore,
+    private val now: () -> Instant = Clock.System::now,
+) : PuzzleRepository {
+    override fun observeCollection(accountId: UserId): Flow<PuzzleCollection> =
+        combine(
+            puzzleDao.observeCollection(accountId.value),
+            puzzleDao.observePuzzles(accountId.value),
+            puzzleDao.observePieces(accountId.value),
+        ) { collection, puzzles, pieces ->
+            collection?.toDomain(puzzles, pieces) ?: PuzzleCollection.seed()
+        }.distinctUntilChanged()
+
+    override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> =
+        when (val fetched = remote.fetchCollection(accountId)) {
+            is RepositoryResult.Failure -> fetched
+            is RepositoryResult.Success -> {
+                val collection = fetched.value.let { remoteCollection ->
+                    remoteCollection.copy(
+                        puzzles = remoteCollection.puzzles.map { puzzle -> puzzle.withStoredArtwork() },
+                    )
+                }
+                puzzleDao.replaceCollection(
+                    accountId = accountId.value,
+                    collection = collection.toEntity(accountId, now()),
+                    puzzles = collection.puzzles.mapIndexed { index, puzzle ->
+                        puzzle.toEntity(accountId = accountId, position = index)
+                    },
+                    pieces = collection.puzzles.flatMap { puzzle ->
+                        puzzle.ownedPieces.map { index ->
+                            PuzzlePieceEntity(
+                                accountId = accountId.value,
+                                puzzleId = puzzle.id,
+                                pieceIndex = index,
+                            )
+                        }
+                    },
+                )
+                RepositoryResult.Success(Unit)
+            }
+        }
+
+    override suspend fun buyPiece(
+        command: BuyPuzzlePieceCommand,
+    ): RepositoryResult<PuzzlePiecePurchaseOutcome> {
+        val outcome = remote.buyPiece(command)
+        val completed = (outcome as? RepositoryResult.Success)?.value as? PuzzlePiecePurchaseOutcome.Completed
+        if (completed != null) {
+            puzzleDao.insertPiece(
+                PuzzlePieceEntity(
+                    accountId = command.accountId.value,
+                    puzzleId = completed.puzzleId,
+                    pieceIndex = completed.pieceIndex,
+                ),
+            )
+            refresh(command.accountId)
+        }
+        return outcome
+    }
+
+    private suspend fun PuzzleProgress.withStoredArtwork(): PuzzleProgress {
+        val path = imagePath ?: return this
+        val key = puzzleArtworkKey(slug ?: id, path)
+        val stored = artworkStore.pathFor(key)
+            ?: when (val download = remote.downloadPanel(path)) {
+                is RepositoryResult.Success -> artworkStore.write(key, download.value)
+                is RepositoryResult.Failure -> null
+            }
+        return if (stored == null) this else copy(artwork = PuzzleArtwork.File(stored))
+    }
+}
+
+internal fun puzzleArtworkKey(name: String, imagePath: String): String {
+    val safeName = name.filter { it.isLetterOrDigit() || it == '_' || it == '-' }.ifEmpty { "panel" }
+    val extension = imagePath.substringAfterLast('.', "png")
+        .filter(Char::isLetterOrDigit)
+        .take(4)
+        .ifEmpty { "png" }
+    val fingerprint = imagePath.hashCode().toUInt().toString(16)
+    return "$safeName-$fingerprint.$extension"
 }
 
 class RoomBingoRepository(

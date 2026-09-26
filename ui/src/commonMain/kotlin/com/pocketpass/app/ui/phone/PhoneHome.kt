@@ -111,7 +111,10 @@ fun PhoneHomeTab(
                 header = { PhoneRecentsHeader(metrics, state, dispatch) },
                 empty = { PhoneRecentsEmpty(metrics) },
                 onPerson = { dispatch(PocketPassEvent.OpenUserProfile(it, ProfileViewerSource.RecentInteraction)) },
-                hero = { PhoneOwnHero(metrics, state, dispatch, vertical = false) },
+                hero = {
+                    PhoneOwnHero(metrics, state, dispatch,
+                        vertical = metrics.designWidth >= 1400f && metrics.designHeight > metrics.designWidth)
+                },
             )
             PhoneSortMenuScrim(state.sortMenuOpen, "recent_sort_scrim") { dispatch(PocketPassEvent.CloseSortMenu) }
         }

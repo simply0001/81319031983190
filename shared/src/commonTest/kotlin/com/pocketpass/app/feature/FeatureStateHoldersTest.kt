@@ -1,11 +1,14 @@
 package com.pocketpass.app.feature
 
+import kotlinx.coroutines.flow.first
+
 import com.pocketpass.app.data.LocalSettings
 import com.pocketpass.app.data.SettingsRepository
 import com.pocketpass.app.data.repository.FixtureAchievementsRepository
 import com.pocketpass.app.data.repository.FixtureBingoRepository
 import com.pocketpass.app.data.repository.FixtureLeaderboardRepository
 import com.pocketpass.app.data.repository.FixtureWorldTourRepository
+import com.pocketpass.app.data.repository.FixturePassingStatsRepository
 import com.pocketpass.app.data.repository.FixtureShopRepository
 import com.pocketpass.app.data.repository.FixtureData
 import com.pocketpass.app.data.repository.FixtureFriendsRepository
@@ -67,6 +70,12 @@ import kotlin.test.assertFalse
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import com.pocketpass.app.data.repository.FixturePuzzleRepository
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
+import com.pocketpass.app.domain.model.PuzzlePurchaseRejection
+import com.pocketpass.app.domain.repository.PuzzleRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FeatureStateHoldersTest {
@@ -482,6 +491,37 @@ class FeatureStateHoldersTest {
     }
 
     @Test
+    fun boardAuthorProfileOffersFriendRequestUnlessInvitesAreBlocked() = runTest {
+        val available = ProfileViewerStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            profileRepository = FixtureProfileRepository(),
+            friendsRepository = FixtureFriendsRepository(),
+            presenceRepository = FixturePresenceRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+        available.open(FixtureData.spobProfile, ProfileViewerSource.Board)
+        runCurrent()
+        assertEquals(ProfileFriendRequestState.Available, available.state.value.friendRequestState)
+        available.sendFriendRequest()
+        runCurrent()
+        assertEquals(ProfileFriendRequestState.Pending, available.state.value.friendRequestState)
+
+        val blockedProfile = FixtureData.spobProfile.copy(blockInvites = true)
+        val blocked = ProfileViewerStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            profileRepository = FixtureProfileRepository(initialProfiles = listOf(blockedProfile)),
+            friendsRepository = FixtureFriendsRepository(),
+            presenceRepository = FixturePresenceRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+        blocked.open(blockedProfile, ProfileViewerSource.Board)
+        runCurrent()
+        assertEquals(ProfileFriendRequestState.Unavailable, blocked.state.value.friendRequestState)
+    }
+
+    @Test
     fun profileViewerUsesFriendPresenceAndHidesFriendRequestAction() = runTest {
         val friend = FixtureData.friends.first()
         val presence = FixturePresenceRepository(
@@ -665,6 +705,23 @@ class FeatureStateHoldersTest {
     }
 
     @Test
+    fun messagesSurfaceImageAttachmentFailures() = runTest {
+        val holder = MessagesStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            conversationRepository = FixtureMessageRepository(
+                clock = { Instant.parse("2026-01-01T12:47:00Z") },
+            ),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        holder.reportImageAttachmentFailure("That image is too large to send.")
+        runCurrent()
+
+        assertEquals("That image is too large to send.", holder.state.value.operationError)
+    }
+
+    @Test
     fun messagesKeepPerConversationDraftsMarkReadAndSendOptimistically() = runTest {
         val repository = FixtureMessageRepository(
             clock = { Instant.parse("2026-01-01T12:47:00Z") },
@@ -824,9 +881,23 @@ class FeatureStateHoldersTest {
             shopRepository = FixtureShopRepository(),
             leaderboardRepository = FixtureLeaderboardRepository(),
             worldTourRepository = FixtureWorldTourRepository(),
+            puzzleRepository = FixturePuzzleRepository(),
+            passingStatsRepository = FixturePassingStatsRepository(),
             scope = backgroundScope,
         )
         runCurrent()
+        assertEquals(
+            FixtureData.puzzleCollection.ownedPieceCount,
+            holder.state.value.snapshot.data()?.puzzleCount,
+        )
+        assertEquals(
+            FixtureData.passingStats.currentStreak,
+            holder.state.value.snapshot.data()?.streakDays,
+        )
+        assertEquals(
+            FixtureData.passingStats.weekPasses,
+            holder.state.value.snapshot.data()?.weekPasses,
+        )
 
         holder.toggle()
         runCurrent()
@@ -875,6 +946,30 @@ class FeatureStateHoldersTest {
         accountId.value = null
         runCurrent()
         assertEquals(emptyList<LeaderboardEntry>(), holder.state.value.entries)
+    }
+
+    @Test
+    fun globalLeaderboardLimitChangesWithoutDiscardingCachedPlayers() = runTest {
+        val entries = (1..100).map { FixtureData.leaderboard.first().copy(userId = UserId("player-$it")) }
+        val settings = InMemorySettingsRepository()
+        val holder = LeaderboardStateHolder(MutableStateFlow(FixtureData.CurrentUserId),
+            FixtureLeaderboardRepository(entries), settings, backgroundScope)
+        holder.open()
+        holder.setScope(LeaderboardScope.Global)
+        runCurrent()
+        assertEquals(entries.take(20), holder.state.value.entries)
+        for (limit in listOf(50, 75, 100, 20)) {
+            holder.setGlobalLimit(limit)
+            runCurrent()
+            assertEquals(entries.take(limit), holder.state.value.entries)
+            assertEquals(limit, settings.settings.first().globalLeaderboardLimit)
+        }
+        holder.setGlobalLimit(30)
+        runCurrent()
+        assertEquals(20, holder.state.value.globalLimit)
+        holder.setScope(LeaderboardScope.Friends)
+        runCurrent()
+        assertEquals(entries, holder.state.value.entries)
     }
 
     @Test
@@ -1026,6 +1121,148 @@ class FeatureStateHoldersTest {
     }
 
     @Test
+    fun puzzleExposesTheCollectionAndClearsOnSignOut() = runTest {
+        val accountId = MutableStateFlow<UserId?>(FixtureData.CurrentUserId)
+        val holder = PuzzleStateHolder(
+            accountId = accountId,
+            puzzleRepository = FixturePuzzleRepository(),
+            shopRepository = FixtureShopRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        assertEquals(FixtureData.puzzleCollection, holder.state.value.collection)
+        assertEquals(1, holder.state.value.viewedIndex)
+        assertEquals(FixtureData.tokenBalance, holder.state.value.tokenBalance)
+        assertEquals(null, holder.state.value.refreshError)
+
+        holder.refresh()
+        runCurrent()
+        assertEquals(null, holder.state.value.refreshError)
+
+        accountId.value = null
+        runCurrent()
+        assertEquals(PuzzleCollection.Empty, holder.state.value.collection)
+        assertEquals(null, holder.state.value.viewedIndex)
+        assertEquals(0, holder.state.value.tokenBalance)
+    }
+
+    @Test
+    fun puzzleBrowsingClampsToStartedPuzzlesAndOpenReturnsToTheCurrentOne() = runTest {
+        val accountId = MutableStateFlow<UserId?>(FixtureData.CurrentUserId)
+        val holder = PuzzleStateHolder(
+            accountId = accountId,
+            puzzleRepository = FixturePuzzleRepository(),
+            shopRepository = FixtureShopRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        holder.browse(-1)
+        runCurrent()
+        assertEquals(0, holder.state.value.viewedIndex)
+        holder.browse(-1)
+        runCurrent()
+        assertEquals(0, holder.state.value.viewedIndex)
+
+        holder.browse(1)
+        runCurrent()
+        assertEquals(1, holder.state.value.viewedIndex)
+        holder.browse(1)
+        runCurrent()
+        assertEquals(1, holder.state.value.viewedIndex)
+
+        holder.browse(-1)
+        runCurrent()
+        holder.open()
+        runCurrent()
+        assertEquals(1, holder.state.value.viewedIndex)
+    }
+
+    @Test
+    fun puzzleBuyAddsAPieceSpendsTokensAndSurfacesRejections() = runTest {
+        val accountId = MutableStateFlow<UserId?>(FixtureData.CurrentUserId)
+        val shop = FixtureShopRepository()
+        val holder = PuzzleStateHolder(
+            accountId = accountId,
+            puzzleRepository = FixturePuzzleRepository(ledger = shop),
+            shopRepository = shop,
+            scope = backgroundScope,
+        )
+        runCurrent()
+        val before = holder.state.value.collection.current?.ownedCount ?: 0
+
+        holder.buyPiece()
+        runCurrent()
+        assertEquals(before + 1, holder.state.value.collection.current?.ownedCount)
+        assertEquals(FixtureData.tokenBalance - PuzzleCollection.DEFAULT_PIECE_PRICE_TOKENS, holder.state.value.tokenBalance)
+        assertEquals(false, holder.state.value.buying)
+        assertEquals(null, holder.state.value.purchaseError)
+
+        val rejecting = RejectingPuzzleRepository()
+        val rejected = PuzzleStateHolder(
+            accountId = accountId,
+            puzzleRepository = rejecting,
+            shopRepository = FixtureShopRepository(balance = 100),
+            scope = backgroundScope,
+        )
+        runCurrent()
+        rejected.buyPiece()
+        runCurrent()
+        assertEquals("You need 15 tokens for a piece.", rejected.state.value.purchaseError)
+        rejected.dismissPurchaseError()
+        runCurrent()
+        assertEquals(null, rejected.state.value.purchaseError)
+    }
+
+    @Test
+    fun puzzleBuyIsIgnoredWhenTokensAreShort() = runTest {
+        val accountId = MutableStateFlow<UserId?>(FixtureData.CurrentUserId)
+        val shop = FixtureShopRepository(balance = 10)
+        val holder = PuzzleStateHolder(
+            accountId = accountId,
+            puzzleRepository = FixturePuzzleRepository(ledger = shop),
+            shopRepository = shop,
+            scope = backgroundScope,
+        )
+        runCurrent()
+        val before = holder.state.value.collection.current?.ownedCount
+
+        holder.buyPiece()
+        runCurrent()
+        assertEquals(before, holder.state.value.collection.current?.ownedCount)
+        assertEquals(10, holder.state.value.tokenBalance)
+    }
+
+    @Test
+    fun gamesHolderClosesThePuzzlePromptBeforeTheGame() {
+        val holder = GamesStateHolder()
+
+        holder.openGame(GameTarget.Bingo)
+        holder.openPuzzleBuyPrompt()
+        assertEquals(false, holder.state.value.puzzleBuyPromptVisible)
+
+        holder.openGame(GameTarget.PuzzleSwap)
+        holder.openPuzzleBuyPrompt()
+        assertEquals(true, holder.state.value.puzzleBuyPromptVisible)
+
+        assertEquals(true, holder.close())
+        assertEquals(false, holder.state.value.puzzleBuyPromptVisible)
+        assertEquals(GameTarget.PuzzleSwap, holder.state.value.activeGame)
+        assertEquals(false, holder.closePuzzleBuyPrompt())
+
+        holder.openPuzzleInfo()
+        assertEquals(true, holder.state.value.puzzleInfoVisible)
+        assertEquals(true, holder.close())
+        assertEquals(false, holder.state.value.puzzleInfoVisible)
+        assertEquals(GameTarget.PuzzleSwap, holder.state.value.activeGame)
+        assertEquals(false, holder.closePuzzleInfo())
+
+        assertEquals(true, holder.close())
+        assertEquals(null, holder.state.value.activeGame)
+    }
+
+    @Test
     fun settingsHolderUsesRepositoryBoundaryAndResetRestoresDefaults() = runTest {
         val repository: SettingsRepository = InMemorySettingsRepository()
         val holder = SettingsStateHolder(repository, backgroundScope)
@@ -1060,6 +1297,29 @@ class FeatureStateHoldersTest {
 
         assertEquals(LocalSettings(), holder.settings.value)
         assertTrue(holder.settings.value.nearbyEnabled)
+    }
+
+    @Test
+    fun groupPrivacyFailureKeepsSpecificExplanationAndSelectedPeople() = runTest {
+        val fixture = FixtureMessageRepository()
+        val repository = object : MessageRepository by fixture {
+            override suspend fun createGroupConversation(command: com.pocketpass.app.domain.model.CreateGroupConversationCommand): RepositoryResult<ConversationId> =
+                RepositoryResult.Failure(com.pocketpass.app.domain.state.RepositoryFailure(
+                    com.pocketpass.app.domain.state.RepositoryFailureKind.Forbidden,
+                    com.pocketpass.app.domain.model.GROUP_MESSAGES_BLOCKED, retryable = false))
+        }
+        val holder = MessagesStateHolder(accountId = flowOf(FixtureData.CurrentUserId),
+            conversationRepository = repository, scope = backgroundScope)
+        runCurrent()
+        holder.openGroupComposer()
+        holder.setGroupTitle("My group")
+        holder.toggleGroupMember(FixtureData.SpobUserId)
+        holder.createGroup()
+        runCurrent()
+        val composer = requireNotNull(holder.state.value.groupComposer)
+        assertEquals(com.pocketpass.app.domain.model.GROUP_MESSAGES_BLOCKED, composer.error)
+        assertEquals(setOf(FixtureData.SpobUserId), composer.selectedMemberIds)
+        assertFalse(composer.submitting)
     }
 
     @Test
@@ -1392,10 +1652,20 @@ class FeatureStateHoldersTest {
             )
         }
 
+        override suspend fun setPendingAccountSetupUserId(userId: String?) {
+            mutableSettings.value = mutableSettings.value.copy(
+                pendingAccountSetupUserId = userId,
+            )
+        }
+
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) {
             mutableSettings.value = mutableSettings.value.copy(
                 updateAlertsEnabled = enabled,
             )
+        }
+
+        override suspend fun setMessageAlertsEnabled(enabled: Boolean) {
+            mutableSettings.value = mutableSettings.value.copy(messageAlertsEnabled = enabled)
         }
 
         override suspend fun setStepRewardsEnabled(enabled: Boolean) {
@@ -1408,6 +1678,10 @@ class FeatureStateHoldersTest {
             mutableSettings.value = mutableSettings.value.copy(
                 lastNotifiedUpdateVersionCode = versionCode,
             )
+        }
+
+        override suspend fun setGlobalLeaderboardLimit(limit: Int) {
+            mutableSettings.value = mutableSettings.value.copy(globalLeaderboardLimit = limit)
         }
 
         override suspend fun setLeaderboardScope(scope: LeaderboardScope) {
@@ -1450,3 +1724,18 @@ class FeatureStateHoldersTest {
 
 private fun <T> LoadState<T>.data(): T =
     (this as LoadState.Data).value
+
+private class RejectingPuzzleRepository : PuzzleRepository {
+    private val collection = MutableStateFlow(FixtureData.puzzleCollection)
+
+    override fun observeCollection(accountId: UserId): Flow<PuzzleCollection> = collection
+
+    override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> =
+        RepositoryResult.Success(Unit)
+
+    override suspend fun buyPiece(
+        command: BuyPuzzlePieceCommand,
+    ): RepositoryResult<PuzzlePiecePurchaseOutcome> = RepositoryResult.Success(
+        PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.InsufficientTokens),
+    )
+}

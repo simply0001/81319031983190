@@ -2,7 +2,7 @@ package com.pocketpass.app
 
 import com.pocketpass.app.data.repository.FixtureStepRewardsRemoteDataSource
 import com.pocketpass.app.data.repository.remote.StepRewardsRemoteDataSource
-import com.pocketpass.app.steps.AndroidStepCounterSource
+import com.pocketpass.app.steps.AndroidPreferredStepSource
 import com.pocketpass.app.steps.StepRewardsScheduler
 import com.pocketpass.app.steps.StepRewardsTracker
 import com.pocketpass.app.steps.StepRewardsWorkerRuntime
@@ -32,6 +32,7 @@ import com.pocketpass.app.data.repository.RoomAchievementsRepository
 import com.pocketpass.app.data.repository.RoomBingoRepository
 import com.pocketpass.app.data.repository.RoomLeaderboardRepository
 import com.pocketpass.app.data.repository.RoomWorldTourRepository
+import com.pocketpass.app.data.repository.RoomPassingStatsRepository
 import com.pocketpass.app.data.repository.remote.EncounterRemoteDataSource
 import com.pocketpass.app.data.repository.remote.ProfileRemoteDataSource
 import com.pocketpass.app.data.supabase.PocketPassSupabaseClientFactory
@@ -65,6 +66,7 @@ import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.accountIdOrNull
+import com.pocketpass.app.feature.AccountSecurityStateHolder
 import com.pocketpass.app.feature.AccountSetupStateHolder
 import com.pocketpass.app.feature.ActivitiesStateHolder
 import com.pocketpass.app.feature.GamesStateHolder
@@ -99,6 +101,7 @@ import com.pocketpass.app.mii.toSaveRequest
 import com.pocketpass.app.mii.withoutLockedHat
 import com.pocketpass.app.nearby.NearbyLifecycleController
 import com.pocketpass.app.nearby.NearbyCredentialPool
+import com.pocketpass.app.nearby.NearbyDeviceTagStore
 import com.pocketpass.app.nearby.isAynThorDevice
 import com.pocketpass.app.nearby.NearbyEncounterProof
 import com.pocketpass.app.nearby.NearbyNotifications
@@ -123,6 +126,11 @@ import com.pocketpass.app.update.UPDATE_MANIFEST_URL
 import com.pocketpass.app.update.OkHttpUpdateTransport
 import com.pocketpass.app.update.UpdateNotifications
 import com.pocketpass.app.widget.AndroidWidgetSnapshotSink
+import com.pocketpass.app.state.WidgetPlatformActions
+import com.pocketpass.app.widget.AndroidWidgetPlatformActions
+import com.pocketpass.app.widget.FileWidgetDesignRepository
+import com.pocketpass.app.widget.WidgetDesignRepository
+import com.pocketpass.app.widget.WidgetDesignsStateHolder
 import com.pocketpass.app.widget.WidgetSnapshotPublisher
 import io.github.jan.supabase.SupabaseClient
 import kotlin.coroutines.cancellation.CancellationException
@@ -151,6 +159,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import com.pocketpass.app.push.MessagePushManager
+import com.pocketpass.app.data.repository.RoomPuzzleRepository
+import com.pocketpass.app.feature.PuzzleStateHolder
+import com.pocketpass.app.puzzle.FilePuzzleArtworkStore
 
 internal suspend fun clearSignOutData(cleanup: () -> Unit) {
     withContext(NonCancellable + Dispatchers.IO) {
@@ -297,6 +309,12 @@ class AppContainer(
         secureStore = nearbySecureStore,
     )
 
+    val nearbyDeviceTags = NearbyDeviceTagStore(
+        remote = productionComponents?.encounterRemote
+            ?: FixtureEncounterRemoteDataSource(),
+        secureStore = nearbySecureStore,
+    )
+
     val homeProfile = HomeProfileStateHolder(
         accountId = activeAccountId,
         profileRepository = repositories.profiles,
@@ -308,9 +326,27 @@ class AppContainer(
         accountId = activeAccountId,
         profileRepository = repositories.profiles,
         scope = applicationScope,
+        pendingSetupUserId = settingsRepository.settings.map { it.pendingAccountSetupUserId },
+        clearPendingSetup = { settingsRepository.setPendingAccountSetupUserId(null) },
+    )
+    val accountSecurity = AccountSecurityStateHolder(
+        sessionRepository = repositories.session,
+        scope = applicationScope,
     )
     private val pendingConversation = MutableStateFlow<ConversationId?>(null)
     val requestedConversation: StateFlow<ConversationId?> = pendingConversation
+    private val pendingBoard = MutableStateFlow<com.pocketpass.app.boards.BoardDestination?>(null)
+    val requestedBoard: StateFlow<com.pocketpass.app.boards.BoardDestination?> = pendingBoard
+    fun consumeRequestedBoard() { pendingBoard.value = null }
+    fun requestBoard(accountId: String, boardId: String, threadId: String?) {
+        if (runCatching { UUID.fromString(accountId); UUID.fromString(boardId); threadId?.let(UUID::fromString) }.isFailure) return
+        applicationScope.launch {
+            val session = repositories.session.sessionState.first { it !is SessionState.Initializing }
+            if (session.accountIdOrNull()?.value != accountId) return@launch
+            val account = kotlinx.coroutines.withTimeoutOrNull(10_000) { activeAccountId.first { it != null } }
+            if (account?.value == accountId) pendingBoard.value = com.pocketpass.app.boards.BoardDestination(boardId, threadId)
+        }
+    }
 
     fun consumeRequestedConversation() {
         pendingConversation.value = null
@@ -335,6 +371,25 @@ class AppContainer(
             notificationPermissionRequests.tryEmit(Unit)
         } else {
             UpdateNotifications.cancel(context)
+        }
+    }
+
+    suspend fun setMessageAlertsEnabled(enabled: Boolean) {
+        messagePush.preferenceChanged(enabled)
+        settings.setMessageAlertsEnabled(enabled)
+        if (enabled) notificationPermissionRequests.tryEmit(Unit)
+    }
+
+    fun requestMessageConversation(accountId: String, conversationId: String) {
+        if (runCatching { UUID.fromString(accountId); UUID.fromString(conversationId) }.isFailure) return
+        applicationScope.launch {
+            val session = repositories.session.sessionState.first { it !is SessionState.Initializing }
+            if (session.accountIdOrNull()?.value != accountId) return@launch
+            val account = kotlinx.coroutines.withTimeoutOrNull(10_000) {
+                activeAccountId.first { it != null }
+            }
+            if (account?.value != accountId) return@launch
+            pendingConversation.value = ConversationId(conversationId)
         }
     }
 
@@ -366,6 +421,8 @@ class AppContainer(
         presenceRepository = repositories.presence,
         onMessageSent = { soundEffects.play(SoundEffect.MessageSent) },
         onGroupCreated = { pendingConversation.value = it },
+        friendsRepository = repositories.friends,
+        profileRepository = repositories.profiles,
     )
     val notifications = NotificationStateHolder(
         accountId = activeAccountId,
@@ -378,6 +435,8 @@ class AppContainer(
         shopRepository = repositories.shop,
         leaderboardRepository = repositories.leaderboard,
         worldTourRepository = repositories.worldTour,
+        puzzleRepository = repositories.puzzle,
+        passingStatsRepository = repositories.passingStats,
         scope = applicationScope,
     )
     val shop = ShopStateHolder(
@@ -407,6 +466,12 @@ class AppContainer(
         bingoRepository = repositories.bingo,
         scope = applicationScope,
     )
+    val puzzle = PuzzleStateHolder(
+        accountId = activeAccountId,
+        puzzleRepository = repositories.puzzle,
+        shopRepository = repositories.shop,
+        scope = applicationScope,
+    )
     val settings = SettingsStateHolder(settingsRepository, applicationScope)
     private val updateTransport = OkHttpUpdateTransport()
     val appUpdate = AppUpdateStateHolder(
@@ -430,6 +495,7 @@ class AppContainer(
     val auth = AuthStateHolder(
         sessionRepository = repositories.session,
         scope = applicationScope,
+        onPasswordAccountCreated = { settingsRepository.setPendingAccountSetupUserId(it.value) },
     )
     val nearby = NearbyLifecycleController(
         context = context,
@@ -438,7 +504,7 @@ class AppContainer(
         sessionState = repositories.session.sessionState,
         scope = applicationScope,
     )
-    val stepSource = AndroidStepCounterSource(context, applicationScope)
+    val stepSource = AndroidPreferredStepSource(context, applicationScope)
     val stepRewards = StepRewardsTracker(
         settingsRepository = settingsRepository,
         settings = settings.settings,
@@ -447,6 +513,7 @@ class AppContainer(
         remote = productionComponents?.stepRewardsRemote
             ?: FixtureStepRewardsRemoteDataSource(),
         scope = applicationScope,
+        onPiecesCredited = { accountId -> repositories.puzzle.refresh(accountId) },
     )
 
     private val realtimeRuntime: RealtimeRuntime? = productionComponents?.let { production ->
@@ -483,8 +550,29 @@ class AppContainer(
         nearby = nearby.state,
         miiEditor = miiEditor.state,
         settings = settings.settings,
+        shop = shop.state,
+        stepRewards = stepRewards.state,
+        achievements = achievements.state,
+        bingo = bingo.state,
+        worldTour = worldTour.state,
+        leaderboard = leaderboard.state,
         sink = AndroidWidgetSnapshotSink(context),
     )
+
+    val widgetDesignRepository: WidgetDesignRepository =
+        FileWidgetDesignRepository(context, applicationScope)
+    val widgetDesigns = WidgetDesignsStateHolder(widgetDesignRepository, applicationScope)
+    val widgetPlatform: WidgetPlatformActions = AndroidWidgetPlatformActions(context)
+    private val pendingWidgetAssignment = MutableStateFlow<Int?>(null)
+    val requestedWidgetAssignment: StateFlow<Int?> = pendingWidgetAssignment
+
+    fun requestWidgetAssignment(appWidgetId: Int) {
+        pendingWidgetAssignment.value = appWidgetId
+    }
+
+    fun consumeRequestedWidgetAssignment() {
+        pendingWidgetAssignment.value = null
+    }
 
     val authRemoteDataSource: SupabaseAuthRemoteDataSource?
         get() = backendComponents?.authRemote
@@ -492,7 +580,18 @@ class AppContainer(
     val realtimeGateway: SupabaseRealtimeGateway?
         get() = backendComponents?.realtime
 
+    val messagePush = MessagePushManager(
+        context = context,
+        client = backendComponents?.client,
+        settings = settingsRepository,
+        session = repositories.session.sessionState,
+        foreground = appForeground,
+        scope = applicationScope,
+        requestPermission = { notificationPermissionRequests.tryEmit(Unit) },
+    )
+
     init {
+        messagePush.start()
         applicationScope.launch {
             activeAccountId
                 .collectLatest { accountId ->
@@ -680,6 +779,8 @@ class AppContainer(
     }
 
     suspend fun signOut(): RepositoryResult<Unit> {
+        messagePush.signOut()
+        pendingConversation.value = null
         val accountsWithLocalMutations = database.withTransaction {
             database.openHelper.writableDatabase
                 .query("SELECT DISTINCT accountId FROM pending_operations")
@@ -709,6 +810,11 @@ class AppContainer(
             repositories.session.signOut()
         } finally {
             secureCleanupFailures = buildList {
+                accountsWithLocalMutations.forEach { accountId ->
+                    runCatching { nearbyDeviceTags.forget(accountId) }
+                        .exceptionOrNull()
+                        ?.let(::add)
+                }
                 addAll(
                     nearbySecureEntryKeys.mapNotNull { entryKey ->
                         runCatching {
@@ -806,7 +912,9 @@ class AppContainer(
             leaderboard = fixtures.leaderboard,
             achievements = fixtures.achievements,
             worldTour = fixtures.worldTour,
+            passingStats = fixtures.passingStats,
             bingo = fixtures.bingo,
+            puzzle = fixtures.puzzle,
             encounters = fixtures.encounters,
             presence = fixtures.presence,
             sync = fixtures.sync,
@@ -822,11 +930,12 @@ class AppContainer(
             remote = remote.sources,
             nearbySecureStore = nearbySecureStore,
             nearbyProofOutboxStore = nearbyProofOutboxStore,
-            onEncounterSubmitted = { command, encounter ->
+            onEncounterSubmitted = { command, encounter, rejected ->
                 nearbyReceiptVerdicts.report(
                     NearbyReceiptOutcome(
                         submittedEncounterId = command.encounterId,
                         resolvedEncounterId = encounter?.id,
+                        rejected = rejected,
                     ),
                 )
             },
@@ -853,6 +962,15 @@ class AppContainer(
             database.bingoDao(),
             remote.sources.bingo,
         )
+        val puzzle = RoomPuzzleRepository(
+            database.puzzleDao(),
+            remote.sources.puzzle,
+            FilePuzzleArtworkStore(context),
+        )
+        val passingStats = RoomPassingStatsRepository(
+            database.passingStatsDao(),
+            remote.sources.passingStats,
+        )
         val presence = RealtimePresenceRepository()
         val graph = PocketPassRepositoryGraph(
             session = backend.session,
@@ -864,10 +982,14 @@ class AppContainer(
             leaderboard = leaderboard,
             achievements = achievements,
             worldTour = worldTour,
+            passingStats = passingStats,
             bingo = bingo,
+            puzzle = puzzle,
             encounters = bundle.encounters,
             presence = presence,
             sync = bundle.sync,
+            boards = com.pocketpass.app.boards.RoomBoardRepository(
+                com.pocketpass.app.boards.SupabaseBoardApi(backend.client), database.boardDao()),
         )
         return ProductionComponents(
             repositories = graph,

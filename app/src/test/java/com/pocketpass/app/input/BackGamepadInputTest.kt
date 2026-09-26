@@ -6,6 +6,31 @@ import org.junit.Test
 
 class BackGamepadInputTest {
     @Test
+    fun backLeavesCardActionsBeforeClosingTheShopAndConsumesRepeats() {
+        for (key in listOf(KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK)) {
+            assertEquals(
+                BackGamepadKeyAction.FocusParent,
+                classifyBackGamepadKey(key, KeyEvent.ACTION_DOWN, 0, hasDismissableLayer = true, hasFocusParent = true),
+            )
+            assertEquals(
+                BackGamepadKeyAction.Consume,
+                classifyBackGamepadKey(key, KeyEvent.ACTION_UP, 0, hasDismissableLayer = true, hasFocusParent = true),
+            )
+            assertEquals(
+                BackGamepadKeyAction.Consume,
+                classifyBackGamepadKey(key, KeyEvent.ACTION_DOWN, 1, hasDismissableLayer = true, hasFocusParent = false),
+            )
+        }
+        assertEquals(
+            BackGamepadKeyAction.Backspace,
+            classifyBackGamepadKey(
+                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.ACTION_DOWN, 0,
+                hasDismissableLayer = true, keyboardActive = true, canBackspace = true, hasFocusParent = true,
+            ),
+        )
+    }
+
+    @Test
     fun bButtonBackspacesWhileTheKeyboardIsActiveAndRepeatsWhenHeld() {
         assertEquals(
             BackGamepadKeyAction.Backspace,
@@ -99,6 +124,26 @@ class BackGamepadInputTest {
         )
     }
 
+    @Test
+    fun bLeavesTheEmojiOrSymbolsPageBeforeClosingTheKeyboard() {
+        assertEquals(
+            BackGamepadKeyAction.KeyboardEscape,
+            classify(KeyEvent.KEYCODE_BUTTON_B, KeyEvent.ACTION_DOWN, 0, keyboardActive = true, canBackspace = false, canEscape = true),
+        )
+        assertEquals(
+            BackGamepadKeyAction.Backspace,
+            classify(KeyEvent.KEYCODE_BUTTON_B, KeyEvent.ACTION_DOWN, 0, keyboardActive = true, canBackspace = true, canEscape = true),
+        )
+        assertEquals(
+            BackGamepadKeyAction.Consume,
+            classify(KeyEvent.KEYCODE_BUTTON_B, KeyEvent.ACTION_DOWN, 1, keyboardActive = true, canBackspace = false, canEscape = true),
+        )
+        assertEquals(
+            BackGamepadKeyAction.Back,
+            classify(KeyEvent.KEYCODE_BUTTON_B, KeyEvent.ACTION_DOWN, 0, keyboardActive = true, canBackspace = false),
+        )
+    }
+
     private fun classify(
         keyCode: Int,
         action: Int,
@@ -106,6 +151,7 @@ class BackGamepadInputTest {
         hasDismissableLayer: Boolean = true,
         keyboardActive: Boolean = false,
         canBackspace: Boolean = keyboardActive,
+        canEscape: Boolean = false,
     ) = classifyBackGamepadKey(
         keyCode = keyCode,
         action = action,
@@ -114,5 +160,6 @@ class BackGamepadInputTest {
         fromGamepad = false,
         keyboardActive = keyboardActive,
         canBackspace = canBackspace,
+        canEscape = canEscape,
     )
 }

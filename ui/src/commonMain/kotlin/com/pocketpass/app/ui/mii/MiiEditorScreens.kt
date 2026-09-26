@@ -244,6 +244,10 @@ fun MiiEditorBottomScreen(
         val promptOpen = state.discardPromptVisible
         val paletteField = state.colorPaletteField
         val paletteOpen = paletteField != null
+        var retainedPaletteField by remember { mutableStateOf<MiiColorField?>(null) }
+        paletteField?.let { field -> SideEffect { retainedPaletteField = field } }
+        val animatedPaletteField = paletteField ?: retainedPaletteField
+        var paletteWasOpen by remember { mutableStateOf(false) }
         val editorBlur = animateFloatAsState(
             targetValue = if (overlayOpen || promptOpen || paletteOpen) 3.05f else 0f,
             animationSpec = tween(durationMillis = 180),
@@ -257,12 +261,17 @@ fun MiiEditorBottomScreen(
         }
         LaunchedEffect(paletteOpen) {
             if (paletteOpen) {
+                paletteWasOpen = true
                 paletteField?.let { field ->
                     focus?.focus("mii_palette_${state.draft.colorValue(field)}", reveal = false)
                 }
-            } else if (focus?.focusId?.startsWith("mii_palette_") == true) {
-                state.chipPaletteField()?.let { field ->
-                    focus.focus(miiColorPaletteTag(field), reveal = false)
+            } else if (paletteWasOpen) {
+                paletteWasOpen = false
+                val focusId = focus?.focusId
+                if (focus != null && (focusId == null || focusId.startsWith("mii_palette_"))) {
+                    state.chipPaletteField()?.let { field ->
+                        focus.focus(miiColorPaletteTag(field), reveal = false)
+                    }
                 }
             }
         }
@@ -395,7 +404,7 @@ fun MiiEditorBottomScreen(
         }
 
         AnimatedVisibility(
-            visible = paletteOpen && paletteField != null,
+            visible = paletteOpen,
             enter = fadeIn(animationSpec = tween(durationMillis = 180)),
             exit = fadeOut(animationSpec = tween(durationMillis = 140)),
         ) {
@@ -403,11 +412,12 @@ fun MiiEditorBottomScreen(
                 AdjustmentScrim(
                     onClose = { onEvent(MiiEditorEvent.CloseColorPalette) },
                 )
-                paletteField?.let { field ->
+                animatedPaletteField?.let { field ->
                     ColorPalettePanel(
                         metrics = metrics,
                         state = state,
                         field = field,
+                        focusable = paletteOpen,
                         onEvent = onEvent,
                     )
                 }
@@ -992,6 +1002,7 @@ private fun ColorPalettePanel(
     metrics: DesignMetrics,
     state: MiiEditorUiState,
     field: MiiColorField,
+    focusable: Boolean,
     onEvent: (MiiEditorEvent) -> Unit,
 ) {
     val selectedIndex = state.draft.colorValue(field)
@@ -1034,12 +1045,18 @@ private fun ColorPalettePanel(
                     if (selected) PocketActionGreen else swatchBorder(-1, color),
                     swatchShape,
                 )
-                .controllerTarget(
-                    "mii_palette_$index",
-                    layer = MII_ADJUSTMENT_FOCUS_LAYER,
-                    cornerRadius = PALETTE_SWATCH / 2f,
-                    neighbors = neighbors,
-                ) { onEvent(MiiEditorEvent.SelectColor(field, index)) }
+                .then(
+                    if (focusable) {
+                        Modifier.controllerTarget(
+                            "mii_palette_$index",
+                            layer = MII_ADJUSTMENT_FOCUS_LAYER,
+                            cornerRadius = PALETTE_SWATCH / 2f,
+                            neighbors = neighbors,
+                        ) { onEvent(MiiEditorEvent.SelectColor(field, index)) }
+                    } else {
+                        Modifier
+                    },
+                )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

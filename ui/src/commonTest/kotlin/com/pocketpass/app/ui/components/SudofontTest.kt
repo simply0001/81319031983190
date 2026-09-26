@@ -13,14 +13,27 @@ class SudofontTest {
     private val family = FontFamily.Monospace
 
     @Test
-    fun tableHasTwentyNineDistinctSingleCodePointGlyphs() {
-        assertEquals(29, SudofontGlyphs.size)
-        assertEquals(29, SudofontGlyphs.map { it.codePoint }.toSet().size)
-        assertEquals(29, SudofontGlyphs.map { it.pua }.toSet().size)
+    fun tableHasThirtyDistinctSingleCodePointGlyphs() {
+        assertEquals(30, SudofontGlyphs.size)
+        assertEquals(30, SudofontGlyphs.map { it.codePoint }.toSet().size)
+        assertEquals(30, SudofontGlyphs.map { it.pua }.toSet().size)
         SudofontGlyphs.forEach { glyph ->
             assertEquals(listOf(TextRun(0, glyph.text.length)), sudofontRuns(glyph.text), glyph.name)
             assertTrue(glyph.text.length == 1 || glyph.text.length == 2, glyph.name)
         }
+    }
+
+    @Test
+    fun cryingUsesCustomFontWithoutChangingMessageText() {
+        val crying = codePointToString(0x1F62D)
+        assertEquals(crying, SudofontGlyphs.single { it.name == "crying" }.text)
+        assertTrue(isSudofontCodePoint(0xE029))
+        val source = "oh $crying\uFE0F!"
+        val styled = withSudofont(AnnotatedString(source), family)
+        assertEquals(source, styled.text)
+        assertEquals(listOf(TextRun(3, 5)), sudofontRuns(source))
+        assertEquals(family, styled.spanStyles.single().item.fontFamily)
+        assertEquals("oh ", ("oh " + crying).dropLastCodePoint())
     }
 
     @Test

@@ -1,0 +1,19 @@
+<svg width="142.65" height="142.65" viewBox="0 0 142.65 142.65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
+<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#ringTeal)" stroke-width="9"/>
+<g transform="translate(33.325 40.925) scale(0.87044)">
+<path d="M8.73125 69.85C6.33016 69.85 4.27467 68.9951 2.5648 67.2852C0.854935 65.5753 0 63.5198 0 61.1187V8.73125C0 6.33016 0.854935 4.27467 2.5648 2.5648C4.27467 0.854935 6.33016 0 8.73125 0H78.5813C80.9823 0 83.0378 0.854935 84.7477 2.5648C86.4576 4.27467 87.3125 6.33016 87.3125 8.73125V61.1187C87.3125 63.5198 86.4576 65.5753 84.7477 67.2852C83.0378 68.9951 80.9823 69.85 78.5813 69.85H8.73125ZM43.6563 39.2906L78.5813 17.4625V8.73125L43.6563 30.5594L8.73125 8.73125V17.4625L43.6563 39.2906Z" fill="url(#glyphTeal)"/>
+</g>
+</g>
+<defs>
+<linearGradient id="ringTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5E9AAC"/>
+<stop offset="1" stop-color="#21677B"/>
+</linearGradient>
+<linearGradient id="glyphTeal" x1="43.656" y1="0.000" x2="43.656" y2="69.850" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B7D90"/>
+<stop offset="1" stop-color="#1B5363"/>
+</linearGradient>
+</defs>
+</svg>

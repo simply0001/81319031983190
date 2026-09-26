@@ -7,6 +7,7 @@ import com.pocketpass.app.steps.DailyStepReward
 import com.pocketpass.app.data.repository.remote.BingoRemoteDataSource
 import com.pocketpass.app.data.repository.remote.FriendsRemoteDataSource
 import com.pocketpass.app.data.repository.remote.WorldTourRemoteDataSource
+import com.pocketpass.app.data.repository.remote.PassingStatsRemoteDataSource
 import com.pocketpass.app.data.repository.remote.EncounterRemoteDataSource
 import com.pocketpass.app.data.repository.remote.MessageRemoteDataSource
 import com.pocketpass.app.data.repository.remote.NotificationRemoteDataSource
@@ -18,8 +19,10 @@ import com.pocketpass.app.data.supabase.dto.AchievementDto
 import com.pocketpass.app.data.supabase.dto.BingoCellDto
 import com.pocketpass.app.data.supabase.dto.ConversationDto
 import com.pocketpass.app.data.supabase.dto.WorldTourRegionDto
+import com.pocketpass.app.data.supabase.dto.PassingStatsDto
 import com.pocketpass.app.data.supabase.dto.ConversationMemberDto
 import com.pocketpass.app.data.supabase.dto.FriendCodeDto
+import com.pocketpass.app.data.supabase.dto.FriendRequestDto
 import com.pocketpass.app.data.supabase.dto.FriendshipDto
 import com.pocketpass.app.data.supabase.dto.MessageDto
 import com.pocketpass.app.data.supabase.dto.DeleteMessageRpc
@@ -55,6 +58,7 @@ import com.pocketpass.app.domain.model.AchievementState
 import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.model.BingoCell
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.ConversationKind
 import com.pocketpass.app.domain.model.ConversationSummary
@@ -103,6 +107,7 @@ import com.pocketpass.app.domain.model.ShopPurchaseRejection
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
+import com.pocketpass.app.media.ImageAttachmentPolicy
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.model.ClientOperationId
 import com.pocketpass.app.domain.model.FriendProfileStats
@@ -171,6 +176,14 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.putJsonObject
+import com.pocketpass.app.data.repository.remote.PuzzleRemoteDataSource
+import com.pocketpass.app.data.supabase.dto.BuyPuzzlePieceRpc
+import com.pocketpass.app.data.supabase.dto.PuzzleCollectionDto
+import com.pocketpass.app.data.supabase.dto.PuzzlePiecePurchaseDto
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
+import com.pocketpass.app.domain.model.PuzzlePurchaseRejection
 
 class SupabaseProductionRemoteDataSources(
     private val client: SupabaseClient,
@@ -189,6 +202,8 @@ class SupabaseProductionRemoteDataSources(
     AchievementsRemoteDataSource,
     WorldTourRemoteDataSource,
     BingoRemoteDataSource,
+    PuzzleRemoteDataSource,
+    PassingStatsRemoteDataSource,
     StepRewardsRemoteDataSource,
     FriendProfileStatsSource,
     ConnectedAppsSource {
@@ -203,6 +218,8 @@ class SupabaseProductionRemoteDataSources(
         achievements = this,
         worldTour = this,
         bingo = this,
+        puzzle = this,
+        passingStats = this,
         stepRewards = this,
     )
 
@@ -340,6 +357,14 @@ class SupabaseProductionRemoteDataSources(
         }
     }
 
+    override suspend fun fetchDeviceTagSecret(
+        accountId: UserId,
+    ): RepositoryResult<ByteArray> = remoteResult {
+        Base64.Default.decode(
+            client.postgrest.rpc("get_nearby_device_tag_secret").decodeAs<String>(),
+        )
+    }
+
     override suspend fun reportDailySteps(
         accountId: UserId,
         localDay: String,
@@ -361,6 +386,8 @@ class SupabaseProductionRemoteDataSources(
             tokensAwarded = report.tokensAwarded,
             tokensCredited = report.tokensCredited,
             balance = report.balance,
+            piecesAwarded = report.piecesAwarded,
+            piecesCredited = report.piecesCredited,
         )
     }
 
@@ -407,6 +434,37 @@ class SupabaseProductionRemoteDataSources(
             }
             .decodeSingleOrNull<ProfileDto>()
             ?.toDomain(::authenticatedAvatarUrl)
+    }
+
+    override suspend fun fetchAuthorProfiles(userIds: Set<UserId>): RepositoryResult<List<UserProfile>> = remoteResult {
+        fetchProfiles(userIds.map { it.value }.toSet()).values.toList()
+    }
+
+    override suspend fun setMessagePrivacy(
+        command: com.pocketpass.app.domain.model.SetMessagePrivacyCommand,
+    ): RepositoryResult<UserProfile> = remoteResult {
+        client.postgrest.rpc("set_message_privacy", kotlinx.serialization.json.buildJsonObject {
+            put("p_account_id", kotlinx.serialization.json.JsonPrimitive(command.accountId.value))
+            put("p_blocked", kotlinx.serialization.json.JsonPrimitive(command.blocked))
+        }).decodeAs<ProfileDto>().toDomain(::authenticatedAvatarUrl)
+    }
+    override suspend fun setInvitesPrivacy(
+        command: com.pocketpass.app.domain.model.SetInvitesPrivacyCommand,
+    ): RepositoryResult<UserProfile> = remoteResult {
+        client.postgrest.rpc("set_invite_privacy", kotlinx.serialization.json.buildJsonObject {
+            put("p_account_id", kotlinx.serialization.json.JsonPrimitive(command.accountId.value))
+            put("p_blocked", kotlinx.serialization.json.JsonPrimitive(command.blocked))
+        }).decodeAs<ProfileDto>().toDomain(::authenticatedAvatarUrl)
+    }
+
+    override suspend fun setChatBubbleColour(
+        command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand,
+    ): RepositoryResult<UserProfile> = remoteResult {
+        client.postgrest.rpc("set_chat_bubble_colour", kotlinx.serialization.json.buildJsonObject {
+            put("p_account_id", kotlinx.serialization.json.JsonPrimitive(command.accountId.value))
+            put("p_colour", kotlinx.serialization.json.JsonPrimitive(command.colour.key))
+            put("p_client_operation_id", kotlinx.serialization.json.JsonPrimitive(command.clientOperationId.value))
+        }).decodeAs<ProfileDto>().toDomain(::authenticatedAvatarUrl)
     }
 
     override suspend fun updateProfile(
@@ -624,6 +682,17 @@ class SupabaseProductionRemoteDataSources(
             .map(WorldTourRegionDto::toDomain)
     }
 
+    override suspend fun fetchStats(
+        accountId: UserId,
+        utcOffsetMinutes: Int,
+    ): RepositoryResult<PassingStats> = remoteResult {
+        requireActiveSession(accountId)
+        client.postgrest.rpc(
+            function = "get_passing_stats",
+            parameters = PassingStatsRpc(utcOffsetMinutes = utcOffsetMinutes),
+        ).decodeSingle<PassingStatsDto>().toDomain()
+    }
+
     override suspend fun fetchBoard(
         accountId: UserId,
     ): RepositoryResult<List<BingoCell>> = remoteResult {
@@ -631,6 +700,50 @@ class SupabaseProductionRemoteDataSources(
         client.postgrest.rpc(function = "get_bingo_card")
             .decodeList<BingoCellDto>()
             .map(BingoCellDto::toDomain)
+    }
+
+    override suspend fun fetchCollection(
+        accountId: UserId,
+    ): RepositoryResult<PuzzleCollection> = remoteResult {
+        requireActiveSession(accountId)
+        client.postgrest.rpc(function = "get_puzzle_collection")
+            .decodeAs<PuzzleCollectionDto>()
+            .toDomain(::publicPanelUrl)
+    }
+
+    override suspend fun buyPiece(
+        command: BuyPuzzlePieceCommand,
+    ): RepositoryResult<PuzzlePiecePurchaseOutcome> = remoteResult {
+        requireActiveSession(command.accountId)
+        try {
+            val receipt = client.postgrest.rpc(
+                function = "buy_puzzle_piece",
+                parameters = BuyPuzzlePieceRpc(
+                    clientOperationId = command.clientOperationId.value,
+                ),
+            ).decodeSingle<PuzzlePiecePurchaseDto>()
+            PuzzlePiecePurchaseOutcome.Completed(
+                puzzleId = receipt.puzzleKey,
+                pieceIndex = receipt.pieceIndex,
+                balance = receipt.balance,
+                puzzleCompleted = receipt.completed,
+                nextPuzzleId = receipt.nextPuzzleKey,
+            )
+        } catch (error: PostgrestRestException) {
+            when (error.puzzleRejection()) {
+                PuzzlePurchaseRejection.InsufficientTokens.code ->
+                    PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.InsufficientTokens)
+
+                PuzzlePurchaseRejection.CollectionComplete.code ->
+                    PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.CollectionComplete)
+
+                else -> throw error
+            }
+        }
+    }
+
+    override suspend fun downloadPanel(imagePath: String): RepositoryResult<ByteArray> = remoteResult {
+        client.storage.from(PUZZLE_PANELS_BUCKET).downloadPublic(imagePath)
     }
 
     override suspend fun openDirectConversation(
@@ -830,28 +943,21 @@ class SupabaseProductionRemoteDataSources(
                 }
             }
             .decodeList<FriendshipDto>()
-        val relatedUserIds = friendships
-            .mapTo(linkedSetOf()) { friendship ->
-                friendship.otherUserId(accountId.value)
+        // Pending requests ride along so a sent request survives the next sync.
+        val requests = client
+            .from(FRIEND_REQUESTS_TABLE)
+            .select {
+                filter {
+                    eq("status", "pending")
+                    or {
+                        eq("requester_id", accountId.value)
+                        eq("addressee_id", accountId.value)
+                    }
+                }
             }
-        val profiles = fetchProfiles(relatedUserIds)
-        friendships
-            .mapNotNull { friendship ->
-                val friendUserId = friendship.otherUserId(accountId.value)
-                val profile = profiles[friendUserId] ?: return@mapNotNull null
-                Friend(
-                    ownerId = accountId,
-                    profile = profile,
-                    status = FriendshipStatus.Accepted,
-                    lastInteractionAt = parseSupabaseInstant(friendship.createdAt),
-                    isOnline = false,
-                )
-            }
-            .sortedWith(
-                compareByDescending<Friend> { it.isOnline }
-                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.profile.displayName }
-                .thenBy { it.profile.userId.value },
-            )
+            .decodeList<FriendRequestDto>()
+        val profiles = fetchProfiles(friendSnapshotPeerIds(accountId, friendships, requests))
+        buildFriendSnapshot(accountId, friendships, requests, profiles)
     }
 
     override suspend fun fetchMyFriendCode(
@@ -1128,48 +1234,74 @@ class SupabaseProductionRemoteDataSources(
 
     override suspend fun sendMessage(
         command: SendMessageCommand,
-    ): RepositoryResult<Message> = remoteResult {
+    ): RepositoryResult<Message> {
         val attachment = command.attachment
-        val remotePath = if (attachment?.localPath != null) {
-            val path = messageMediaPath(
-                accountId = command.accountId,
-                conversationId = command.conversationId,
-                messageId = command.messageId,
-                mimeType = attachment.mimeType,
-            )
-            client.storage.from(MESSAGE_MEDIA_BUCKET).upload(
-                path = path,
-                data = SystemFileSystem.source(Path(attachment.localPath))
-                    .buffered()
-                    .use { source -> source.readByteArray() },
-            ) {
-                upsert = true
-                contentType = ContentType.parse(attachment.mimeType)
-            }
-            path
+        val localPath = attachment?.localPath
+        val attachmentBytes = if (localPath != null) {
+            readLocalAttachment(localPath)
+                ?: return attachmentRejected(ImageAttachmentPolicy.UNREADABLE_MESSAGE)
         } else {
-            attachment?.remotePath
+            null
         }
+        if (
+            attachmentBytes != null &&
+            !ImageAttachmentPolicy.fitsUploadLimit(attachmentBytes.size.toLong())
+        ) {
+            return attachmentRejected(ImageAttachmentPolicy.TOO_LARGE_MESSAGE)
+        }
+        return remoteResult {
+            val remotePath = if (attachment != null && attachmentBytes != null) {
+                val path = messageMediaPath(
+                    accountId = command.accountId,
+                    conversationId = command.conversationId,
+                    messageId = command.messageId,
+                    mimeType = attachment.mimeType,
+                )
+                client.storage.from(MESSAGE_MEDIA_BUCKET).upload(
+                    path = path,
+                    data = attachmentBytes,
+                ) {
+                    upsert = true
+                    contentType = ContentType.parse(attachment.mimeType)
+                }
+                path
+            } else {
+                attachment?.remotePath
+            }
 
-        client.postgrest.rpc(
-            function = "send_message",
-            parameters = SendMessageRpc(
-                messageId = command.messageId.value,
-                conversationId = command.conversationId.value,
-                clientOperationId = command.clientOperationId.value,
-                body = command.body,
-                replyToId = null,
-                metadata = buildJsonObject {
-                    if (remotePath != null && attachment != null) {
-                        putJsonObject(MESSAGE_ATTACHMENT_KEY) {
-                            put("path", JsonPrimitive(remotePath))
-                            put("mime_type", JsonPrimitive(attachment.mimeType))
+            client.postgrest.rpc(
+                function = "send_message",
+                parameters = SendMessageRpc(
+                    messageId = command.messageId.value,
+                    conversationId = command.conversationId.value,
+                    clientOperationId = command.clientOperationId.value,
+                    body = command.body,
+                    replyToId = null,
+                    metadata = buildJsonObject {
+                        if (remotePath != null && attachment != null) {
+                            putJsonObject(MESSAGE_ATTACHMENT_KEY) {
+                                put("path", JsonPrimitive(remotePath))
+                                put("mime_type", JsonPrimitive(attachment.mimeType))
+                            }
                         }
-                    }
-                },
-            ),
-        ).decodeAs<MessageDto>().toDomain(::authenticatedMessageMediaUrl)
+                    },
+                ),
+            ).decodeAs<MessageDto>().toDomain(::authenticatedMessageMediaUrl)
+        }
     }
+
+    private fun readLocalAttachment(path: String): ByteArray? = try {
+        SystemFileSystem.source(Path(path))
+            .buffered()
+            .use { source -> source.readByteArray() }
+    } catch (_: IOException) {
+        null
+    }
+
+    private fun attachmentRejected(message: String): RepositoryResult<Message> =
+        RepositoryResult.Failure(
+            RepositoryFailure(kind = RepositoryFailureKind.Validation, message = message),
+        )
 
     override suspend fun editMessage(
         command: EditMessageCommand,
@@ -1302,6 +1434,9 @@ class SupabaseProductionRemoteDataSources(
     private fun authenticatedAvatarUrl(path: String): String =
         client.storage.from(AVATAR_BUCKET).authenticatedUrl(path)
 
+    private fun publicPanelUrl(path: String): String =
+        client.storage.from(PUZZLE_PANELS_BUCKET).publicUrl(path)
+
     private fun authenticatedMessageMediaUrl(path: String): String =
         client.storage.from(MESSAGE_MEDIA_BUCKET).authenticatedUrl(path)
 
@@ -1344,6 +1479,7 @@ class SupabaseProductionRemoteDataSources(
         const val PROFILES_TABLE = "profiles"
         const val PROFILE_MIIS_TABLE = "profile_miis"
         const val FRIENDSHIPS_TABLE = "friendships"
+        const val FRIEND_REQUESTS_TABLE = "friend_requests"
         const val CONVERSATIONS_TABLE = "conversations"
         const val CONVERSATION_MEMBERS_TABLE = "conversation_members"
         const val MESSAGES_TABLE = "messages"
@@ -1356,6 +1492,7 @@ class SupabaseProductionRemoteDataSources(
         const val AVATAR_BUCKET = "avatars"
         const val AUTHENTICATED_AVATAR_MARKER = "/object/authenticated/avatars/"
         const val MESSAGE_MEDIA_BUCKET = "message-media"
+        const val PUZZLE_PANELS_BUCKET = "puzzle-panels"
         const val MAX_SUMMARY_MESSAGES = 1_000L
         const val MAX_MESSAGES_PER_REFRESH = 1_000L
         const val MAX_IN_FILTER_IDS = 100
@@ -1396,6 +1533,7 @@ internal fun messageMediaPath(
     val extension = when (mimeType.lowercase()) {
         "image/png" -> "png"
         "image/webp" -> "webp"
+        "image/gif" -> "gif"
         else -> "jpg"
     }
     return "$account/$conversation/$message.$extension"
@@ -1510,6 +1648,12 @@ private data class ProfileMiiRowDto(
 )
 
 @Serializable
+private data class PassingStatsRpc(
+    @SerialName("p_utc_offset_minutes")
+    val utcOffsetMinutes: Int,
+)
+
+@Serializable
 private data class ReportDailyStepsRpc(
     @SerialName("p_local_day")
     val localDay: String,
@@ -1529,6 +1673,10 @@ private data class DailyStepRewardDto(
     @SerialName("tokens_credited")
     val tokensCredited: Int,
     val balance: Int,
+    @SerialName("pieces_awarded")
+    val piecesAwarded: Int = 0,
+    @SerialName("pieces_credited")
+    val piecesCredited: Int = 0,
 )
 
 @Serializable
@@ -1657,6 +1805,18 @@ private val PURCHASE_REJECTION_HINTS = setOf(
     PURCHASE_ALREADY_OWNED,
 )
 
+private val PUZZLE_REJECTION_HINTS = setOf(
+    PuzzlePurchaseRejection.InsufficientTokens.code,
+    PuzzlePurchaseRejection.CollectionComplete.code,
+)
+
+private fun PostgrestRestException.puzzleRejection(): String? =
+    hint?.takeIf { it in PUZZLE_REJECTION_HINTS } ?: when (code ?: "PT$statusCode") {
+        "PT402" -> PuzzlePurchaseRejection.InsufficientTokens.code
+        "PT409" -> PuzzlePurchaseRejection.CollectionComplete.code
+        else -> null
+    }
+
 private fun PostgrestRestException.purchaseRejection(): String? =
     hint?.takeIf { it in PURCHASE_REJECTION_HINTS } ?: when (code ?: "PT$statusCode") {
         "PT402" -> ShopPurchaseRejection.InsufficientTokens.code
@@ -1697,6 +1857,13 @@ private fun Int.toRemoteFailureKind(): RepositoryFailureKind = when (this) {
 }
 
 private fun Throwable.toRemoteFailure(): RepositoryFailure {
+    if (this is PostgrestRestException && hint == "BOARD_TEXT_REJECTED") return RepositoryFailure(
+        RepositoryFailureKind.Validation, error, retryable = false)
+    if (this is PostgrestRestException && hint == "GROUP_MESSAGES_BLOCKED") return RepositoryFailure(
+        RepositoryFailureKind.Forbidden, com.pocketpass.app.domain.model.GROUP_MESSAGES_BLOCKED, retryable = false)
+    if (this is PostgrestRestException && hint == "DIRECT_MESSAGES_BLOCKED") return RepositoryFailure(
+        RepositoryFailureKind.Forbidden, "This person has Block all messages turned on.", retryable = false)
+
     val kind = when (this) {
         is RestException -> statusCode.toRemoteFailureKind()
         is OAuthServerException -> statusCode.toRemoteFailureKind()

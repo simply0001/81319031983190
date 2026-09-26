@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PocketPass Developer</title>
+    <link rel="icon" type="image/png" href="/assets/pocketpass-leaf.png">
+    <link rel="stylesheet" href="/developer.css">
+    <script src="/config.js" defer></script>
+    <script src="/backdrop.js" defer></script>
+    <script src="/developer.js" defer></script>
+  </head>
+  <body>
+    <canvas id="backdrop" aria-hidden="true"></canvas>
+    <div id="login-shell" class="auth-shell" hidden>
+      <section id="view-login" class="auth-card" hidden>
+        <img class="auth-leaf" src="/assets/pocketpass-leaf.png" alt="" width="112" height="131">
+        <div class="auth-wordmark">PocketPass</div>
+        <div class="auth-kicker">Developer portal</div>
+        <p class="auth-copy">Register apps that connect to PocketPass accounts. You need a PocketPass account (create one in the app) — the portal signs you in with it.</p>
+        <form id="login-email-form" class="stack">
+          <label class="field">
+            <span>Email</span>
+            <input id="login-email" type="email" autocomplete="email" required placeholder="you@example.com">
+          </label>
+          <button type="submit" class="btn btn-green btn-block">Send code</button>
+        </form>
+        <form id="login-code-form" class="stack" hidden>
+          <p class="auth-copy" id="login-code-hint"></p>
+          <label class="field">
+            <span>Verification code</span>
+            <input id="login-code" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required placeholder="000000">
+          </label>
+          <button type="submit" class="btn btn-green btn-block">Verify</button>
+          <button type="button" id="login-back" class="btn btn-grey btn-block">Use another email</button>
+        </form>
+        <div id="login-alt">
+          <div class="auth-divider"><span>or</span></div>
+          <button type="button" id="login-discord" class="btn btn-discord btn-block">Sign in with Discord</button>
+          <button type="button" id="login-password-toggle" class="btn btn-grey btn-block">Use a username and password</button>
+          <form id="login-password-form" class="stack" hidden>
+            <label class="field">
+              <span>Username or email</span>
+              <input id="login-username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="username">
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input id="login-password" type="password" autocomplete="current-password" required placeholder="password">
+            </label>
+            <button type="submit" class="btn btn-green btn-block">Sign in</button>
+            <p class="auth-copy">Passwords cannot be reset. If you linked an email address to the account, sign in with that email instead.</p>
+          </form>
+        </div>
+        <div class="auth-docs">
+          <a class="btn btn-grey btn-block" href="/docs">Read the developer docs</a>
+        </div>
+        <p class="auth-foot">No account yet? <a href="https://github.com/Hinoaaaaaf212/pocketpass-release/releases/latest" rel="noopener noreferrer">Download PocketPass</a> and create one in the app, then come back here.</p>
+      </section>
+    </div>
+
+    <div id="app-shell" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-leaf" src="/assets/pocketpass-leaf.png" alt="" width="34" height="40">
+          <span class="brand-name">PocketPass <span class="brand-thin">Developer</span></span>
+        </div>
+        <nav id="nav" class="nav">
+          <button type="button" class="nav-link is-active" data-view="apps">Apps</button>
+          <a class="nav-link" href="/docs">Docs</a>
+        </nav>
+        <div id="session" class="session">
+          <span id="session-name" class="session-name"></span>
+          <button type="button" id="sign-out" class="btn btn-grey btn-small">Sign out</button>
+        </div>
+      </header>
+
+      <main class="page">
+        <section id="view-apps" class="view" hidden>
+          <div class="view-head">
+            <h1>Your apps</h1>
+            <div class="view-actions">
+              <span id="apps-count" class="muted" aria-live="polite"></span>
+              <button type="button" class="btn btn-grey btn-small" data-refresh="apps">Refresh</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div id="apps-table" class="table-wrap"></div>
+          </div>
+          <div class="panel panel-teal">
+            <div class="panel-head">
+              <h2>Register a new app</h2>
+              <p class="panel-sub">Users see the name, description, website and permissions on the consent screen. Everything except the client type can be changed later.</p>
+            </div>
+            <form id="app-create-form" class="stack">
+              <div class="grid-2">
+                <label class="field">
+                  <span>Name</span>
+                  <input name="name" type="text" maxlength="64" required placeholder="Cocoon" autocomplete="off">
+                </label>
+                <label class="field">
+                  <span>Website (optional)</span>
+                  <input name="website" type="url" maxlength="2048" placeholder="https://example.com" autocomplete="off">
+                </label>
+              </div>
+              <label class="field">
+                <span>Description (optional)</span>
+                <input name="description" type="text" maxlength="280" placeholder="One sentence about what your app does, shown on the consent screen" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Logo URL (optional)</span>
+                <input name="logo_url" type="url" maxlength="2048" placeholder="https://example.com/logo.png" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Redirect URIs (one per line)</span>
+                <textarea name="redirect_uris" rows="4" required placeholder="https://example.com/callback&#10;http://127.0.0.1:8765/callback" spellcheck="false"></textarea>
+                <span class="hint">Matched exactly. Use https or a custom scheme; http is allowed only for localhost and 127.0.0.1. Up to 10.</span>
+              </label>
+              <div class="field">
+                <span>Client type</span>
+                <div class="perm-grid">
+                  <label class="perm-option">
+                    <input type="radio" name="client_type" value="public" checked>
+                    <span>
+                      <span class="perm-title">Public</span>
+                      <br>
+                      <span class="perm-desc">Websites, browser apps and native apps that cannot keep a secret. PKCE only, no client secret.</span>
+                    </span>
+                  </label>
+                  <label class="perm-option">
+                    <input type="radio" name="client_type" value="confidential">
+                    <span>
+                      <span class="perm-title">Confidential</span>
+                      <br>
+                      <span class="perm-desc">Server-side apps that can keep a secret. PKCE plus the client secret when exchanging codes and refreshing tokens.</span>
+                    </span>
+                  </label>
+                </div>
+                <span class="hint">The client type cannot be changed after registration.</span>
+              </div>
+              <div class="field">
+                <span>Permissions</span>
+                <div class="perm-grid" data-perm-grid></div>
+                <span class="hint">Adding a permission later disconnects every connected user until they approve the app again. Removing one never disconnects anyone.</span>
+              </div>
+              <div class="row">
+                <button type="submit" class="btn btn-green">Register app</button>
+                <span id="app-create-hint" class="hint" hidden></span>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section id="view-app" class="view" hidden>
+          <div class="view-head">
+            <button type="button" id="app-back" class="btn btn-grey btn-small">&larr; All apps</button>
+            <button type="button" class="btn btn-grey btn-small" data-refresh="app">Refresh</button>
+          </div>
+          <div id="app-detail" class="view"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <template id="tpl-app-detail">
+      <div class="panel panel-teal app-head">
+        <div>
+          <h1 class="app-name"></h1>
+          <p class="app-sub"></p>
+        </div>
+        <div class="app-badges"></div>
+      </div>
+      <div class="panel panel-warn secret-panel" hidden>
+        <div class="panel-head">
+          <h2>Client secret</h2>
+          <p class="panel-sub">This is the only time the secret is shown. Copy it into your server's secret store now — the portal cannot show it again. If you lose it, rotate it.</p>
+        </div>
+        <div class="stack">
+          <code class="mono secret-value"></code>
+          <div class="row">
+            <button type="button" class="btn btn-green btn-small secret-copy">Copy secret</button>
+            <button type="button" class="btn btn-grey btn-small secret-dismiss">I have saved it</button>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>Credentials</h2></div>
+          <dl class="facts app-facts"></dl>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Actions</h2>
+            <p class="panel-sub">Test the consent flow, rotate the secret or remove the app.</p>
+          </div>
+          <div class="stack">
+            <div>
+              <button type="button" class="btn btn-green test-connect">Test connect</button>
+              <span class="hint test-connect-hint"></span>
+            </div>
+            <div class="rotate-row" hidden>
+              <button type="button" class="btn btn-grey rotate-secret">Rotate secret</button>
+              <span class="hint">The current secret stops working immediately — deploy the new one first.</span>
+            </div>
+            <div>
+              <button type="button" class="btn btn-red delete-app">Delete app</button>
+              <span class="hint">Disconnects every user and retires the client id. Cannot be undone.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel test-panel" hidden>
+        <div class="panel-head">
+          <h2>Test connect</h2>
+          <p class="panel-sub">The consent flow opened in a new tab. After you approve, the browser lands on your redirect URI with a <code>code</code> and this <code>state</code>. Exchange the code with the verifier below within 10 minutes.</p>
+        </div>
+        <div class="stack">
+          <dl class="facts test-facts"></dl>
+          <pre class="code-block test-curl"></pre>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Usage</h2>
+          <p class="panel-sub usage-sub"></p>
+        </div>
+        <div class="table-wrap usage-table"></div>
+      </div>
+      <div class="panel limits-panel">
+        <div class="panel-head">
+          <h2>Limits</h2>
+          <p class="panel-sub">Every app starts with the same limits. Failed requests count too. When your app outgrows them, ask for more — requests are reviewed by hand and the decision shows up here.</p>
+        </div>
+        <div class="stack">
+          <dl class="facts limits-facts"></dl>
+          <div class="limits-pending" hidden></div>
+          <div>
+            <button type="button" class="btn btn-grey limits-request">Request higher limits</button>
+          </div>
+          <form class="stack limits-form" hidden>
+            <div class="grid-2">
+              <label class="field">
+                <span>Requests per minute, per user</span>
+                <input name="user_per_minute" type="number" min="1" max="1000000" step="1" required>
+              </label>
+              <label class="field">
+                <span>Requests per minute, per app</span>
+                <input name="app_per_minute" type="number" min="1" max="1000000" step="1" required>
+              </label>
+              <label class="field">
+                <span>Requests per second, per app (burst)</span>
+                <input name="app_per_second" type="number" min="1" max="1000000" step="1" required>
+              </label>
+              <label class="field">
+                <span>Concurrent Realtime connections</span>
+                <input name="realtime_connections" type="number" min="1" max="1000000" step="1" placeholder="shared pool">
+                <span class="hint">Realtime capacity is shared between all apps; an approved number is provisioned by the PocketPass team.</span>
+              </label>
+            </div>
+            <label class="field">
+              <span>Why do you need more?</span>
+              <textarea name="reason" rows="4" minlength="20" maxlength="1000" required placeholder="What the app does, how many users you expect, and which limit you are hitting."></textarea>
+            </label>
+            <div class="row">
+              <button type="submit" class="btn btn-green">Send request</button>
+              <button type="button" class="btn btn-grey limits-cancel">Cancel</button>
+            </div>
+          </form>
+          <div class="table-wrap limits-table"></div>
+        </div>
+      </div>
+      <div class="panel panel-teal">
+        <div class="panel-head">
+          <h2>Edit app</h2>
+          <p class="panel-sub">Changes to the name, description, website and logo show on the consent screen right away.</p>
+        </div>
+        <form class="stack app-edit-form">
+          <div class="grid-2">
+            <label class="field">
+              <span>Name</span>
+              <input name="name" type="text" maxlength="64" required autocomplete="off">
+            </label>
+            <label class="field">
+              <span>Website (optional)</span>
+              <input name="website" type="url" maxlength="2048" placeholder="https://example.com" autocomplete="off">
+            </label>
+          </div>
+          <label class="field">
+            <span>Description (optional)</span>
+            <input name="description" type="text" maxlength="280" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Logo URL (optional)</span>
+            <input name="logo_url" type="url" maxlength="2048" placeholder="https://example.com/logo.png" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Redirect URIs (one per line)</span>
+            <textarea name="redirect_uris" rows="4" required spellcheck="false"></textarea>
+            <span class="hint">Matched exactly. Use https or a custom scheme; http is allowed only for localhost and 127.0.0.1. Up to 10.</span>
+          </label>
+          <div class="field">
+            <span>Permissions</span>
+            <div class="perm-grid" data-perm-grid></div>
+            <span class="hint">Adding a permission disconnects every connected user until they approve the app again. Removing one never disconnects anyone.</span>
+          </div>
+          <div class="row">
+            <button type="submit" class="btn btn-green">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </template>
+  </body>
+</html>

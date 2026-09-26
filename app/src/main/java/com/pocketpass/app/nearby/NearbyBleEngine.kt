@@ -45,6 +45,7 @@ internal class NearbyBleEngine(
     context: Context,
     private val credentialPool: NearbyCredentialPool,
     private val accountId: UserId,
+    private val deviceTagSecret: ByteArray? = null,
     private val onProof: (NearbyEncounterProof) -> Unit = {},
     private val onState: (
         NearbyRuntimeStatus,
@@ -59,9 +60,15 @@ internal class NearbyBleEngine(
     private val scanner: BluetoothLeScanner? = adapter.bluetoothLeScanner
     private val advertiser: BluetoothLeAdvertiser? = adapter.bluetoothLeAdvertiser
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val invitationNonce = NearbyCrypto.randomNonce()
+    @Volatile
+    private var invitationNonce = NearbyDeviceTag.invitationNonce(deviceTagSecret)
     private val sessions = ConcurrentHashMap<String, GattSession>()
     private val recentlyAttempted = ConcurrentHashMap<String, Long>()
+    private val ownDevicesSeen: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    @Volatile
+    private var ownTagsDay = Long.MIN_VALUE
+    @Volatile
+    private var ownTags: Set<Int> = emptySet()
     private val messageIds = AtomicInteger(1)
     private var gattServer: BluetoothGattServer? = null
     private var transferCharacteristic: BluetoothGattCharacteristic? = null
@@ -97,6 +104,12 @@ internal class NearbyBleEngine(
                     return
                 }
                 val nonce = ByteBuffer.wrap(serviceData, 1, Long.SIZE_BYTES).long
+                if (isOwnDevice(nonce)) {
+                    if (ownDevicesSeen.add(result.device.address)) {
+                        Log.i(TAG, "Skipping a device signed in to this account")
+                    }
+                    return
+                }
                 if (
                     nonce == invitationNonce ||
                     java.lang.Long.compareUnsigned(invitationNonce, nonce) <= 0
@@ -393,6 +406,7 @@ internal class NearbyBleEngine(
             return
         }
         startScanning()
+        scheduleNonceRotation()
     }
 
     fun stop() {
@@ -407,7 +421,36 @@ internal class NearbyBleEngine(
         advertising = false
         scanning = false
         recentlyAttempted.clear()
+        ownDevicesSeen.clear()
         scope.cancel()
+    }
+
+    private fun isOwnDevice(nonce: Long): Boolean {
+        val secret = deviceTagSecret ?: return false
+        val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
+        val day = NearbyDeviceTag.dayNumber(now)
+        if (day != ownTagsDay) {
+            ownTags = NearbyDeviceTag.acceptedTags(secret, now)
+            ownTagsDay = day
+        }
+        return NearbyDeviceTag.tagOf(nonce) in ownTags
+    }
+
+    private fun scheduleNonceRotation() {
+        val secret = deviceTagSecret ?: return
+        scope.launch {
+            while (!stopped) {
+                val now = Instant.fromEpochMilliseconds(System.currentTimeMillis())
+                delay(NearbyDeviceTag.millisUntilNextDay(now) + NONCE_ROTATION_GRACE_MILLIS)
+                if (stopped) return@launch
+                invitationNonce = NearbyDeviceTag.invitationNonce(secret)
+                if (advertising) {
+                    advertiser?.stopAdvertising(advertiseCallback)
+                    advertising = false
+                    startAdvertising()
+                }
+            }
+        }
     }
 
     private fun connectAsCentral(device: BluetoothDevice, remoteNonce: Long?) {
@@ -758,5 +801,6 @@ internal class NearbyBleEngine(
         private const val ATT_PROTOCOL_OVERHEAD = 3
         private const val CONNECTION_RETRY_WINDOW_MILLIS = 5 * 60 * 1_000L
         private const val DRAIN_CLOSE_TIMEOUT_MILLIS = 3_000L
+        private const val NONCE_ROTATION_GRACE_MILLIS = 5_000L
     }
 }

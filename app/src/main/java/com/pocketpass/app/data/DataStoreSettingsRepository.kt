@@ -21,6 +21,7 @@ private val Context.pocketPassDataStore by preferencesDataStore(name = "pocketpa
 
 class DataStoreSettingsRepository(private val context: Context) : SettingsRepository {
     private object Keys {
+        val boardsVisible = booleanPreferencesKey("boards_visible")
         val nearbyEnabled = booleanPreferencesKey("nearby_enabled")
         val nearbyOnboardingCompleted =
             booleanPreferencesKey("nearby_onboarding_completed")
@@ -34,16 +35,20 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         val nearbyRepairAlertsEnabled =
             booleanPreferencesKey("nearby_repair_alerts_enabled")
         val updateAlertsEnabled = booleanPreferencesKey("update_alerts_enabled")
+        val messageAlertsEnabled = booleanPreferencesKey("message_alerts_enabled")
         val stepRewardsEnabled = booleanPreferencesKey("step_rewards_enabled")
         val lastNotifiedUpdateVersionCode =
             intPreferencesKey("last_notified_update_version_code")
         val lastSeenMinSupportedVersionCode =
             intPreferencesKey("last_seen_min_supported_version_code")
         val nearbyAlertsSeenThrough = longPreferencesKey("nearby_alerts_seen_through")
+        val globalLeaderboardLimit = intPreferencesKey("global_leaderboard_limit")
         val leaderboardScope = stringPreferencesKey("leaderboard_scope")
         val recentInteractionsSort =
             stringPreferencesKey("recent_interactions_sort")
         val friendsSort = stringPreferencesKey("friends_sort")
+        val pendingAccountSetupUserId =
+            stringPreferencesKey("pending_account_setup_user_id")
     }
 
     override val settings: Flow<LocalSettings> = context.pocketPassDataStore.data
@@ -56,6 +61,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         }
         .map { preferences ->
             LocalSettings(
+                boardsVisible = preferences[Keys.boardsVisible] ?: true,
                 nearbyEnabled = preferences[Keys.nearbyEnabled] ?: true,
                 nearbyOnboardingCompleted =
                     preferences[Keys.nearbyOnboardingCompleted] ?: false,
@@ -73,6 +79,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
                 nearbyRepairAlertsEnabled =
                     preferences[Keys.nearbyRepairAlertsEnabled] ?: true,
                 updateAlertsEnabled = preferences[Keys.updateAlertsEnabled] ?: true,
+                messageAlertsEnabled = preferences[Keys.messageAlertsEnabled] ?: true,
                 stepRewardsEnabled = preferences[Keys.stepRewardsEnabled] ?: false,
                 lastNotifiedUpdateVersionCode =
                     preferences[Keys.lastNotifiedUpdateVersionCode] ?: 0,
@@ -80,6 +87,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
                     preferences[Keys.lastSeenMinSupportedVersionCode] ?: 0,
                 nearbyAlertsSeenThroughEpochMillis =
                     preferences[Keys.nearbyAlertsSeenThrough] ?: 0L,
+                globalLeaderboardLimit = preferences[Keys.globalLeaderboardLimit]?.takeIf { it in GlobalLeaderboardLimits } ?: 20,
                 leaderboardScope = preferences[Keys.leaderboardScope]
                     ?.let { stored ->
                         LeaderboardScope.entries.firstOrNull { it.key == stored }
@@ -95,11 +103,16 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
                         RecentInteractionsSort.entries.firstOrNull { it.key == stored }
                     }
                     ?: RecentInteractionsSort.LatestEncounter,
+                pendingAccountSetupUserId = preferences[Keys.pendingAccountSetupUserId],
             )
         }
 
     override suspend fun setNearby(enabled: Boolean) {
         context.pocketPassDataStore.edit { it[Keys.nearbyEnabled] = enabled }
+    }
+
+    override suspend fun setBoardsVisible(visible: Boolean) {
+        context.pocketPassDataStore.edit { it[Keys.boardsVisible] = visible }
     }
 
     override suspend fun setNearbyOnboardingCompleted(completed: Boolean) {
@@ -154,6 +167,10 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         }
     }
 
+    override suspend fun setMessageAlertsEnabled(enabled: Boolean) {
+        context.pocketPassDataStore.edit { it[Keys.messageAlertsEnabled] = enabled }
+    }
+
     override suspend fun setStepRewardsEnabled(enabled: Boolean) {
         context.pocketPassDataStore.edit { it[Keys.stepRewardsEnabled] = enabled }
     }
@@ -174,6 +191,11 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.pocketPassDataStore.edit { it[Keys.nearbyAlertsSeenThrough] = epochMillis }
     }
 
+    override suspend fun setGlobalLeaderboardLimit(limit: Int) {
+        require(limit in GlobalLeaderboardLimits)
+        context.pocketPassDataStore.edit { it[Keys.globalLeaderboardLimit] = limit }
+    }
+
     override suspend fun setLeaderboardScope(scope: LeaderboardScope) {
         context.pocketPassDataStore.edit { it[Keys.leaderboardScope] = scope.key }
     }
@@ -188,9 +210,21 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.pocketPassDataStore.edit { it[Keys.friendsSort] = sort.key }
     }
 
+    override suspend fun setPendingAccountSetupUserId(userId: String?) {
+        context.pocketPassDataStore.edit {
+            if (userId == null) {
+                it.remove(Keys.pendingAccountSetupUserId)
+            } else {
+                it[Keys.pendingAccountSetupUserId] = userId
+            }
+        }
+    }
+
     override suspend fun resetSettings() {
         context.pocketPassDataStore.edit { preferences ->
+            preferences.remove(Keys.pendingAccountSetupUserId)
             preferences[Keys.nearbyEnabled] = true
+            preferences[Keys.boardsVisible] = true
             preferences[Keys.nearbyOnboardingCompleted] = false
             preferences[Keys.soundLevel] = 0.45f
             preferences[Keys.sfxLevel] = 0.6f
@@ -201,7 +235,9 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             preferences[Keys.encounterAlertsEnabled] = true
             preferences[Keys.nearbyRepairAlertsEnabled] = true
             preferences[Keys.updateAlertsEnabled] = true
+            preferences[Keys.messageAlertsEnabled] = true
             preferences[Keys.stepRewardsEnabled] = false
+            preferences[Keys.globalLeaderboardLimit] = 20
             preferences[Keys.leaderboardScope] = LeaderboardScope.Friends.key
             preferences[Keys.recentInteractionsSort] =
                 RecentInteractionsSort.LatestEncounter.key

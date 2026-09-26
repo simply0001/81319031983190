@@ -52,6 +52,7 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.EntranceMotion
 import com.pocketpass.app.ui.components.FigmaAsset
+import com.pocketpass.app.ui.components.passingStatsLine
 import com.pocketpass.app.ui.components.IdleMotion
 import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.pocketFrame
@@ -60,11 +61,13 @@ import com.pocketpass.app.ui.screens.AchievementSectionPanel
 import com.pocketpass.app.ui.screens.ActivityPanel
 import com.pocketpass.app.ui.screens.GameEntries
 import com.pocketpass.app.ui.screens.GameRow
+import com.pocketpass.app.ui.screens.LeaderboardLimitPanel
 import com.pocketpass.app.ui.screens.LeaderboardPanel
 import com.pocketpass.app.ui.screens.LeaderboardScopeOption
 import com.pocketpass.app.ui.screens.OVERLAY_POP_BASE_DELAY_MILLIS
 import com.pocketpass.app.ui.screens.OVERLAY_POP_STAGGER_MILLIS
-import com.pocketpass.app.ui.screens.ShopCategoryPanel
+import com.pocketpass.app.ui.screens.ShopCategoryCard
+import com.pocketpass.app.ui.screens.ShopItemCard
 import com.pocketpass.app.ui.screens.selfLeaderboardEntry
 import com.pocketpass.app.ui.theme.pocketPalette
 
@@ -142,30 +145,63 @@ fun PhoneActivitiesTab(
         ActivitiesSection.Shop -> ActivitiesScaffold(
             metrics = metrics,
             panes = panes,
-            title = "Shop",
-            subtitle = if (state.shop.purchasingItemIds.isNotEmpty()) {
+            title = state.shop.selectedCategory?.title ?: "Shop",
+            subtitle = if (state.shop.selectedCategory != null) {
+                "${state.shop.selectedCategory?.items?.size} items · ${state.shop.tokenBalance} Tokens"
+            } else if (state.shop.purchasingItemIds.isNotEmpty()) {
                 "${state.shop.tokenBalance} Tokens · Purchase pending…"
             } else {
                 "${state.shop.tokenBalance} Tokens · Earn by playing games, walking & interacting!"
             },
-            backTag = "shop_back",
-            onBack = { dispatch(PocketPassEvent.CloseShop) },
+            backTag = if (state.shop.selectedCategory != null) "shop_category_back" else "shop_back",
+            onBack = {
+                dispatch(
+                    if (state.shop.selectedCategory != null) PocketPassEvent.CloseShopCategory
+                    else PocketPassEvent.CloseShop,
+                )
+            },
+            showArt = state.shop.selectedCategory == null,
             art = { big ->
-                SectionArt(metrics, Assets.ActivitiesCoinDefault, if (big) 496.082f else 300f, if (big) 496.082f else 300f, IdleMotion.CoinRock)
+                if (state.shop.selectedCategory == null) {
+                    SectionArt(metrics, Assets.ActivitiesCoinDefault, if (big) 496.082f else 300f, if (big) 496.082f else 300f, IdleMotion.CoinRock)
+                }
             },
         ) {
-            (state.shop.purchaseError ?: state.shop.refreshError)?.let { message ->
+            (state.miiEditor.wearHatError ?: state.shop.purchaseError ?: state.shop.refreshError)?.let { message ->
                 SectionNotice(metrics, message, "shop_notice")
                 Spacer(Modifier.height(metrics.dp(24f)))
             }
-            state.shop.categories.forEachIndexed { index, category ->
-                MotionLayer(
-                    entrance = EntranceMotion.OverlayPop,
-                    delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + index * OVERLAY_POP_STAGGER_MILLIS,
-                ) {
-                    ShopCategoryPanel(metrics = metrics, category = category, state = state, dispatch = dispatch)
+            val selectedCategory = state.shop.selectedCategory
+            if (selectedCategory == null) {
+                state.shop.categories.forEachIndexed { index, category ->
+                    MotionLayer(
+                        entrance = EntranceMotion.OverlayPop,
+                        delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + index * OVERLAY_POP_STAGGER_MILLIS,
+                    ) {
+                        DeckSlot(metrics, 260f) {
+                            ShopCategoryCard(metrics, category) {
+                                dispatch(PocketPassEvent.OpenShopCategory(category.id))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(metrics.dp(28f)))
                 }
-                Spacer(Modifier.height(metrics.dp(40f)))
+            } else {
+                selectedCategory.items.forEach { item ->
+                    DeckSlot(metrics, 218f) {
+                        ShopItemCard(
+                            metrics = metrics,
+                            item = item,
+                            status = state.shop.statusOf(item),
+                            canBuy = state.shop.canBuy(item),
+                            wearEnabled = state.miiEditorEnabled,
+                            previewAppearance = state.miiEditor.draft,
+                            wearHatInProgress = state.miiEditor.wearHatInProgress,
+                            dispatch = dispatch,
+                        )
+                    }
+                    Spacer(Modifier.height(metrics.dp(24f)))
+                }
             }
         }
 
@@ -230,6 +266,7 @@ fun PhoneActivitiesTab(
                         }
                         Spacer(Modifier.height(metrics.dp(50f)))
                     }
+                    DeckSlot(metrics, 250f) { LeaderboardLimitPanel(metrics, 0f, state, dispatch) }
                 } else {
                     state.leaderboard.refreshError?.let { message ->
                         SectionNotice(metrics, message, "leaderboard_notice")
@@ -351,6 +388,7 @@ private fun ActivitiesScaffold(
     backTag: String?,
     onBack: (() -> Unit)?,
     art: @Composable (big: Boolean) -> Unit,
+    showArt: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val insets = LocalPhoneInsets.current
@@ -369,8 +407,10 @@ private fun ActivitiesScaffold(
         ) {
             header()
             Spacer(Modifier.height(metrics.dp(if (title == null) 16f else 28f)))
-            art(false)
-            Spacer(Modifier.height(metrics.dp(48f)))
+            if (showArt) {
+                art(false)
+                Spacer(Modifier.height(metrics.dp(48f)))
+            }
             content()
         }
     } else {
@@ -387,14 +427,16 @@ private fun ActivitiesScaffold(
                             .padding(top = metrics.dp(insets.top + 24f), bottom = metrics.dp(insets.bottom + 40f)),
                     ) {
                         header()
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                                .padding(vertical = metrics.dp(40f)),
-                            contentAlignment = Alignment.Center,
-                        ) { art(true) }
+                        if (showArt) {
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = metrics.dp(40f)),
+                                contentAlignment = Alignment.Center,
+                            ) { art(true) }
+                        }
                     }
                 }
             },
@@ -443,6 +485,7 @@ private fun PhoneActivitiesHero(
         Row(
             Modifier
                 .fillMaxWidth()
+                .padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN))
                 .height(metrics.dp(layerHeight + if (stepsVisible) 48f else 0f)),
             verticalAlignment = Alignment.Top,
         ) {
@@ -459,6 +502,7 @@ private fun PhoneActivitiesHero(
                 rightCount = state.activitySnapshot?.puzzleCount ?: 3,
                 idleEnabled = defaultIdle,
                 artSize = artSize,
+                thirds = stepsVisible,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationY = -size.height * swapProgress.value },
@@ -470,6 +514,7 @@ private fun PhoneActivitiesHero(
                 rightCount = state.activitySnapshot?.locationCount ?: 3,
                 idleEnabled = alternateIdle,
                 artSize = fullArt,
+                thirds = false,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationY = size.height * (1f - swapProgress.value) },
@@ -483,7 +528,6 @@ private fun PhoneActivitiesHero(
                     artSize = compactArt * 484.11f / 496.082f,
                     modifier = Modifier
                         .weight((1f - swap).coerceAtLeast(0.001f))
-                        .padding(end = metrics.dp(PHONE_CONTENT_MARGIN))
                         .clipToBounds()
                         .graphicsLayer {
                             alpha = 1f - swap
@@ -495,6 +539,25 @@ private fun PhoneActivitiesHero(
         }
         Spacer(Modifier.height(metrics.dp(24f)))
         ShuffleButton(metrics) { dispatch(PocketPassEvent.ShuffleActivities) }
+        passingStatsLine(
+            state.activitySnapshot?.streakDays ?: 0,
+            state.activitySnapshot?.weekPasses ?: 0,
+        )?.let { line ->
+            Spacer(Modifier.height(metrics.dp(18f)))
+            Text(
+                text = line,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN))
+                    .testTag("passing_streak"),
+                color = pocketPalette.teal,
+                fontFamily = Rubik,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = metrics.sp(28f),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -506,35 +569,41 @@ private fun CounterLayer(
     rightCount: Int,
     idleEnabled: Boolean,
     artSize: Float,
+    thirds: Boolean,
     modifier: Modifier,
 ) {
     Row(
-        modifier = modifier.padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN)),
+        modifier = modifier,
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.Top,
     ) {
-        Counter(
-            metrics = metrics,
-            resource = if (alternate) Assets.ActivitiesCoinAlt else Assets.ActivitiesCoinDefault,
-            count = leftCount,
-            color = pocketPalette.ink(if (alternate) Color(0xFF33398D) else Color(0xFF803427)),
-            entrance = EntranceMotion.ActivityCoinSettle,
-            idle = IdleMotion.CoinRock,
-            idleActive = idleEnabled,
-            artSize = artSize,
-            delay = 0,
-        )
-        Counter(
-            metrics = metrics,
-            resource = if (alternate) Assets.ActivitiesPuzzleAlt else Assets.ActivitiesPuzzleDefault,
-            count = rightCount,
-            color = pocketPalette.ink(if (alternate) Color(0xFF851111) else Color(0xFF11851E)),
-            entrance = EntranceMotion.ActivityPuzzleSettle,
-            idle = IdleMotion.PuzzleBob,
-            idleActive = idleEnabled,
-            artSize = artSize * 484.11f / 496.082f,
-            delay = 70,
-        )
+        val slot = if (thirds) Modifier.weight(1f) else Modifier
+        Box(slot, contentAlignment = Alignment.TopCenter) {
+            Counter(
+                metrics = metrics,
+                resource = if (alternate) Assets.ActivitiesCoinAlt else Assets.ActivitiesCoinDefault,
+                count = leftCount,
+                color = pocketPalette.ink(if (alternate) Color(0xFF33398D) else Color(0xFF803427)),
+                entrance = EntranceMotion.ActivityCoinSettle,
+                idle = IdleMotion.CoinRock,
+                idleActive = idleEnabled,
+                artSize = artSize,
+                delay = 0,
+            )
+        }
+        Box(slot, contentAlignment = Alignment.TopCenter) {
+            Counter(
+                metrics = metrics,
+                resource = if (alternate) Assets.ActivitiesPuzzleAlt else Assets.ActivitiesPuzzleDefault,
+                count = rightCount,
+                color = pocketPalette.ink(if (alternate) Color(0xFF851111) else Color(0xFF11851E)),
+                entrance = EntranceMotion.ActivityPuzzleSettle,
+                idle = IdleMotion.PuzzleBob,
+                idleActive = idleEnabled,
+                artSize = artSize * 484.11f / 496.082f,
+                delay = 70,
+            )
+        }
     }
 }
 

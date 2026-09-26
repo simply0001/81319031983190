@@ -1,4 +1,5 @@
 import java.util.Properties
+import com.google.gms.googleservices.GoogleServicesTask
 import javax.inject.Inject
 import org.gradle.process.ExecOperations
 
@@ -6,6 +7,24 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val firebaseConfigurationFile = providers.gradleProperty("POCKETPASS_GOOGLE_SERVICES_JSON")
+    .orNull?.let(rootProject::file)
+    ?: rootProject.file("../PocketPass-backups/backend/google-services.json").takeIf { it.isFile }
+    ?: file("google-services.json")
+val firebaseConfigured = firebaseConfigurationFile.isFile
+check(providers.gradleProperty("POCKETPASS_REQUIRE_FIREBASE").orNull != "true" || firebaseConfigured) {
+    "Firebase configuration is missing. Set POCKETPASS_GOOGLE_SERVICES_JSON or place google-services.json in PocketPass-backups/backend or app/."
+}
+if (firebaseConfigured) {
+    apply(plugin = "com.google.gms.google-services")
+    androidComponents.onVariants { variant ->
+        val taskName = "process${variant.name.replaceFirstChar { it.uppercaseChar() }}GoogleServices"
+        tasks.named<GoogleServicesTask>(taskName).configure {
+            googleServicesJsonFiles.set(listOf(firebaseConfigurationFile))
+        }
+    }
 }
 
 abstract class MinifyMiiRendererTask : DefaultTask() {
@@ -80,8 +99,8 @@ android {
         applicationId = "com.pocketpass.app"
         minSdk = 30
         targetSdk = 36
-        versionCode = 15
-        versionName = "0.1.2-alpha"
+        versionCode = 26
+        versionName = "0.2.0-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -108,6 +127,7 @@ android {
         buildConfigField("String", "RELEASE_CERT_SHA256", "\"$releaseCertificateSha256\"")
         buildConfigField("String", "AUTH_CALLBACK_URL", "\"https://links.pocketpass.xyz/auth/callback\"")
         buildConfigField("boolean", "BACKEND_ENABLED", backendEnabled.toString())
+        buildConfigField("boolean", "FIREBASE_CONFIGURED", firebaseConfigured.toString())
         manifestPlaceholders["pocketPassLinkHost"] = "links.pocketpass.xyz"
     }
 
@@ -180,6 +200,13 @@ androidComponents {
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+    constraints {
+        implementation(libs.androidx.fragment) {
+            because("Firebase's transitive Fragment version must support Activity Result permissions")
+        }
+    }
     implementation(project(":shared"))
     implementation(project(":ui"))
 
@@ -198,11 +225,13 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.health.connect.client)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.serialization.protobuf)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
     implementation(libs.coil.svg)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.room.runtime)

@@ -21,6 +21,9 @@ import com.pocketpass.app.domain.model.UserProfile
 import kotlin.time.Instant
 
 interface MutationAcknowledgementReconciler {
+    suspend fun reconcileBioResult(command: com.pocketpass.app.domain.model.UpdateProfileCommand, acceptedBio: String, error: String? = null) {}
+    suspend fun reconcileChatColour(accountId: UserId, operationId: String, colour: String, error: String? = null) {}
+
     suspend fun reconcileAcknowledgedProfile(profile: UserProfile)
 
     suspend fun reconcileAcknowledgedMessage(
@@ -45,6 +48,19 @@ interface MutationAcknowledgementReconciler {
 class RoomRepositoryReconciler(
     private val database: PocketPassDatabase,
 ) : MutationAcknowledgementReconciler {
+    override suspend fun reconcileBioResult(command: com.pocketpass.app.domain.model.UpdateProfileCommand, acceptedBio: String, error: String?) {
+        database.useWriterConnection { connection -> connection.immediateTransaction {
+            val dao = database.profileDao()
+            if (error == null) dao.acknowledgeBio(command.accountId.value, command.clientOperationId.value)
+            else {
+                val pending = dao.bioDraft(command.accountId.value)
+                if (pending == null || pending.operationId == command.clientOperationId.value) {
+                    dao.saveBioDraft(com.pocketpass.app.data.local.entity.BioDraftEntity(command.accountId.value, command.profile.bio, acceptedBio, command.clientOperationId.value, error))
+                }
+                dao.setAcceptedBio(command.accountId.value, acceptedBio)
+            }
+        } }
+    }
     suspend fun reconcileProfile(
         userId: UserId,
         remoteProfile: UserProfile?,
@@ -58,19 +74,39 @@ class RoomRepositoryReconciler(
                     accountId = userId.value,
                     kinds = setOf(ProductionOperationKinds.UPDATE_PROFILE),
                 ).contains(userId.value)
-                if (hasPendingUpdate) return@immediateTransaction
+                if (hasPendingUpdate) {
+                    remoteProfile?.let {
+                        database.profileDao().setMessagePrivacy(userId.value, it.blockMessages)
+                        database.profileDao().setInvitesPrivacy(userId.value, it.blockInvites)
+                    }
+                    return@immediateTransaction
+                }
 
                 if (remoteProfile == null) {
                     database.profileDao().delete(userId.value)
                 } else {
-                    database.profileDao().upsert(remoteProfile.toEntity())
+                    upsertPreservingChatColour(remoteProfile)
                 }
             }
         }
     }
 
     override suspend fun reconcileAcknowledgedProfile(profile: UserProfile) {
-        database.profileDao().upsert(profile.toEntity())
+        database.useWriterConnection { it.immediateTransaction { upsertPreservingChatColour(profile) } }
+    }
+
+    private suspend fun upsertPreservingChatColour(profile: UserProfile) {
+        val cached = database.profileDao().get(profile.userId.value)
+        val entity = profile.toEntity()
+        database.profileDao().upsert(if (cached?.chatColourOperationId != null) entity.copy(
+            chatBubbleColour = cached.chatBubbleColour, chatColourOperationId = cached.chatColourOperationId,
+            chatColourError = cached.chatColourError,
+        ) else entity)
+    }
+
+    override suspend fun reconcileChatColour(accountId: UserId, operationId: String, colour: String, error: String?) {
+        if (error == null) database.profileDao().acknowledgeChatColour(accountId.value, operationId, colour)
+        else database.profileDao().rejectChatColour(accountId.value, operationId, error)
     }
 
     override suspend fun reconcileAcknowledgedPurchase(

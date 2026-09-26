@@ -14,6 +14,10 @@ fun PocketPassDatabase.Companion.build(
     name,
 )
     .addMigrations(
+        PocketPassDatabase.Migration21To22,
+        PocketPassDatabase.Migration20To21,
+        PocketPassDatabase.Migration18To19,
+        PocketPassDatabase.Migration19To20,
         PocketPassDatabase.Migration1To2,
         PocketPassDatabase.Migration2To3,
         PocketPassDatabase.Migration3To4,
@@ -29,10 +33,35 @@ fun PocketPassDatabase.Companion.build(
         PocketPassDatabase.Migration13To14,
         PocketPassDatabase.Migration14To15,
         PocketPassDatabase.Migration15To16,
+        PocketPassDatabase.Migration16To17,
+        PocketPassDatabase.Migration17To18,
     )
     .build()
 
 val PocketPassDatabase.Companion.Migration1To2: Migration get() = migration1To2
+
+val PocketPassDatabase.Companion.Migration21To22: Migration get() = migration21To22
+private val migration21To22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) { invitesPrivacyMigrationSql.forEach(db::execSQL) }
+}
+val PocketPassDatabase.Companion.Migration20To21: Migration get() = migration20To21
+private val migration20To21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) { boardsMigrationStatements.forEach(db::execSQL) }
+}
+val PocketPassDatabase.Companion.Migration19To20: Migration get() = migration19To20
+private val migration19To20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(messagePrivacyMigrationSql)
+    }
+}
+
+val PocketPassDatabase.Companion.Migration18To19: Migration get() = migration18To19
+
+private val migration18To19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        chatColourMigrationStatements.forEach(db::execSQL)
+    }
+}
 val PocketPassDatabase.Companion.Migration2To3: Migration get() = migration2To3
 val PocketPassDatabase.Companion.Migration3To4: Migration get() = migration3To4
 val PocketPassDatabase.Companion.Migration4To5: Migration get() = migration4To5
@@ -47,6 +76,8 @@ val PocketPassDatabase.Companion.Migration12To13: Migration get() = migration12T
 val PocketPassDatabase.Companion.Migration13To14: Migration get() = migration13To14
 val PocketPassDatabase.Companion.Migration14To15: Migration get() = migration14To15
 val PocketPassDatabase.Companion.Migration15To16: Migration get() = migration15To16
+val PocketPassDatabase.Companion.Migration16To17: Migration get() = migration16To17
+val PocketPassDatabase.Companion.Migration17To18: Migration get() = migration17To18
 
 private val migration1To2: Migration = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -444,6 +475,84 @@ private val migration15To16: Migration = object : Migration(15, 16) {
             """
             CREATE INDEX IF NOT EXISTS index_conversation_members_accountId_conversationId
             ON conversation_members (accountId, conversationId)
+            """.trimIndent(),
+        )
+    }
+}
+
+private val migration16To17: Migration = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS puzzle_collections (
+                accountId TEXT NOT NULL,
+                currentPuzzleId TEXT,
+                piecePriceTokens INTEGER NOT NULL,
+                updatedAtEpochMillis INTEGER NOT NULL,
+                PRIMARY KEY(accountId)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS puzzles (
+                accountId TEXT NOT NULL,
+                puzzleId TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                title TEXT NOT NULL,
+                slug TEXT,
+                imagePath TEXT,
+                artworkKind TEXT NOT NULL,
+                artworkValue TEXT,
+                columnCount INTEGER NOT NULL,
+                rowCount INTEGER NOT NULL,
+                startedAtEpochMillis INTEGER,
+                completedAtEpochMillis INTEGER,
+                completedByHandover INTEGER NOT NULL,
+                PRIMARY KEY(accountId, puzzleId)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS index_puzzles_accountId_position
+            ON puzzles (accountId, position)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS puzzle_pieces (
+                accountId TEXT NOT NULL,
+                puzzleId TEXT NOT NULL,
+                pieceIndex INTEGER NOT NULL,
+                PRIMARY KEY(accountId, puzzleId, pieceIndex)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS index_puzzle_pieces_accountId_puzzleId
+            ON puzzle_pieces (accountId, puzzleId)
+            """.trimIndent(),
+        )
+    }
+}
+
+private val migration17To18: Migration = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS passing_stats (
+                accountId TEXT NOT NULL,
+                currentStreak INTEGER NOT NULL,
+                bestStreak INTEGER NOT NULL,
+                weekPasses INTEGER NOT NULL,
+                weekPeople INTEGER NOT NULL,
+                weekRegions INTEGER NOT NULL,
+                updatedAtEpochMillis INTEGER NOT NULL,
+                PRIMARY KEY(accountId)
+            )
             """.trimIndent(),
         )
     }

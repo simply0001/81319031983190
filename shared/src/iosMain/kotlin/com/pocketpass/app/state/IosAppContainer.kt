@@ -13,6 +13,7 @@ import com.pocketpass.app.auth.SupabaseAuthRemoteDataSource
 import com.pocketpass.app.auth.SupabaseSessionRepository
 import com.pocketpass.app.data.SettingsRepository
 import com.pocketpass.app.data.UserDefaultsSettingsRepository
+import com.pocketpass.app.data.UserDefaultsWidgetDesignRepository
 import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.local.buildPocketPassDatabase
 import com.pocketpass.app.data.local.clearAllPocketPassTables
@@ -26,6 +27,7 @@ import com.pocketpass.app.data.repository.RoomAchievementsRepository
 import com.pocketpass.app.data.repository.RoomBingoRepository
 import com.pocketpass.app.data.repository.RoomLeaderboardRepository
 import com.pocketpass.app.data.repository.RoomWorldTourRepository
+import com.pocketpass.app.data.repository.RoomPassingStatsRepository
 import com.pocketpass.app.data.supabase.PocketPassSupabaseClientFactory
 import com.pocketpass.app.data.supabase.SupabaseBackendConfig
 import com.pocketpass.app.data.supabase.SupabaseProductionRemoteDataSources
@@ -38,6 +40,7 @@ import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.accountIdOrNull
+import com.pocketpass.app.feature.AccountSecurityStateHolder
 import com.pocketpass.app.feature.AccountSetupStateHolder
 import com.pocketpass.app.feature.AchievementsStateHolder
 import com.pocketpass.app.feature.ActivitiesStateHolder
@@ -48,6 +51,9 @@ import com.pocketpass.app.feature.GamesStateHolder
 import com.pocketpass.app.feature.HomeProfileStateHolder
 import com.pocketpass.app.feature.LeaderboardStateHolder
 import com.pocketpass.app.feature.MessagesStateHolder
+import com.pocketpass.app.media.ImageAttachmentPolicy
+import com.pocketpass.app.media.ImageAttachmentPreparation
+import com.pocketpass.app.media.IosImageAttachmentPreparer
 import com.pocketpass.app.feature.NotificationStateHolder
 import com.pocketpass.app.feature.ProfileViewerStateHolder
 import com.pocketpass.app.feature.SettingsStateHolder
@@ -78,6 +84,7 @@ import com.pocketpass.app.security.KeystoreSupabaseCodeVerifierCache
 import com.pocketpass.app.security.KeystoreSupabaseSessionManager
 import com.pocketpass.app.nearby.IosNearbyController
 import com.pocketpass.app.nearby.NearbyCredentialPool
+import com.pocketpass.app.nearby.NearbyDeviceTagStore
 import com.pocketpass.app.nearby.NearbyEncounterProof
 import com.pocketpass.app.nearby.NearbyProofOutboxStore
 import com.pocketpass.app.nearby.NearbyReceiptOutcome
@@ -88,6 +95,7 @@ import com.pocketpass.app.sync.IosNetworkMonitor
 import com.pocketpass.app.sync.OutboxProcessor
 import com.pocketpass.app.sync.RealtimeRuntime
 import com.pocketpass.app.widget.IosWidgetSnapshotSink
+import com.pocketpass.app.widget.WidgetDesignsStateHolder
 import com.pocketpass.app.widget.WidgetSnapshotPublisher
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
@@ -122,6 +130,9 @@ import platform.UIKit.UIApplicationDidBecomeActiveNotification
 import platform.UIKit.UIApplicationWillResignActiveNotification
 import platform.UIKit.UIDevice
 import platform.UIKit.UIDeviceBatteryState
+import com.pocketpass.app.data.repository.RoomPuzzleRepository
+import com.pocketpass.app.feature.PuzzleStateHolder
+import com.pocketpass.app.puzzle.IosFilePuzzleArtworkStore
 
 /**
  * The iOS composition root. With backend coordinates generated into
@@ -163,6 +174,7 @@ class IosAppContainer(
     override val miiEditorEnabled = true
     override val pretendoImportEnabled = true
     override val encounterLedSupported = false
+    override val messagePushSupported = backend != null && com.pocketpass.app.push.IosMessagePushBridge.handler != null
 
     private val miiPersistence = IosFileMiiEditorPersistence()
     private val miiPublishQueue = IosFileMiiProfilePublishQueue()
@@ -225,10 +237,17 @@ class IosAppContainer(
     override val auth = AuthStateHolder(
         sessionRepository = repositories.session,
         scope = applicationScope,
+        onPasswordAccountCreated = { settingsRepository.setPendingAccountSetupUserId(it.value) },
     )
     override val accountSetup = AccountSetupStateHolder(
         accountId = activeAccountId,
         profileRepository = repositories.profiles,
+        scope = applicationScope,
+        pendingSetupUserId = settingsRepository.settings.map { it.pendingAccountSetupUserId },
+        clearPendingSetup = { settingsRepository.setPendingAccountSetupUserId(null) },
+    )
+    override val accountSecurity = AccountSecurityStateHolder(
+        sessionRepository = repositories.session,
         scope = applicationScope,
     )
     override val homeProfile = HomeProfileStateHolder(
@@ -242,6 +261,12 @@ class IosAppContainer(
     private val pendingConversation = MutableStateFlow<ConversationId?>(null)
     override val requestedConversation: StateFlow<ConversationId?> = pendingConversation
     override val requestedAppUpdate: StateFlow<Boolean> = MutableStateFlow(false)
+    override val requestedWidgetAssignment: StateFlow<Int?> = MutableStateFlow(null)
+    override val widgetDesigns = WidgetDesignsStateHolder(
+        repository = UserDefaultsWidgetDesignRepository(),
+        scope = applicationScope,
+    )
+    override val widgetPlatform: WidgetPlatformActions = InactiveWidgetPlatform
 
     override val profileViewer = ProfileViewerStateHolder(
         accountId = activeAccountId,
@@ -271,6 +296,8 @@ class IosAppContainer(
         presenceRepository = repositories.presence,
         onMessageSent = { soundEffects.play(SoundEffect.MessageSent) },
         onGroupCreated = { pendingConversation.value = it },
+        friendsRepository = repositories.friends,
+        profileRepository = repositories.profiles,
     )
     override val notifications = NotificationStateHolder(
         accountId = activeAccountId,
@@ -283,6 +310,8 @@ class IosAppContainer(
         shopRepository = repositories.shop,
         leaderboardRepository = repositories.leaderboard,
         worldTourRepository = repositories.worldTour,
+        puzzleRepository = repositories.puzzle,
+        passingStatsRepository = repositories.passingStats,
         scope = applicationScope,
     )
     override val shop = ShopStateHolder(
@@ -312,6 +341,12 @@ class IosAppContainer(
         bingoRepository = repositories.bingo,
         scope = applicationScope,
     )
+    override val puzzle = PuzzleStateHolder(
+        accountId = activeAccountId,
+        puzzleRepository = repositories.puzzle,
+        shopRepository = repositories.shop,
+        scope = applicationScope,
+    )
     override val settings = SettingsStateHolder(settingsRepository, applicationScope)
     override val nearby: NearbyActions = backend?.let { components ->
         IosNearbyController(
@@ -320,6 +355,7 @@ class IosAppContainer(
             settings = settings.settings,
             activeAccountId = activeAccountId,
             credentialPool = components.nearbyCredentialPool,
+            deviceTags = components.nearbyDeviceTags,
             submitProof = { accountId, proof -> submitNearbyProof(accountId, proof) },
             onEncounter = {
                 applicationScope.launch {
@@ -340,6 +376,7 @@ class IosAppContainer(
         remote = backend?.remote?.sources?.stepRewards
             ?: FixtureStepRewardsRemoteDataSource(),
         scope = applicationScope,
+        onPiecesCredited = { accountId -> repositories.puzzle.refresh(accountId) },
     )
 
     private val widgetPublisher = WidgetSnapshotPublisher(
@@ -351,11 +388,31 @@ class IosAppContainer(
         nearby = nearby.state,
         miiEditor = miiEditor.state,
         settings = settings.settings,
+        shop = shop.state,
+        stepRewards = stepRewards.state,
+        achievements = achievements.state,
+        bingo = bingo.state,
+        worldTour = worldTour.state,
+        leaderboard = leaderboard.state,
         sink = IosWidgetSnapshotSink(),
     )
 
     private val appForeground = MutableStateFlow(true)
     private val networkMonitor = IosNetworkMonitor()
+
+    private val messagePush = backend?.takeIf { messagePushSupported }?.let { components ->
+        com.pocketpass.app.push.IosMessagePushManager(
+            client = components.client,
+            settings = settingsRepository,
+            session = repositories.session.sessionState,
+            foreground = appForeground,
+            network = networkMonitor.state,
+            scope = applicationScope,
+            openConversation = { pendingConversation.value = ConversationId(it) },
+        )
+    }
+
+    fun handleMessageNotification(data: Map<String, String>) { messagePush?.tapped(data) }
 
     private val realtimeRuntime = backend?.let { components ->
         RealtimeRuntime(
@@ -382,6 +439,7 @@ class IosAppContainer(
         }
         val components = backend
         registerForegroundObservers()
+        messagePush?.start()
         applicationScope.launch {
             appForeground.collect { foreground -> stepRewards.setForeground(foreground) }
         }
@@ -423,6 +481,8 @@ class IosAppContainer(
     }
 
     override fun consumeRequestedAppUpdate() = Unit
+
+    override fun consumeRequestedWidgetAssignment() = Unit
 
     override fun consumeRequestedConversation() {
         pendingConversation.value = null
@@ -478,6 +538,7 @@ class IosAppContainer(
         val components = backend ?: return repositories.session.signOut()
         val accountId = activeAccountId.value
         var cleanupFailures: List<Throwable> = emptyList()
+        messagePush?.beforeSignOut()
         val result = try {
             repositories.session.signOut()
         } finally {
@@ -486,6 +547,10 @@ class IosAppContainer(
                 add(runCatching { components.verifierCache.deleteCodeVerifier() }.exceptionOrNull())
                 add(runCatching { components.presence.clearAll() }.exceptionOrNull())
                 accountId?.let { account ->
+                    add(
+                        runCatching { components.nearbyDeviceTags.forget(account) }
+                            .exceptionOrNull(),
+                    )
                     add(
                         runCatching { miiPublishQueue.clearAccount(account.value) }
                             .exceptionOrNull(),
@@ -507,6 +572,7 @@ class IosAppContainer(
                     },
                 )
             }.filterNotNull()
+            messagePush?.afterSignOut()
         }
         return if (cleanupFailures.isEmpty()) {
             result
@@ -561,12 +627,39 @@ class IosAppContainer(
         return healthy
     }
 
+    val imageAttachmentPreparer = IosImageAttachmentPreparer()
+
+    fun sendPickedImage(sourcePath: String) {
+        applicationScope.launch {
+            val outcome = imageAttachmentPreparer.prepare(sourcePath)
+            imageAttachmentPreparer.discard(sourcePath)
+            when (outcome) {
+                is ImageAttachmentPreparation.Ready -> messages.sendImageAttachment(
+                    localPath = outcome.attachment.path,
+                    mimeType = outcome.attachment.mimeType,
+                )
+
+                is ImageAttachmentPreparation.Failed ->
+                    messages.reportImageAttachmentFailure(outcome.message)
+            }
+        }
+    }
+
+    fun reportImagePickFailure() {
+        messages.reportImageAttachmentFailure(ImageAttachmentPolicy.UNREADABLE_MESSAGE)
+    }
+
     override suspend fun resetSettings() {
         settings.resetSettings()
     }
 
     override suspend fun setUpdateAlertsEnabled(enabled: Boolean) {
         settings.setUpdateAlertsEnabled(enabled)
+    }
+
+    override suspend fun setMessageAlertsEnabled(enabled: Boolean) {
+        settings.setMessageAlertsEnabled(enabled)
+        if (enabled && messagePushSupported) com.pocketpass.app.push.IosMessagePushBridge.handler?.invoke("request")
     }
 
     private fun registerForegroundObservers() {
@@ -624,11 +717,12 @@ class IosAppContainer(
             remote = remote.sources,
             nearbySecureStore = nearbySecureStore,
             nearbyProofOutboxStore = nearbyProofOutboxStore,
-            onEncounterSubmitted = { command, encounter ->
+            onEncounterSubmitted = { command, encounter, rejected ->
                 nearbyReceiptVerdicts.report(
                     NearbyReceiptOutcome(
                         submittedEncounterId = command.encounterId,
                         resolvedEncounterId = encounter?.id,
+                        rejected = rejected,
                     ),
                 )
             },
@@ -660,11 +754,23 @@ class IosAppContainer(
                 database.bingoDao(),
                 remote.sources.bingo,
             ),
+            puzzle = RoomPuzzleRepository(
+                database.puzzleDao(),
+                remote.sources.puzzle,
+                IosFilePuzzleArtworkStore(),
+            ),
+            passingStats = RoomPassingStatsRepository(
+                database.passingStatsDao(),
+                remote.sources.passingStats,
+            ),
             encounters = bundle.encounters,
             presence = presence,
             sync = bundle.sync,
+            boards = com.pocketpass.app.boards.RoomBoardRepository(
+                com.pocketpass.app.boards.SupabaseBoardApi(client), database.boardDao()),
         )
         return IosBackendComponents(
+            client = client,
             database = database,
             sessionManager = sessionManager,
             verifierCache = verifierCache,
@@ -677,6 +783,10 @@ class IosAppContainer(
             nearbyReceiptVerdicts = nearbyReceiptVerdicts,
             nearbyCredentialPool = NearbyCredentialPool(
                 dao = database.nearbyEncounterDao(),
+                remote = remote.sources.encounters,
+                secureStore = nearbySecureStore,
+            ),
+            nearbyDeviceTags = NearbyDeviceTagStore(
                 remote = remote.sources.encounters,
                 secureStore = nearbySecureStore,
             ),
@@ -695,7 +805,9 @@ class IosAppContainer(
                 leaderboard = fixtures.leaderboard,
                 achievements = fixtures.achievements,
                 worldTour = fixtures.worldTour,
+                passingStats = fixtures.passingStats,
                 bingo = fixtures.bingo,
+                puzzle = fixtures.puzzle,
                 encounters = fixtures.encounters,
                 presence = fixtures.presence,
                 sync = fixtures.sync,
@@ -756,6 +868,7 @@ class IosAppContainer(
     }
 
     private class IosBackendComponents(
+        val client: io.github.jan.supabase.SupabaseClient,
         val database: PocketPassDatabase,
         val sessionManager: KeystoreSupabaseSessionManager,
         val verifierCache: KeystoreSupabaseCodeVerifierCache,
@@ -767,6 +880,7 @@ class IosAppContainer(
         val nearbyProofOutboxStore: NearbyProofOutboxStore,
         val nearbyReceiptVerdicts: NearbyReceiptVerdictBus,
         val nearbyCredentialPool: NearbyCredentialPool,
+        val nearbyDeviceTags: NearbyDeviceTagStore,
     )
 
     private companion object {

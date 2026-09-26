@@ -22,8 +22,11 @@ class SupabaseSessionRepository(
 ) : SessionRepository {
     private val operationMutex = Mutex()
     private val mutableSessionState = MutableStateFlow<SessionState>(SessionState.Initializing)
+    private val mutableAccountEmail = MutableStateFlow<String?>(null)
 
     override val sessionState: StateFlow<SessionState> = mutableSessionState.asStateFlow()
+
+    override val accountEmail: StateFlow<String?> = mutableAccountEmail.asStateFlow()
 
     init {
         applicationScope.launch {
@@ -31,6 +34,7 @@ class SupabaseSessionRepository(
                 mutableSessionState.update { current ->
                     status.toDomainState(previous = current)
                 }
+                refreshAccountEmail()
             }
         }
     }
@@ -40,6 +44,7 @@ class SupabaseSessionRepository(
             try {
                 val state = remote.initialize().toDomainState(mutableSessionState.value)
                 mutableSessionState.value = state
+                refreshAccountEmail()
                 RepositoryResult.Success(state)
             } catch (error: Throwable) {
                 val failure = error.toRepositoryFailure()
@@ -57,6 +62,7 @@ class SupabaseSessionRepository(
                 val authenticated = remote.handleAuthCallback(callbackUri)
                 val state = authenticated.toDomainState(mutableSessionState.value)
                 mutableSessionState.value = state
+                refreshAccountEmail()
                 RepositoryResult.Success(state)
             } catch (error: Throwable) {
                 RepositoryResult.Failure(error.toRepositoryFailure())
@@ -98,7 +104,95 @@ class SupabaseSessionRepository(
                 val authenticated = remote.verifyEmailOtp(email, sixDigitCode)
                 val state = authenticated.toDomainState(mutableSessionState.value)
                 mutableSessionState.value = state
+                refreshAccountEmail()
                 RepositoryResult.Success(state)
+            } catch (error: Throwable) {
+                RepositoryResult.Failure(error.toRepositoryFailure())
+            }
+        }
+
+    override suspend fun isUsernameAvailable(username: String): RepositoryResult<Boolean> =
+        try {
+            RepositoryResult.Success(remote.isUsernameAvailable(username))
+        } catch (error: Throwable) {
+            RepositoryResult.Failure(error.toRepositoryFailure())
+        }
+
+    override suspend fun signUpWithPassword(
+        loginEmail: String,
+        password: String,
+        username: String,
+    ): RepositoryResult<SessionState> =
+        operationMutex.withLock {
+            try {
+                val authenticated = remote.signUpWithPassword(loginEmail, password, username)
+                val state = authenticated.toDomainState(mutableSessionState.value)
+                mutableSessionState.value = state
+                refreshAccountEmail()
+                RepositoryResult.Success(state)
+            } catch (error: Throwable) {
+                RepositoryResult.Failure(error.toRepositoryFailure())
+            }
+        }
+
+    override suspend fun signInWithPassword(
+        loginEmail: String,
+        password: String,
+    ): RepositoryResult<SessionState> =
+        operationMutex.withLock {
+            try {
+                val authenticated = remote.signInWithPassword(loginEmail, password)
+                val state = authenticated.toDomainState(mutableSessionState.value)
+                mutableSessionState.value = state
+                refreshAccountEmail()
+                RepositoryResult.Success(state)
+            } catch (error: Throwable) {
+                RepositoryResult.Failure(error.toRepositoryFailure())
+            }
+        }
+
+    override suspend fun requestEmailLink(email: String): RepositoryResult<Unit> =
+        operationMutex.withLock {
+            try {
+                remote.requestEmailLink(email)
+                RepositoryResult.Success(Unit)
+            } catch (error: Throwable) {
+                RepositoryResult.Failure(error.toRepositoryFailure())
+            }
+        }
+
+    override suspend fun verifyEmailLink(
+        email: String,
+        sixDigitCode: String,
+    ): RepositoryResult<Unit> =
+        operationMutex.withLock {
+            try {
+                remote.verifyEmailLink(email, sixDigitCode)
+                refreshAccountEmail()
+                RepositoryResult.Success(Unit)
+            } catch (error: Throwable) {
+                RepositoryResult.Failure(error.toRepositoryFailure())
+            }
+        }
+
+    override suspend fun requestReauthentication(): RepositoryResult<Unit> =
+        operationMutex.withLock {
+            try {
+                remote.requestReauthentication()
+                RepositoryResult.Success(Unit)
+            } catch (error: Throwable) {
+                RepositoryResult.Failure(error.toRepositoryFailure())
+            }
+        }
+
+    override suspend fun changePassword(
+        newPassword: String,
+        nonce: String,
+    ): RepositoryResult<Unit> =
+        operationMutex.withLock {
+            try {
+                remote.changePassword(newPassword, nonce)
+                RepositoryResult.Success(Unit)
             } catch (error: Throwable) {
                 RepositoryResult.Failure(error.toRepositoryFailure())
             }
@@ -113,8 +207,19 @@ class SupabaseSessionRepository(
                 RepositoryResult.Failure(error.toRepositoryFailure())
             } finally {
                 mutableSessionState.value = SessionState.SignedOut
+                mutableAccountEmail.value = null
             }
         }
+
+    private fun refreshAccountEmail() {
+        mutableAccountEmail.value = when (mutableSessionState.value) {
+            is SessionState.Authenticated,
+            is SessionState.OfflineWithCachedSession,
+            -> remote.currentAccountEmail()
+
+            else -> null
+        }
+    }
 
     private fun RemoteAuthStatus.toDomainState(previous: SessionState): SessionState =
         when (this) {

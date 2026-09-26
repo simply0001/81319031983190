@@ -16,7 +16,9 @@ class NearbyBootReceiver : BroadcastReceiver() {
         }
         val pending = goAsync()
         val application = context.applicationContext as PocketPassApplication
+        val booted = intent.action == Intent.ACTION_BOOT_COMPLETED
         application.container.applicationScope.launchWithCompletion(pending) {
+            if (booted) application.container.stepSource.recordBoot()
             application.container.nearby.restoreAfterSystemEvent()
         }
     }

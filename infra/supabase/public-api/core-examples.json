@@ -1,0 +1,283 @@
+[
+  {
+    "name": "session.get",
+    "section": "endpoints",
+    "scope": "none",
+    "fields": []
+  },
+  {
+    "name": "session.revoke",
+    "section": "endpoints",
+    "scope": "none",
+    "fields": []
+  },
+  {
+    "name": "me.get",
+    "section": "endpoints",
+    "scope": "profile:read",
+    "fields": []
+  },
+  {
+    "name": "profiles.get",
+    "section": "endpoints",
+    "scope": "profile:read",
+    "fields": [
+      "user_id"
+    ]
+  },
+  {
+    "name": "profiles.get_many",
+    "section": "endpoints",
+    "scope": "profile:read",
+    "fields": [
+      "user_ids"
+    ]
+  },
+  {
+    "name": "friends.list",
+    "section": "endpoints",
+    "scope": "friends:read",
+    "fields": []
+  },
+  {
+    "name": "friends.requests_list",
+    "section": "endpoints",
+    "scope": "friends:read",
+    "fields": []
+  },
+  {
+    "name": "friends.request_send",
+    "section": "endpoints",
+    "scope": "friends:write",
+    "fields": [
+      "user_id",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "friends.request_respond",
+    "section": "endpoints",
+    "scope": "friends:write",
+    "fields": [
+      "request_id",
+      "accept",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "friends.request_cancel",
+    "section": "endpoints",
+    "scope": "friends:write",
+    "fields": [
+      "request_id"
+    ]
+  },
+  {
+    "name": "friends.remove",
+    "section": "endpoints",
+    "scope": "friends:write",
+    "fields": [
+      "user_id",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "friends.code_get",
+    "section": "endpoints",
+    "scope": "friends:write",
+    "fields": []
+  },
+  {
+    "name": "friends.code_resolve",
+    "section": "endpoints",
+    "scope": "friends:write",
+    "fields": [
+      "code"
+    ]
+  },
+  {
+    "name": "conversations.list",
+    "section": "endpoints",
+    "scope": "messages:read",
+    "fields": []
+  },
+  {
+    "name": "conversations.get",
+    "section": "endpoints",
+    "scope": "messages:read",
+    "fields": [
+      "conversation_id"
+    ]
+  },
+  {
+    "name": "conversations.open",
+    "section": "endpoints",
+    "scope": "messages:write",
+    "fields": [
+      "user_id",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "conversations.create",
+    "section": "endpoints",
+    "scope": "groups:write",
+    "fields": [
+      "title",
+      "member_ids",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "conversations.add_members",
+    "section": "endpoints",
+    "scope": "groups:write",
+    "fields": [
+      "conversation_id",
+      "member_ids",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "conversations.remove_member",
+    "section": "endpoints",
+    "scope": "groups:write",
+    "fields": [
+      "conversation_id",
+      "user_id",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "conversations.leave",
+    "section": "endpoints",
+    "scope": "groups:write",
+    "fields": [
+      "conversation_id",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "conversations.rename",
+    "section": "endpoints",
+    "scope": "groups:write",
+    "fields": [
+      "conversation_id",
+      "title",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "conversations.mark_read",
+    "section": "endpoints",
+    "scope": "messages:write",
+    "fields": [
+      "conversation_id"
+    ]
+  },
+  {
+    "name": "messages.list",
+    "section": "endpoints",
+    "scope": "messages:read",
+    "fields": [
+      "conversation_id"
+    ]
+  },
+  {
+    "name": "messages.send",
+    "section": "endpoints",
+    "scope": "messages:write",
+    "fields": [
+      "conversation_id",
+      "client_operation_id"
+    ]
+  },
+  {
+    "name": "messages.edit",
+    "section": "endpoints",
+    "scope": "messages:write",
+    "fields": [
+      "message_id",
+      "body"
+    ]
+  },
+  {
+    "name": "messages.delete",
+    "section": "endpoints",
+    "scope": "messages:write",
+    "fields": [
+      "message_id"
+    ]
+  },
+  {
+    "name": "notifications.list",
+    "section": "endpoints",
+    "scope": "notifications:read",
+    "fields": []
+  },
+  {
+    "name": "notifications.mark_read",
+    "section": "endpoints",
+    "scope": "notifications:read",
+    "fields": [
+      "notification_id"
+    ]
+  },
+  {
+    "name": "notifications.delete",
+    "section": "endpoints",
+    "scope": "notifications:read",
+    "fields": [
+      "notification_id"
+    ]
+  },
+  {
+    "name": "tokens.get",
+    "section": "endpoints",
+    "scope": "tokens:read",
+    "fields": []
+  },
+  {
+    "name": "encounters.list",
+    "section": "endpoints",
+    "scope": "encounters:read",
+    "fields": []
+  },
+  {
+    "name": "puzzles.get",
+    "section": "endpoints",
+    "scope": "puzzles:read",
+    "fields": []
+  },
+  {
+    "name": "blocks.list",
+    "section": "blocking-api",
+    "scope": "blocks:read",
+    "fields": []
+  },
+  {
+    "name": "blocks.set",
+    "section": "blocking-api",
+    "scope": "blocks:write",
+    "fields": [
+      "user_id",
+      "blocked",
+      "operation_id"
+    ]
+  },
+  {
+    "name": "privacy.get",
+    "section": "blocking-api",
+    "scope": "privacy:read",
+    "fields": []
+  },
+  {
+    "name": "privacy.set",
+    "section": "blocking-api",
+    "scope": "privacy:write",
+    "fields": [
+      "block_messages",
+      "operation_id"
+    ]
+  }
+]

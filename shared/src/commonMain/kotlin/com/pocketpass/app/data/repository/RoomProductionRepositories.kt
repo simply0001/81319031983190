@@ -77,6 +77,54 @@ class RoomProfileRepository(
     private val pendingOperationScheduler: PendingOperationScheduler =
         PendingOperationScheduler.None,
 ) : MutableProfileRepository {
+    override fun observeBioDraft(accountId: UserId) = profileDao.observeBioDraft(accountId.value).map { draft ->
+        draft?.let { com.pocketpass.app.domain.model.BioSaveDraft(it.draft, it.error) }
+    }
+    override suspend fun setMessagePrivacy(command: com.pocketpass.app.domain.model.SetMessagePrivacyCommand): RepositoryResult<UserProfile> = repositoryCall {
+        when (val result = remote.setMessagePrivacy(command)) {
+            is RepositoryResult.Failure -> result
+            is RepositoryResult.Success -> {
+                require(result.value.userId == command.accountId) { "Privacy response account mismatch" }
+                profileDao.setMessagePrivacy(command.accountId.value, result.value.blockMessages)
+                result
+            }
+        }
+    }
+    override suspend fun setInvitesPrivacy(command: com.pocketpass.app.domain.model.SetInvitesPrivacyCommand): RepositoryResult<UserProfile> = repositoryCall {
+        when (val result = remote.setInvitesPrivacy(command)) {
+            is RepositoryResult.Failure -> result
+            is RepositoryResult.Success -> {
+                require(result.value.userId == command.accountId) { "Privacy response account mismatch" }
+                profileDao.setInvitesPrivacy(command.accountId.value, result.value.blockInvites)
+                result
+            }
+        }
+    }
+
+    override fun observeMessageColours(accountId: UserId, conversationId: ConversationId) =
+        profileDao.observeMessageAuthors(accountId.value, conversationId.value).map { profiles ->
+            profiles.associate { UserId(it.userId) to com.pocketpass.app.domain.model.ChatBubbleColour.fromKey(it.chatBubbleColour) }
+        }
+
+    override suspend fun refreshMessageColours(accountId: UserId, conversationId: ConversationId): RepositoryResult<Unit> = repositoryCall {
+        val ids = profileDao.messageAuthorIds(accountId.value, conversationId.value).map(::UserId).toSet()
+        when (val result = remote.fetchAuthorProfiles(ids)) {
+            is RepositoryResult.Failure -> result
+            is RepositoryResult.Success -> {
+                val profiles = result.value.associateBy { it.userId }
+                ids.forEach { reconciler.reconcileProfile(it, profiles[it]) }
+                RepositoryResult.Success(Unit)
+            }
+        }
+    }
+
+    override suspend fun setChatBubbleColour(command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand): RepositoryResult<Unit> = repositoryCall {
+        checkNotNull(profileDao.get(command.accountId.value)) { "Your profile is not ready yet" }
+        mutationStore.enqueueChatColour(command).toRepositoryResult().also {
+            if (it is RepositoryResult.Success) pendingOperationScheduler.schedule(command.accountId)
+        }
+    }
+
     override fun observeProfile(userId: UserId): Flow<UserProfile?> =
         profileDao.observe(userId.value)
             .map { it?.toDomain() }
@@ -112,7 +160,7 @@ class RoomProfileRepository(
         when (val result = remote.completeAccountSetup(command)) {
             is RepositoryResult.Failure -> result
             is RepositoryResult.Success -> {
-                profileDao.upsert(result.value.toEntity())
+                reconciler.reconcileAcknowledgedProfile(result.value)
                 result
             }
         }
@@ -124,7 +172,7 @@ class RoomProfileRepository(
         when (val result = remote.renameProfile(command)) {
             is RepositoryResult.Failure -> result
             is RepositoryResult.Success -> {
-                profileDao.upsert(result.value.toEntity())
+                reconciler.reconcileAcknowledgedProfile(result.value)
                 result
             }
         }

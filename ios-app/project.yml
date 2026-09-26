@@ -5,12 +5,19 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
 
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    exactVersion: 12.19.1
+
 settings:
   base:
-    SWIFT_VERSION: "5.9"
+    SWIFT_VERSION: "5.0"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
-    CODE_SIGNING_ALLOWED: NO
-    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 72PMGDSD3B
+    MARKETING_VERSION: "0.1.8"
+    CURRENT_PROJECT_VERSION: "21"
     # Compose Multiplatform 1.12 publishes no iosX64, so the simulator is arm64-only.
     "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
 
@@ -20,6 +27,11 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Resources/Assets.xcassets
+      - path: Resources/PrivacyInfo.xcprivacy
+      - path: Config/GoogleService-Info.plist
+        optional: true
+        buildPhase: resources
       - path: Resources/audio
         name: audio
         type: folder
@@ -32,6 +44,11 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: PocketPass
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        FirebaseAppDelegateProxyEnabled: false
+        FirebaseMessagingAutoInitEnabled: false
+        FIREBASE_ANALYTICS_COLLECTION_ENABLED: false
         # Required by Compose Multiplatform: its PlistSanityCheck aborts the
         # process at launch when this entry is absent, and high-refresh iPhones
         # render at 60Hz without it.
@@ -64,12 +81,22 @@ targets:
     entitlements:
       path: Sources/PocketPass.entitlements
       properties:
+        aps-environment: $(APS_ENVIRONMENT)
         com.apple.security.application-groups:
           - group.xyz.pocketpass
     dependencies:
       - target: PocketPassWidget
+      - package: Firebase
+        product: FirebaseMessaging
+      - package: Firebase
+        product: FirebaseCore
     settings:
       base:
+        PRODUCT_BUNDLE_IDENTIFIER: xyz.pocketpass.PocketPass
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PROVISIONING_PROFILE_SPECIFIER: $(POCKETPASS_APP_PROFILE)
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APS_ENVIRONMENT: development
         FRAMEWORK_SEARCH_PATHS:
           - $(inherited)
           - $(SRCROOT)/../ui/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
@@ -77,6 +104,9 @@ targets:
           - $(inherited)
           - -framework
           - PocketPassUi
+      configs:
+        Release:
+          APS_ENVIRONMENT: production
     preBuildScripts:
       - name: Build the Kotlin framework
         basedOnDependencyAnalysis: false
@@ -96,6 +126,8 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: PocketPass
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         # Rubik faces copied from ui/src/commonMain/composeResources/font.
@@ -112,4 +144,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.pocketpass.PocketPass.widget
-        SWIFT_VERSION: "5.9"
+        PROVISIONING_PROFILE_SPECIFIER: $(POCKETPASS_WIDGET_PROFILE)
+        SWIFT_VERSION: "5.0"
+        SKIP_INSTALL: YES

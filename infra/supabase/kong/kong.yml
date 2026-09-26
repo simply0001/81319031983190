@@ -1,0 +1,958 @@
+_format_version: '2.1'
+_transform: true
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: $SUPABASE_ANON_KEY
+      - key: $SUPABASE_PUBLISHABLE_KEY
+  - username: service_role
+    keyauth_credentials:
+      - key: $SUPABASE_SERVICE_KEY
+      - key: $SUPABASE_SECRET_KEY
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+services:
+  - name: auth-v1-open
+    _comment: 'Auth: /auth/v1/verify* -> http://auth:9999/verify*'
+    url: http://auth:9999/verify
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: cors
+  - name: auth-v1-open-callback
+    _comment: 'Auth: /auth/v1/callback* -> http://auth:9999/callback*'
+    url: http://auth:9999/callback
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths:
+          - /auth/v1/callback
+    plugins:
+      - name: cors
+  - name: auth-v1-open-authorize
+    _comment: 'Auth: /auth/v1/authorize* -> http://auth:9999/authorize*'
+    url: http://auth:9999/authorize
+    routes:
+      - name: auth-v1-open-authorize
+        strip_path: true
+        paths:
+          - /auth/v1/authorize
+    plugins:
+      - name: cors
+  - name: auth-v1-open-jwks
+    _comment: 'Auth: /auth/v1/.well-known/jwks.json -> http://auth:9999/.well-known/jwks.json'
+    url: http://auth:9999/.well-known/jwks.json
+    routes:
+      - name: auth-v1-open-jwks
+        strip_path: true
+        paths:
+          - /auth/v1/.well-known/jwks.json
+    plugins:
+      - name: cors
+  - name: auth-v1-open-oauth-authorize
+    _comment: 'Auth: GET /auth/v1/oauth/authorize (S256 only) -> http://auth:9999/oauth/authorize'
+    url: http://auth:9999/oauth/authorize
+    routes:
+      - name: auth-v1-open-oauth-authorize
+        strip_path: true
+        expression: 'http.method == "GET" && http.path == "/auth/v1/oauth/authorize" && http.queries.code_challenge_method == "S256"'
+    plugins:
+      - name: cors
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 30
+          hour: 300
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+  - name: auth-v1-oauth-authorize-plain-blocked
+    _comment: 'Auth: GET /auth/v1/oauth/authorize with code_challenge_method=plain -> 400 (S256 only)'
+    url: http://auth:9999/oauth/authorize
+    routes:
+      - name: auth-v1-oauth-authorize-plain-blocked
+        strip_path: true
+        expression: 'http.path == "/auth/v1/oauth/authorize" && http.queries.code_challenge_method == "plain"'
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 400
+          message: "code_challenge_method must be S256"
+  - name: auth-v1-open-oauth-token
+    _comment: 'Auth: exact POST /auth/v1/oauth/token -> http://auth:9999/oauth/token'
+    url: http://auth:9999/oauth/token
+    routes:
+      - name: auth-v1-open-oauth-token
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/auth/v1/oauth/token"'
+    plugins:
+      - name: cors
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 30
+          hour: 300
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+  - name: auth-v1-open-oauth-userinfo
+    _comment: 'Auth: exact GET /auth/v1/oauth/userinfo -> http://auth:9999/oauth/userinfo'
+    url: http://auth:9999/oauth/userinfo
+    routes:
+      - name: auth-v1-open-oauth-userinfo
+        strip_path: true
+        expression: 'http.method == "GET" && http.path == "/auth/v1/oauth/userinfo"'
+    plugins:
+      - name: cors
+  - name: auth-v1-open-openid-configuration
+    _comment: 'Auth: /auth/v1/.well-known/openid-configuration -> http://auth:9999/.well-known/openid-configuration'
+    url: http://auth:9999/.well-known/openid-configuration
+    routes:
+      - name: auth-v1-open-openid-configuration
+        strip_path: true
+        expression: 'http.method == "GET" && http.path == "/auth/v1/.well-known/openid-configuration"'
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-sso-acs
+    url: "http://auth:9999/sso/saml/acs"
+    routes:
+      - name: auth-v1-open-sso-acs
+        strip_path: true
+        paths:
+        - /auth/v1/sso/saml/acs
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-sso-metadata
+    url: "http://auth:9999/sso/saml/metadata"
+    routes:
+      - name: auth-v1-open-sso-metadata
+        strip_path: true
+        paths:
+        - /auth/v1/sso/saml/metadata
+    plugins:
+      - name: cors
+
+  - name: auth-v1-otp
+    _comment: 'Auth: exact POST /auth/v1/otp -> http://auth:9999/otp'
+    url: http://auth:9999/otp
+    routes:
+      - name: auth-v1-otp
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/auth/v1/otp"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 10
+          hour: 60
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+
+  - name: auth-v1-signup
+    _comment: 'Auth: exact POST /auth/v1/signup -> http://auth:9999/signup (username accounts)'
+    url: http://auth:9999/signup
+    routes:
+      - name: auth-v1-signup
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/auth/v1/signup"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 5
+          hour: 20
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+
+  - name: auth-v1-token-password
+    _comment: 'Auth: exact POST /auth/v1/token?grant_type=password -> http://auth:9999/token'
+    url: http://auth:9999/token
+    routes:
+      - name: auth-v1-token-password
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/auth/v1/token" && http.queries.grant_type == "password"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 10
+          hour: 60
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+
+  - name: auth-v1-user-update
+    _comment: 'Auth: exact PUT /auth/v1/user -> http://auth:9999/user (email link, password change)'
+    url: http://auth:9999/user
+    routes:
+      - name: auth-v1-user-update
+        strip_path: true
+        expression: 'http.method == "PUT" && http.path == "/auth/v1/user"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 10
+          hour: 60
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth ~= nil and auth ~= "" then
+                local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
+                if token ~= nil then
+                  local seg = token:match("^[%w%-_]+%.([%w%-_]+)%.[%w%-_]*$")
+                  if seg ~= nil then
+                    local b = seg:gsub("%-", "+"):gsub("_", "/")
+                    b = b .. ("="):rep((4 - #b % 4) % 4)
+                    local payload = ngx.decode_base64(b)
+                    if payload == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Token could not be inspected." })
+                    end
+                    if payload:find('"client_id"', 1, true) ~= nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Connected apps cannot use this endpoint. Use /v1/session.get or /auth/v1/oauth/userinfo." })
+                    end
+                  end
+                end
+              end
+
+  - name: auth-v1-reauthenticate
+    _comment: 'Auth: exact GET /auth/v1/reauthenticate -> http://auth:9999/reauthenticate (sends a code)'
+    url: http://auth:9999/reauthenticate
+    routes:
+      - name: auth-v1-reauthenticate
+        strip_path: true
+        expression: 'http.method == "GET" && http.path == "/auth/v1/reauthenticate"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 5
+          hour: 20
+          policy: local
+          hide_client_headers: false
+          fault_tolerant: false
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth ~= nil and auth ~= "" then
+                local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
+                if token ~= nil then
+                  local seg = token:match("^[%w%-_]+%.([%w%-_]+)%.[%w%-_]*$")
+                  if seg ~= nil then
+                    local b = seg:gsub("%-", "+"):gsub("_", "/")
+                    b = b .. ("="):rep((4 - #b % 4) % 4)
+                    local payload = ngx.decode_base64(b)
+                    if payload == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Token could not be inspected." })
+                    end
+                    if payload:find('"client_id"', 1, true) ~= nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Connected apps cannot use this endpoint. Use /v1/session.get or /auth/v1/oauth/userinfo." })
+                    end
+                  end
+                end
+              end
+
+  - name: auth-v1-recover-blocked
+    _comment: 'Auth: /auth/v1/recover -> 404 (PocketPass passwords cannot be reset)'
+    url: http://auth:9999/recover
+    routes:
+      - name: auth-v1-recover-blocked
+        strip_path: true
+        expression: 'http.path == "/auth/v1/recover"'
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 404
+          message: "Password recovery is not available"
+
+  - name: auth-v1
+    _comment: 'Auth: /auth/v1/* -> http://auth:9999/*'
+    url: http://auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth ~= nil and auth ~= "" then
+                local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
+                if token ~= nil then
+                  local seg = token:match("^[%w%-_]+%.([%w%-_]+)%.[%w%-_]*$")
+                  if seg ~= nil then
+                    local b = seg:gsub("%-", "+"):gsub("_", "/")
+                    b = b .. ("="):rep((4 - #b % 4) % 4)
+                    local payload = ngx.decode_base64(b)
+                    if payload == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Token could not be inspected." })
+                    end
+                    if payload:find('"client_id"', 1, true) ~= nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Connected apps cannot use this endpoint. Use /v1/session.get or /auth/v1/oauth/userinfo." })
+                    end
+                  end
+                end
+              end
+
+  - name: rest-v1-resolve-friend-code
+    _comment: 'PostgREST: exact POST /rest/v1/rpc/resolve_friend_code'
+    url: http://rest:3000/rpc/resolve_friend_code
+    routes:
+      - name: rest-v1-resolve-friend-code
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/rest/v1/rpc/resolve_friend_code"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 10
+          hour: 50
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  - name: rest-v1-issue-nearby-credentials
+    _comment: 'PostgREST: exact POST /rest/v1/rpc/issue_nearby_credentials'
+    url: http://rest:3000/rpc/issue_nearby_credentials
+    routes:
+      - name: rest-v1-issue-nearby-credentials
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/rest/v1/rpc/issue_nearby_credentials"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 5
+          hour: 20
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  - name: rest-v1-submit-nearby-encounter
+    _comment: 'PostgREST: exact POST /rest/v1/rpc/submit_nearby_encounter'
+    url: http://rest:3000/rpc/submit_nearby_encounter
+    routes:
+      - name: rest-v1-submit-nearby-encounter
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/rest/v1/rpc/submit_nearby_encounter"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 30
+          hour: 120
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  - name: rest-v1-openapi
+    _comment: 'PostgREST OpenAPI root: /rest/v1/ -> <http://rest:3000/> (admin only). See <https://github.com/orgs/supabase/discussions/42949>'
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-openapi-root
+        strip_path: true
+        expression: 'http.path == "/rest/v1/"'
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+
+  - name: rest-v1-api-v1
+    _comment: 'PostgREST: /pp-api/rpc/api_v1_* (Caddy rewrite of /v1/<resource>.<action>) -> http://rest:3000/rpc/api_v1_*'
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-api-v1
+        strip_path: true
+        expression: '(http.method == "POST" || http.method == "OPTIONS") && http.path ^= "/pp-api/"'
+    plugins:
+      - name: cors
+        config:
+          max_age: 86400
+          exposed_headers:
+            - RateLimit-Remaining
+            - RateLimit-Reset
+            - Retry-After
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 6000
+          hour: 200000
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  - name: rest-v1-api-v1-blocked
+    _comment: 'PostgREST: /rest/v1/rpc/api_v1_* -> 404, /v1/<resource>.<action> is the only entry (blocked)'
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-api-v1-blocked
+        strip_path: true
+        expression: 'http.path ^= "/rest/v1/rpc/api_v1_"'
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 404
+          message: "Use https://api.pocketpass.xyz/v1/"
+
+  - name: rest-v1-kofi-webhook
+    _comment: 'PostgREST: POST /pp-hooks/kofi (Caddy rewrite of /webhooks/kofi) -> http://rest:3000/rpc/kofi_webhook'
+    url: http://rest:3000/rpc/kofi_webhook
+    routes:
+      - name: rest-v1-kofi-webhook
+        strip_path: true
+        expression: 'http.method == "POST" && http.path == "/pp-hooks/kofi"'
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - anon
+      - name: rate-limiting
+        config:
+          limit_by: ip
+          minute: 30
+          hour: 300
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  - name: rest-v1-kofi-webhook-blocked
+    _comment: 'PostgREST: /rest/v1/rpc/kofi_webhook -> 404, /webhooks/kofi is the only entry (blocked)'
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-kofi-webhook-blocked
+        strip_path: true
+        expression: 'http.path == "/rest/v1/rpc/kofi_webhook"'
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 404
+          message: "Use https://api.pocketpass.xyz/webhooks/kofi"
+
+  - name: rest-v1
+    _comment: 'PostgREST: /rest/v1/* -> http://rest:3000/*'
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth ~= nil and auth ~= "" then
+                local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
+                if token ~= nil then
+                  local seg = token:match("^[%w%-_]+%.([%w%-_]+)%.[%w%-_]*$")
+                  if seg ~= nil then
+                    local b = seg:gsub("%-", "+"):gsub("_", "/")
+                    b = b .. ("="):rep((4 - #b % 4) % 4)
+                    local payload = ngx.decode_base64(b)
+                    if payload == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Token could not be inspected." })
+                    end
+                    if payload:find('"client_id"', 1, true) ~= nil and payload:find('"role":"api_client"', 1, true) == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Connected-app token is not scoped. Reconnect the app." })
+                    end
+                  end
+                end
+              end
+
+  - name: graphql-v1
+    _comment: 'PostgREST: /graphql/v1/* -> http://rest:3000/rpc/graphql'
+    url: http://rest:3000/rpc/graphql
+    routes:
+      - name: graphql-v1-all
+        strip_path: true
+        paths:
+          - /graphql/v1
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Content-Profile: graphql_public"
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth ~= nil and auth ~= "" then
+                local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
+                if token ~= nil then
+                  local seg = token:match("^[%w%-_]+%.([%w%-_]+)%.[%w%-_]*$")
+                  if seg ~= nil then
+                    local b = seg:gsub("%-", "+"):gsub("_", "/")
+                    b = b .. ("="):rep((4 - #b % 4) % 4)
+                    local payload = ngx.decode_base64(b)
+                    if payload == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Token could not be inspected." })
+                    end
+                    if payload:find('"client_id"', 1, true) ~= nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Connected apps cannot use this endpoint. Use /v1/session.get or /auth/v1/oauth/userinfo." })
+                    end
+                  end
+                end
+              end
+
+  - name: realtime-v1-ws
+    _comment: 'Realtime: /realtime/v1/* -> ws://realtime:4000/socket/*'
+    url: http://realtime-dev.supabase-realtime:4000/socket
+    protocol: ws
+    routes:
+      - name: realtime-v1-ws
+        strip_path: true
+        paths:
+          - /realtime/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "x-api-key:$LUA_RT_WS_EXPR"
+          replace:
+            querystring:
+              - "apikey:$LUA_RT_WS_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: realtime-v1-rest-openapi
+    _comment: 'Realtime: /realtime/v1/api/openapi/* -> http://realtime:4000/api/openapi/* (blocked)'
+    url: http://realtime-dev.supabase-realtime:4000/api/openapi
+    protocol: http
+    routes:
+      - name: realtime-v1-rest-openapi
+        strip_path: true
+        paths:
+          - /realtime/v1/api/openapi
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."
+
+  - name: realtime-v1-rest-tenants
+    _comment: 'Realtime: /realtime/v1/api/tenants/* -> http://realtime:4000/api/tenants/* (blocked)'
+    url: http://realtime-dev.supabase-realtime:4000/api/tenants
+    protocol: http
+    routes:
+      - name: realtime-v1-rest-tenants
+        strip_path: true
+        paths:
+          - /realtime/v1/api/tenants
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."
+
+  - name: realtime-v1-rest
+    _comment: 'Realtime: /realtime/v1/api/* -> http://realtime:4000/api/*'
+    url: http://realtime-dev.supabase-realtime:4000/api
+    protocol: http
+    routes:
+      - name: realtime-v1-rest
+        strip_path: true
+        paths:
+          - /realtime/v1/api
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: storage-v1
+    _comment: 'Storage: /storage/v1/* -> http://storage:5000/*'
+    url: http://storage:5000/
+    routes:
+      - name: storage-v1-all
+        strip_path: true
+        paths:
+          - /storage/v1/
+    plugins:
+      - name: cors
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: post-function
+        config:
+          access:
+            - |
+              local auth = kong.request.get_header("authorization")
+              if auth == nil or auth == "" or auth:find("^%s*$") then
+                kong.service.request.clear_header("authorization")
+              else
+                local token = auth:match("^%s*[Bb][Ee][Aa][Rr][Ee][Rr]%s+(%S+)")
+                if token ~= nil then
+                  local seg = token:match("^[%w%-_]+%.([%w%-_]+)%.[%w%-_]*$")
+                  if seg ~= nil then
+                    local b = seg:gsub("%-", "+"):gsub("_", "/")
+                    b = b .. ("="):rep((4 - #b % 4) % 4)
+                    local payload = ngx.decode_base64(b)
+                    if payload == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Token could not be inspected." })
+                    end
+                    if payload:find('"client_id"', 1, true) ~= nil and payload:find('"role":"api_client"', 1, true) == nil then
+                      return kong.response.exit(403, { error = "oauth_client_forbidden", error_description = "Connected-app token is not scoped. Reconnect the app." })
+                    end
+                  end
+                end
+              end
+              if kong.request.get_method() == "POST" and kong.request.get_path():find("/storage/v1/object/sign/", 1, true) == 1 then
+                local body = kong.request.get_body("application/json")
+                if type(body) ~= "table" then
+                  return kong.response.exit(400, { error = "invalid_sign_request" })
+                end
+                local ttl = tonumber(body.expiresIn)
+                if ttl == nil or ttl > 900 then
+                  body.expiresIn = 900
+                end
+                kong.service.request.set_body(body, "application/json")
+              end
+
+  - name: well-known-oauth
+    _comment: 'Auth: /.well-known/oauth-authorization-server -> http://auth:9999/.well-known/oauth-authorization-server'
+    url: http://auth:9999/.well-known/oauth-authorization-server
+    routes:
+      - name: well-known-oauth
+        strip_path: true
+        paths:
+          - /.well-known/oauth-authorization-server
+    plugins:
+      - name: cors
+
+
+  - name: meta
+    _comment: 'pg-meta: /pg/* -> http://pg-meta:8080/*'
+    url: http://meta:8080/
+    routes:
+      - name: meta-all
+        strip_path: true
+        paths:
+          - /pg/
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+
+  - name: mcp-blocker
+    _comment: 'Block direct access to /api/mcp'
+    url: http://studio:3000/api/mcp
+    routes:
+      - name: mcp-blocker-route
+        strip_path: true
+        paths:
+          - /api/mcp
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."
+
+  - name: mcp
+    _comment: 'MCP: /mcp -> http://studio:3000/api/mcp (local access)'
+    url: http://studio:3000/api/mcp
+    routes:
+      - name: mcp
+        strip_path: true
+        paths:
+          - /mcp
+    plugins:
+      - name: request-termination
+        config:
+          status_code: 403
+          message: "Access is forbidden."

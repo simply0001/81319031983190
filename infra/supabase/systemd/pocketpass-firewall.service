@@ -1,0 +1,13 @@
+[Unit]
+Description=PocketPass DOCKER-USER firewall rules
+Wants=network-online.target
+After=network-online.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/pocketpass/app/infra/supabase/scripts/configure-firewall.sh
+
+[Install]
+WantedBy=multi-user.target

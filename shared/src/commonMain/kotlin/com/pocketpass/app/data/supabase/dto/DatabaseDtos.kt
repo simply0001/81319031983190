@@ -4,6 +4,7 @@ import com.pocketpass.app.domain.model.AchievementState
 import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.model.BingoCell
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
 import com.pocketpass.app.domain.model.ClientOperationId
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.ConversationMember
@@ -22,9 +23,19 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import com.pocketpass.app.domain.model.PuzzleArtwork
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzleKind
+import com.pocketpass.app.domain.model.PuzzleProgress
 
 @Serializable
 data class ProfileDto(
+    @SerialName("block_messages")
+    val blockMessages: Boolean = false,
+    @SerialName("block_invites")
+    val blockInvites: Boolean = false,
+    @SerialName("chat_bubble_colour")
+    val chatBubbleColour: String = "default",
     @SerialName("user_id")
     val userId: String,
     val username: String,
@@ -188,6 +199,22 @@ data class WorldTourRegionDto(
 )
 
 @Serializable
+data class PassingStatsDto(
+    @SerialName("current_streak")
+    val currentStreak: Int,
+    @SerialName("best_streak")
+    val bestStreak: Int,
+    @SerialName("week_passes")
+    val weekPasses: Int,
+    @SerialName("week_people")
+    val weekPeople: Int,
+    @SerialName("week_regions")
+    val weekRegions: Int,
+    @SerialName("week_start")
+    val weekStart: String,
+)
+
+@Serializable
 data class BingoCellDto(
     @SerialName("cell_position")
     val position: Int,
@@ -201,6 +228,63 @@ data class BingoCellDto(
     val progressCurrent: Int,
     @SerialName("progress_target")
     val progressTarget: Int,
+)
+
+@Serializable
+data class PuzzleCollectionDto(
+    @SerialName("current_index")
+    val currentIndex: Int? = null,
+    @SerialName("piece_price")
+    val piecePrice: Int = PuzzleCollection.DEFAULT_PIECE_PRICE_TOKENS,
+    @SerialName("pieces_owned_total")
+    val piecesOwnedTotal: Int = 0,
+    val puzzles: List<PuzzleDto> = emptyList(),
+)
+
+@Serializable
+data class PuzzleDto(
+    val index: Int = 0,
+    val kind: String,
+    @SerialName("puzzle_key")
+    val puzzleKey: String,
+    @SerialName("panel_id")
+    val panelId: String? = null,
+    val slug: String? = null,
+    val title: String? = null,
+    @SerialName("image_path")
+    val imagePath: String? = null,
+    val columns: Int,
+    val rows: Int,
+    @SerialName("total_pieces")
+    val totalPieces: Int = 0,
+    @SerialName("owned_pieces")
+    val ownedPieces: List<Int> = emptyList(),
+    @SerialName("started_at")
+    val startedAt: String? = null,
+    @SerialName("completed_at")
+    val completedAt: String? = null,
+    @SerialName("completed_by_handover")
+    val completedByHandover: Boolean = false,
+)
+
+@Serializable
+data class PuzzlePiecePurchaseDto(
+    @SerialName("puzzle_key")
+    val puzzleKey: String,
+    @SerialName("panel_id")
+    val panelId: String? = null,
+    @SerialName("piece_index")
+    val pieceIndex: Int,
+    @SerialName("pieces_owned")
+    val piecesOwned: Int,
+    @SerialName("total_pieces")
+    val totalPieces: Int,
+    val completed: Boolean,
+    @SerialName("next_puzzle_key")
+    val nextPuzzleKey: String? = null,
+    @SerialName("price_paid")
+    val pricePaid: Int,
+    val balance: Int,
 )
 
 @Serializable
@@ -327,7 +411,10 @@ data class InteractionEventDto(
 fun ProfileDto.toDomain(
     avatarUrlForPath: (String) -> String,
 ): UserProfile =
-    UserProfile(
+      UserProfile(
+          chatBubbleColour = com.pocketpass.app.domain.model.ChatBubbleColour.fromKey(chatBubbleColour),
+          blockMessages = blockMessages,
+          blockInvites = blockInvites,
         userId = UserId(userId),
         displayName = displayName,
         avatar = avatarPath?.let { AvatarReference.Remote(avatarUrlForPath(it)) },
@@ -362,6 +449,14 @@ fun WorldTourRegionDto.toDomain(): WorldTourRegion = WorldTourRegion(
     firstMetAt = parseSupabaseInstant(firstMetAt),
 )
 
+fun PassingStatsDto.toDomain(): PassingStats = PassingStats(
+    currentStreak = currentStreak,
+    bestStreak = bestStreak,
+    weekPasses = weekPasses,
+    weekPeople = weekPeople,
+    weekRegions = weekRegions,
+)
+
 fun BingoCellDto.toDomain(): BingoCell = BingoCell(
     position = position,
     slug = slug,
@@ -371,6 +466,47 @@ fun BingoCellDto.toDomain(): BingoCell = BingoCell(
     progressCurrent = progressCurrent.coerceAtLeast(0),
     progressTarget = progressTarget.coerceAtLeast(1),
 )
+
+fun PuzzleCollectionDto.toDomain(
+    panelUrlForPath: (String) -> String,
+): PuzzleCollection {
+    val ordered = puzzles.sortedBy(PuzzleDto::index).map { it.toDomain(panelUrlForPath) }
+    return PuzzleCollection(
+        puzzles = ordered,
+        currentIndex = currentIndex?.takeIf { it in ordered.indices },
+        piecePriceTokens = piecePrice.coerceAtLeast(0),
+    )
+}
+
+fun PuzzleDto.toDomain(
+    panelUrlForPath: (String) -> String,
+): PuzzleProgress {
+    val ownPiip = kind == PUZZLE_KIND_OWN_PIIP
+    val columnCount = columns.coerceIn(1, PuzzleProgress.MAX_GRID_SIDE)
+    val rowCount = rows.coerceIn(1, PuzzleProgress.MAX_GRID_SIDE)
+    return PuzzleProgress(
+        id = puzzleKey,
+        kind = if (ownPiip) PuzzleKind.OwnPiip else PuzzleKind.Panel,
+        title = title?.takeIf(String::isNotBlank)
+            ?: if (ownPiip) PuzzleCollection.OWN_PIIP_TITLE else PUZZLE_DEFAULT_TITLE,
+        slug = slug,
+        artwork = when {
+            ownPiip -> PuzzleArtwork.OwnPortrait
+            imagePath != null -> PuzzleArtwork.Remote(panelUrlForPath(imagePath))
+            else -> PuzzleArtwork.Bundled(slug ?: puzzleKey)
+        },
+        columns = columnCount,
+        rows = rowCount,
+        ownedPieces = ownedPieces.filter { it in 0 until columnCount * rowCount }.toSet(),
+        startedAt = startedAt?.let(::parseSupabaseInstant),
+        completedAt = completedAt?.let(::parseSupabaseInstant),
+        completedByHandover = completedByHandover,
+        imagePath = imagePath,
+    )
+}
+
+private const val PUZZLE_KIND_OWN_PIIP = "own_piip"
+private const val PUZZLE_DEFAULT_TITLE = "Puzzle"
 
 fun MessageDto.toDomain(
     resolveAttachmentUrl: (String) -> String = { it },

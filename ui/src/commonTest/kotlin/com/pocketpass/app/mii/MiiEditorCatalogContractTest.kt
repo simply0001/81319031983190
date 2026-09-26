@@ -24,7 +24,7 @@ class MiiEditorCatalogContractTest {
         assertEquals(6, counts[MiiTraitField.MustacheType])
         assertEquals(6, counts[MiiTraitField.BeardType])
         assertEquals(20, counts[MiiTraitField.GlassesType])
-        assertEquals(10, counts[MiiTraitField.HatType])
+        assertEquals(11, counts[MiiTraitField.HatType])
     }
 
     @Test

@@ -59,8 +59,6 @@ private const val TILE_RADIUS = 64f
 private val SheetInk = Color(0xFF22677C)
 private val SheetInkSoft = Color(0xFF5591A4)
 private val SheetBorder = listOf(Color(0xFF76B3C1), Color(0xFF5A96A9), Color(0xFF22677C))
-private val PreviewFill = listOf(Color(0xFF5EA3ED), Color(0xFF0073FF))
-private val PreviewBorder = Color(0xFF4B5FC2)
 private val EditFill = listOf(Color(0xFF7CC4D2), Color(0xFF2E7F94))
 private val EditBorder = Color(0xFF22677C)
 private val DeleteFill = listOf(Color(0xFFF07A6E), Color(0xFFC23A32))
@@ -73,6 +71,7 @@ internal fun MessageActionsSheet(
     visible: Boolean,
     dispatch: (PocketPassEvent) -> Unit,
     onHidden: () -> Unit,
+    colour: com.pocketpass.app.domain.model.ChatBubbleColour = com.pocketpass.app.domain.model.ChatBubbleColour.Default,
 ) {
     val focus = LocalControllerFocus.current
     LaunchedEffect(Unit) { focus?.focus("message_action_edit", reveal = false) }
@@ -174,6 +173,7 @@ internal fun MessageActionsSheet(
             maxLines = 1,
         )
         MessagePreviewBubble(
+            palette = chatBubblePalette(colour),
             metrics = metrics,
             message = message,
             modifier = Modifier.designBounds(metrics, 80f, 134f, 1080f, 176f),
@@ -218,6 +218,7 @@ private fun MessagePreviewBubble(
     metrics: DesignMetrics,
     message: Message,
     modifier: Modifier,
+    palette: BubblePalette,
 ) {
     val shape = RoundedCornerShape(metrics.dp(64f))
     val caption = message.body.takeUnless { it == IMAGE_MESSAGE_PLACEHOLDER_BODY }.orEmpty()
@@ -229,13 +230,13 @@ private fun MessagePreviewBubble(
     Box(
         modifier = modifier
             .clip(shape)
-            .pocketFrame(Brush.verticalGradient(PreviewFill), metrics.dp(12f), PreviewBorder, shape)
+            .pocketFrame(Brush.verticalGradient(colorStops = palette.fill), metrics.dp(12f), palette.border, shape)
             .padding(horizontal = metrics.dp(44f), vertical = metrics.dp(24f)),
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(
             text = preview,
-            color = Color.White,
+            color = palette.text,
             fontFamily = Rubik,
             fontWeight = FontWeight.SemiBold,
             fontSize = metrics.sp(38f),

@@ -26,6 +26,8 @@ actual fun supportsAnimatedPatterns(): Boolean =
 
 actual fun requiresLegacyLocationPermission(): Boolean = Build.VERSION.SDK_INT <= 30
 
+actual fun asksToRunInBackground(): Boolean = true
+
 actual fun formatInstant(instant: Instant, pattern: String): String =
     DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH)
         .withZone(ZoneId.systemDefault())

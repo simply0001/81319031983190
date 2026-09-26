@@ -220,13 +220,75 @@ class AccountSetupStateHolderTest {
         assertEquals(AccountSetupStep.Age, holder.state.value.step)
     }
 
+    @Test
+    fun pendingPasswordAccountsStartAtBioWithTheNameLocked() = runTest {
+        val repository = FakeProfileRepository()
+        val pending = MutableStateFlow<String?>(account.value)
+        val holder = holder(repository, pending)
+        repository.profiles.value = profile(username = "simply")
+        runCurrent()
+
+        val state = holder.state.value
+        assertTrue(state.resolved)
+        assertTrue(state.required)
+        assertTrue(state.nameLocked)
+        assertEquals(AccountSetupStep.Bio, state.step)
+        assertEquals("simply", state.nameDraft)
+
+        holder.dispatch(AccountSetupEvent.NameChanged("other"))
+        runCurrent()
+        assertEquals("simply", holder.state.value.nameDraft)
+        assertTrue(holder.backStep())
+        assertEquals(AccountSetupStep.Bio, holder.state.value.step)
+    }
+
+    @Test
+    fun submittingAPendingSetupClearsTheFlagAndKeepsTheUsername() = runTest {
+        val repository = FakeProfileRepository()
+        val pending = MutableStateFlow<String?>(account.value)
+        var cleared = 0
+        val holder = holder(repository, pending) { cleared += 1 }
+        repository.profiles.value = profile(username = "simply")
+        runCurrent()
+
+        holder.dispatch(AccountSetupEvent.BioChanged("Hello there!"))
+        holder.dispatch(AccountSetupEvent.Continue)
+        holder.dispatch(AccountSetupEvent.SkipAge)
+        holder.dispatch(AccountSetupEvent.CountrySelected("be"))
+        holder.dispatch(AccountSetupEvent.Submit)
+        runCurrent()
+
+        val command = repository.setupCommands.single()
+        assertEquals("simply", command.username)
+        assertEquals("BE", command.countryCode)
+        assertEquals(1, cleared)
+        assertFalse(holder.state.value.required)
+        assertFalse(holder.state.value.nameLocked)
+    }
+
+    @Test
+    fun aPendingFlagForAnotherAccountDoesNotForceSetup() = runTest {
+        val repository = FakeProfileRepository()
+        val pending = MutableStateFlow<String?>("90000000-0000-4000-8000-000000000099")
+        val holder = holder(repository, pending)
+        repository.profiles.value = profile(username = "simply")
+        runCurrent()
+
+        assertTrue(holder.state.value.resolved)
+        assertFalse(holder.state.value.required)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.holder(
         repository: FakeProfileRepository,
+        pending: MutableStateFlow<String?> = MutableStateFlow(null),
+        clearPending: suspend () -> Unit = {},
     ): AccountSetupStateHolder = AccountSetupStateHolder(
         accountId = MutableStateFlow(account),
         profileRepository = repository,
         scope = backgroundScope,
         now = { fixtureNow },
+        pendingSetupUserId = pending,
+        clearPendingSetup = clearPending,
     )
 
     private fun kotlinx.coroutines.test.TestScope.requiredHolder(

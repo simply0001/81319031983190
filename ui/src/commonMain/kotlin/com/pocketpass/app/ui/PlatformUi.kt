@@ -22,6 +22,8 @@ expect fun supportsAnimatedPatterns(): Boolean
 // permission and the permission dialogs must explain that.
 expect fun requiresLegacyLocationPermission(): Boolean
 
+expect fun asksToRunInBackground(): Boolean
+
 // Formats an instant in the device time zone with a Unicode date pattern (e.g. "d MMM yyyy"),
 // always with English month names to match the rest of the interface.
 expect fun formatInstant(instant: Instant, pattern: String): String

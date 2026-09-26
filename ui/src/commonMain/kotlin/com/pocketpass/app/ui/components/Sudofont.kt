@@ -14,7 +14,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import com.pocketpass.app.ui.Sudofont
 
 /**
- * One Nintendo DS special character as Sudofont draws it. The font maps
+ * One DS-style character as Sudofont draws it. The font maps
  * each glyph to both the DS private-use code point and a standard Unicode
  * code point; the app inserts the standard one so other clients still show
  * something sensible.
@@ -27,12 +27,13 @@ data class SudofontGlyph(
     val text: String = codePointToString(codePoint)
 }
 
-/** The 29 DS characters, in keyboard order (three rows of 10, 10 and 9). */
+/** The 29 DS characters plus PocketPass's crying face, in three rows of 10. */
 val SudofontGlyphs: List<SudofontGlyph> = listOf(
     SudofontGlyph(0x1F603, 0xE008, "happy"),
     SudofontGlyph(0x1F620, 0xE009, "angry"),
     SudofontGlyph(0x1F614, 0xE00A, "sad"),
     SudofontGlyph(0x1F611, 0xE00B, "neutral"),
+    SudofontGlyph(0x1F62D, 0xE029, "crying"),
     SudofontGlyph(0x2600, 0xE00C, "sun"),
     SudofontGlyph(0x2601, 0xE00D, "cloud"),
     SudofontGlyph(0x2614, 0xE00E, "umbrella"),

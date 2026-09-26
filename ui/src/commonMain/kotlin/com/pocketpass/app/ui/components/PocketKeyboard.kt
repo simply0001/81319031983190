@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.KeyboardCapslock
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
@@ -30,6 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import com.pocketpass.app.audio.LocalSoundEffects
 import com.pocketpass.app.audio.SoundEffect
@@ -40,6 +44,7 @@ import com.pocketpass.app.ui.controller.LocalControllerFocus
 import com.pocketpass.app.ui.controller.FocusDirection
 import com.pocketpass.app.ui.controller.controllerTarget
 import kotlin.math.abs
+import kotlin.time.TimeSource
 import com.pocketpass.app.ui.anchoredBounds
 import com.pocketpass.app.ui.designBounds
 import com.pocketpass.app.ui.theme.PocketPalette
@@ -230,19 +235,28 @@ fun PocketKeyboard(
     canBackspace: Boolean = true,
     topRowUpTarget: ((centerX: Float) -> String?)? = null,
     emojiKey: Boolean = false,
+    // Callers whose submit already has its own sound (sending a message)
+    // pass null so the key does not double up with a confirm.
+    submitSound: SoundEffect? = SoundEffect.Confirm,
 ) {
     val scale = height / POCKET_KEYBOARD_HEIGHT
     val themed = palette.themed(pocketPalette)
     val focus = LocalControllerFocus.current
     val soundEffects = LocalSoundEffects.current
+    var shift by remember { mutableStateOf(KeyboardShiftState()) }
+    val shiftClock = remember { TimeSource.Monotonic.markNow() }
+    val doubleTapTimeout = LocalViewConfiguration.current.doubleTapTimeoutMillis
+    val onShift = {
+        shift = shift.tap(shiftClock.elapsedNow().inWholeMilliseconds, doubleTapTimeout)
+    }
     val onKeyWithSound: (PocketKey) -> Unit = { key ->
-        soundEffects.play(
-            when (key) {
-                PocketKey.Backspace -> SoundEffect.KeyboardBackspace
-                PocketKey.Submit -> SoundEffect.Confirm
-                else -> SoundEffect.Keyboard
-            },
-        )
+        shift = shift.afterKey(key)
+        val sound = when (key) {
+            PocketKey.Backspace -> SoundEffect.KeyboardBackspace
+            PocketKey.Submit -> submitSound
+            else -> SoundEffect.Keyboard
+        }
+        if (sound != null) soundEffects.play(sound)
         onKey(key)
     }
     var swappedLayout by remember { mutableStateOf(false) }
@@ -306,6 +320,9 @@ fun PocketKeyboard(
                     scale,
                     focusLayer,
                     onKeyWithSound,
+                    shift = shift,
+                    onShift = onShift,
+                    onLayoutChange = { shift = shift.cancelDoubleTap() },
                     emojiKey = emojiKey,
                 )
 
@@ -318,6 +335,9 @@ fun PocketKeyboard(
                     scale,
                     focusLayer,
                     onKeyWithSound,
+                    shift = shift,
+                    onShift = onShift,
+                    onLayoutChange = { shift = shift.cancelDoubleTap() },
                     emailKeys = true,
                 )
 
@@ -342,6 +362,12 @@ private fun EmojiKeysGrid(
     focusLayer: Int,
     onKey: (PocketKey) -> Unit,
 ) {
+    val escapeFocus = LocalControllerFocus.current
+    val latestEmojiOnKey = rememberUpdatedState(onKey)
+    DisposableEffect(escapeFocus) {
+        escapeFocus?.keyboardEscape = { latestEmojiOnKey.value(PocketKey.Alphabet) }
+        onDispose { escapeFocus?.keyboardEscape = null }
+    }
     val columns = 10
     val keySize = 108f
     val gap = 10f * scale
@@ -446,12 +472,19 @@ private fun TextKeys(
     scale: Float,
     focusLayer: Int,
     onKey: (PocketKey) -> Unit,
+    shift: KeyboardShiftState,
+    onShift: () -> Unit,
+    onLayoutChange: () -> Unit,
     emailKeys: Boolean = false,
     emojiKey: Boolean = false,
 ) {
-    var shifted by remember { mutableStateOf(false) }
     var symbols by remember { mutableStateOf(false) }
     val rows = if (symbols) SymbolRows else LetterRows
+    val escapeFocus = LocalControllerFocus.current
+    DisposableEffect(escapeFocus, symbols) {
+        escapeFocus?.keyboardEscape = if (symbols) ({ symbols = false }) else null
+        onDispose { escapeFocus?.keyboardEscape = null }
+    }
 
     val keyWidth = 108f
     val keyHeight = 88f * scale
@@ -459,18 +492,12 @@ private fun TextKeys(
     val topPadding = 22f * scale
     val bottomY = topPadding + 3f * (keyHeight + gap)
     val backspaceX = if (submitLabel != null) BACKSPACE_X else BACKSPACE_X_NO_SUBMIT
-    // The ?123/ABC key sits at the left of the third row, so the bottom row
-    // runs shift, emoji, space, backspace, submit with room for the space bar.
+    // Shift sits beside the third letter row; ?123/ABC starts the bottom row.
     val showEmojiKey = emojiKey && !emailKeys
-    val emojiX = if (symbols) MODE_KEY_X else MODE_KEY_X + 130f + KEY_ROW_GAP
-    val spaceX = when {
-        showEmojiKey -> emojiX + 130f + KEY_ROW_GAP
-        symbols -> MODE_KEY_X
-        else -> MODE_KEY_X + 130f + KEY_ROW_GAP
-    }
-    val modeKeyY = topPadding + MODE_KEY_ROW * (keyHeight + gap)
+    val emojiX = MODE_KEY_X + 130f + KEY_ROW_GAP
+    val spaceX = if (showEmojiKey) emojiX + 130f + KEY_ROW_GAP else emojiX
     val rowStart = { rowIndex: Int, row: String ->
-        if (rowIndex == MODE_KEY_ROW) {
+        if (rowIndex == SHIFT_KEY_ROW) {
             MODE_KEY_ROW_START
         } else {
             (1240f - (row.length * keyWidth + (row.length - 1) * gap)) / 2f
@@ -484,14 +511,14 @@ private fun TextKeys(
         val keys = row.mapIndexed { index, character ->
             KeySlot("key_$character", startX + index * (keyWidth + gap) + keyWidth / 2f)
         }
-        if (rowIndex == MODE_KEY_ROW) {
-            listOf(KeySlot("key_symbols", MODE_KEY_X + MODE_KEY_WIDTH / 2f)) + keys
+        if (rowIndex == SHIFT_KEY_ROW && !symbols) {
+            listOf(KeySlot("key_shift", MODE_KEY_X + MODE_KEY_WIDTH / 2f)) + keys
         } else {
             keys
         }
     }
     val bottomSlots = buildList {
-        if (!symbols) add(KeySlot("key_shift", MODE_KEY_X + 130f / 2f))
+        add(KeySlot("key_symbols", MODE_KEY_X + 130f / 2f))
         if (showEmojiKey) add(KeySlot("key_emoji", emojiX + 130f / 2f))
         if (emailKeys) {
             EMAIL_SHORTCUTS.forEachIndexed { index, shortcut ->
@@ -514,7 +541,7 @@ private fun TextKeys(
         val startX = rowStart(rowIndex, row)
         val y = topPadding + rowIndex * (keyHeight + gap)
         row.forEachIndexed { index, character ->
-            val label = if (shifted && !symbols) {
+            val label = if (shift.uppercase && !symbols) {
                 character.uppercaseChar().toString()
             } else {
                 character.toString()
@@ -533,7 +560,6 @@ private fun TextKeys(
                 neighbors = neighbors[tag].orEmpty(),
                 onClick = {
                     onKey(PocketKey.Character(label))
-                    if (shifted && !symbols) shifted = false
                 },
             )
         }
@@ -544,15 +570,18 @@ private fun TextKeys(
         palette = palette,
         focusLayer = focusLayer,
         x = MODE_KEY_X,
-        y = modeKeyY,
-        width = MODE_KEY_WIDTH,
+        y = bottomY,
+        width = 130f,
         height = keyHeight,
         label = if (symbols) "ABC" else "?123",
         fontSize = 34f,
         fill = palette.accentFill,
         tag = "key_symbols",
         neighbors = neighbors["key_symbols"].orEmpty(),
-        onClick = { symbols = !symbols },
+        onClick = {
+            onLayoutChange()
+            symbols = !symbols
+        },
     )
     if (!symbols) {
         PocketKeyButton(
@@ -560,15 +589,21 @@ private fun TextKeys(
             palette = palette,
             focusLayer = focusLayer,
             x = MODE_KEY_X,
-            y = bottomY,
-            width = 130f,
+            y = topPadding + SHIFT_KEY_ROW * (keyHeight + gap),
+            width = MODE_KEY_WIDTH,
             height = keyHeight,
             label = "Shift",
-            icon = Icons.Filled.KeyboardCapslock,
-            fill = if (shifted) shiftActiveFill() else palette.accentFill,
+            icon = if (shift.mode == KeyboardShiftMode.CapsLock) Icons.Filled.KeyboardCapslock
+                else Icons.Filled.KeyboardArrowUp,
+            keyStateDescription = when (shift.mode) {
+                KeyboardShiftMode.Off -> "Lowercase"
+                KeyboardShiftMode.Shift -> "Next letter uppercase"
+                KeyboardShiftMode.CapsLock -> "Caps lock on"
+            },
+            fill = if (shift.uppercase) shiftActiveFill() else palette.accentFill,
             tag = "key_shift",
             neighbors = neighbors["key_shift"].orEmpty(),
-            onClick = { shifted = !shifted },
+            onClick = onShift,
         )
     }
     if (showEmojiKey) {
@@ -820,6 +855,7 @@ private fun PocketKeyButton(
     labelColor: Color = palette.label,
     icon: ImageVector? = null,
     iconSize: Float = 52f,
+    keyStateDescription: String? = null,
     neighbors: Map<FocusDirection, String> = emptyMap(),
     onClick: () -> Unit,
 ) {
@@ -843,6 +879,7 @@ private fun PocketKeyButton(
             .clip(shape)
             .pocketFrame(fill, metrics.dp(palette.keyBorderWidth), palette.keyBorder, shape)
             .testTag(tag)
+            .semantics { keyStateDescription?.let { stateDescription = it } }
             .controllerTarget(
                 tag,
                 layer = focusLayer,
@@ -890,7 +927,7 @@ private fun PocketKeyButton(
 private const val KEY_ROW_GAP = 14f
 private const val MODE_KEY_X = 40f
 private const val MODE_KEY_WIDTH = 168f
-private const val MODE_KEY_ROW = 2
+private const val SHIFT_KEY_ROW = 2
 private const val MODE_KEY_ROW_START = MODE_KEY_X + MODE_KEY_WIDTH + KEY_ROW_GAP
 private const val KEY_CORNER_RADIUS = 26f
 

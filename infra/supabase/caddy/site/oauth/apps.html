@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Connected apps · PocketPass</title>
+    <link rel="icon" type="image/png" href="/oauth/assets/pocketpass-leaf.png">
+    <link rel="stylesheet" href="/oauth/oauth.css">
+    <script src="/oauth/config.js" defer></script>
+    <script src="/oauth/oauth-auth.js" defer></script>
+    <script src="/oauth/apps.js" defer></script>
+  </head>
+  <body>
+    <div class="auth-shell">
+      <main class="auth-card card-wide">
+        <img class="auth-leaf" src="/oauth/assets/pocketpass-leaf.png" alt="" width="112" height="131">
+        <div class="auth-wordmark">PocketPass</div>
+        <div class="auth-kicker">Connected apps</div>
+
+        <section id="view-loading" hidden>
+          <p class="auth-copy" aria-live="polite">One moment…</p>
+        </section>
+
+        <section id="view-error" hidden>
+          <h1 class="auth-title" id="error-title">Something went wrong</h1>
+          <p class="auth-copy" id="error-copy"></p>
+        </section>
+
+        <section id="view-signin" hidden>
+          <form id="login-email-form" class="stack">
+            <p class="auth-copy">Sign in to see which apps are connected to your PocketPass account. We'll send a 6-digit code to your email.</p>
+            <label class="field">
+              <span>Email</span>
+              <input id="login-email" type="email" autocomplete="email" required placeholder="you@example.com">
+            </label>
+            <button type="submit" class="btn btn-green btn-block">Send code</button>
+          </form>
+          <form id="login-code-form" class="stack" hidden>
+            <p class="auth-copy" id="login-code-hint"></p>
+            <label class="field">
+              <span>Verification code</span>
+              <input id="login-code" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required placeholder="000000">
+            </label>
+            <button type="submit" class="btn btn-green btn-block">Verify</button>
+            <button type="button" id="login-back" class="btn btn-grey btn-block">Use another email</button>
+          </form>
+          <div class="divider"><span>or</span></div>
+          <button type="button" id="login-discord" class="btn btn-discord btn-block">Continue with Discord</button>
+          <button type="button" id="login-password-toggle" class="btn btn-grey btn-block">Use a username and password</button>
+          <form id="login-password-form" class="stack" hidden>
+            <label class="field">
+              <span>Username or email</span>
+              <input id="login-username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="username">
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input id="login-password" type="password" autocomplete="current-password" required placeholder="password">
+            </label>
+            <button type="submit" class="btn btn-green btn-block">Sign in</button>
+            <p class="auth-copy">Passwords cannot be reset. If you linked an email address to the account, sign in with that email instead.</p>
+          </form>
+        </section>
+
+        <section id="view-apps" hidden>
+          <div class="apps-head">
+            <h1>Apps with access to your account</h1>
+            <button type="button" id="apps-refresh" class="btn btn-grey btn-small">Refresh</button>
+          </div>
+          <p class="auth-copy">Revoking an app signs it out of your account right away. You can connect it again later from the app.</p>
+          <ul id="apps-list" class="app-list"></ul>
+        </section>
+
+        <p id="session-line" class="session-line" hidden>Signed in as <strong id="session-name"></strong> <button type="button" id="sign-out" class="link-btn">(sign out)</button></p>
+        <p class="footer-links"><a href="https://pocketpass.xyz">pocketpass.xyz</a></p>
+      </main>
+    </div>
+
+    <div id="banner" class="banner" hidden></div>
+  </body>
+</html>

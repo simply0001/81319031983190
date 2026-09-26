@@ -49,6 +49,7 @@ import com.pocketpass.app.ui.components.PatternBackground
 import com.pocketpass.app.ui.components.StatusPills
 import com.pocketpass.app.ui.components.Text
 import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.ControllerSwapHint
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.ui.mii.MiiEditorBottomScreen
 import com.pocketpass.app.ui.mii.MiiEditorTopScreen
@@ -67,6 +68,7 @@ import com.pocketpass.app.ui.screens.MiiSlotsOverlay
 import com.pocketpass.app.ui.screens.NameEditorBottomOverlay
 import com.pocketpass.app.ui.screens.NotificationDrawer
 import com.pocketpass.app.ui.screens.OAuthConsentOverlay
+import com.pocketpass.app.ui.screens.OAuthConsentTopScreen
 import com.pocketpass.app.ui.screens.ShopBottomOverlay
 import com.pocketpass.app.ui.screens.TopActiveGame
 import com.pocketpass.app.ui.screens.TopGames
@@ -190,6 +192,10 @@ fun TopDisplayContent(
                         onPresentingChanged = { profileViewerPresenting = it },
                     )
                     StatusPills(metrics, state.status)
+                    ControllerSwapHint(
+                        metrics,
+                        belowStatus = state.rootDestination == com.pocketpass.app.model.PocketPassDestination.Activities,
+                    )
                     NotificationDrawer(
                         metrics = metrics,
                         state = state,
@@ -199,6 +205,7 @@ fun TopDisplayContent(
                                 state.friendsOverlay == FriendsOverlay.Notifications,
                         dispatch = dispatch,
                     )
+                    if(state.oauthConsent.visible) OAuthConsentTopScreen(metrics, state)
                 } else {
                     AuthTopScreen(metrics, state.status)
                 }
@@ -214,8 +221,9 @@ fun BottomDisplayContent(
     extensions: PocketPassExtensions = PocketPassExtensions.None,
 ) {
     PocketPassTheme(state.themeMode) {
+        val focus = LocalControllerFocus.current
         PlatformBackHandler(enabled = state.hasDismissableLayer()) {
-            dispatch(PocketPassEvent.Back)
+            if (focus?.exitToParent() != true) dispatch(PocketPassEvent.Back)
         }
         if (state.integrityCompromised) {
             IntegrityBlockScreen()
@@ -394,6 +402,10 @@ private fun TopDestinationBackground(
     metrics: DesignMetrics,
     destination: com.pocketpass.app.model.PocketPassDestination,
 ) {
+    if(destination == com.pocketpass.app.model.PocketPassDestination.Messages) {
+        com.pocketpass.app.ui.screens.BoardBackdrop(metrics)
+        return
+    }
     val palette = pocketPalette.background(destination, top = true)
     PatternBackground(
         metrics = metrics,
@@ -411,6 +423,10 @@ private fun BottomDestinationBackground(
     metrics: DesignMetrics,
     destination: com.pocketpass.app.model.PocketPassDestination,
 ) {
+    if(destination == com.pocketpass.app.model.PocketPassDestination.Messages) {
+        com.pocketpass.app.ui.screens.BoardBackdrop(metrics)
+        return
+    }
     val palette = pocketPalette.background(destination, top = false)
     PatternBackground(
         metrics = metrics,
@@ -452,17 +468,17 @@ private fun RootBottomContent(
         extensions = extensions,
     )
     if (state.rootDestination == com.pocketpass.app.model.PocketPassDestination.Activities) {
-        ExitingOverlay(metrics, visible = state.shop.visible, snapshot = state) { shown ->
+        ExitingOverlay(metrics, visible = state.shop.visible, snapshot = state, releaseFocusOnExit = true) { shown ->
             ShopBottomOverlay(metrics, shown, dispatch)
         }
     }
     if (state.rootDestination == com.pocketpass.app.model.PocketPassDestination.Activities) {
-        ExitingOverlay(metrics, visible = state.games.visible, snapshot = Unit) {
+        ExitingOverlay(metrics, visible = state.games.visible, snapshot = Unit, releaseFocusOnExit = true) {
             GamesBottomOverlay(metrics, dispatch)
         }
     }
     if (state.rootDestination == com.pocketpass.app.model.PocketPassDestination.Activities) {
-        ExitingOverlay(metrics, visible = state.leaderboard.visible, snapshot = state) { shown ->
+        ExitingOverlay(metrics, visible = state.leaderboard.visible, snapshot = state, releaseFocusOnExit = true) { shown ->
             LeaderboardBottomOverlay(metrics, shown, dispatch)
         }
     }
@@ -471,11 +487,13 @@ private fun RootBottomContent(
             AchievementsBottomOverlay(metrics, shown)
         }
     }
-    BottomTabBar(
-        metrics = metrics,
-        current = state.rootDestination,
-        onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) },
-    )
+    if (state.rootDestination != com.pocketpass.app.model.PocketPassDestination.Messages) {
+        BottomTabBar(
+            metrics = metrics,
+            current = state.rootDestination,
+            onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) },
+        )
+    }
     if (
         state.rootDestination ==
         com.pocketpass.app.model.PocketPassDestination.Activities &&
@@ -514,7 +532,7 @@ private fun RootBottomContent(
         FriendProfileBottomOverlay(metrics, state, dispatch)
     }
     if (state.oauthConsent.visible) {
-        OAuthConsentOverlay(metrics, state, dispatch)
+        OAuthConsentOverlay(metrics, state, dispatch, detailsOnTop = true)
     }
 }
 

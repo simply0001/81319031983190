@@ -40,6 +40,24 @@ sealed interface OptimisticMutationResult<out T> {
 class ProductionMutationStore(
     private val database: PocketPassDatabase,
 ) {
+    suspend fun enqueueChatColour(command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand): OptimisticMutationResult<Unit> = enqueue(
+        operation = OperationSpec(command.clientOperationId.value, command.accountId.value, command.clientOperationId.value,
+            ProductionOperationKinds.SET_CHAT_COLOUR, command.accountId.value, ProductionOperationPayloadCodec.encode(command),
+            command.changedAt.toEpochMilliseconds()),
+        value = Unit,
+    ) {
+        usePrepared("SELECT 1 FROM profiles WHERE userId = ?") { statement ->
+            statement.bindText(1, command.accountId.value)
+            check(statement.step()) { "Your profile is not ready yet" }
+        }
+        usePrepared("UPDATE profiles SET chatBubbleColour = ?, chatColourOperationId = ?, chatColourError = NULL WHERE userId = ?") { statement ->
+            statement.bindText(1, command.colour.key)
+            statement.bindText(2, command.clientOperationId.value)
+            statement.bindText(3, command.accountId.value)
+            statement.step()
+        }
+    }
+
     suspend fun enqueueProfileUpdate(
         command: UpdateProfileCommand,
     ): OptimisticMutationResult<UserProfile> {
@@ -56,7 +74,14 @@ class ProductionMutationStore(
             ),
             value = command.profile,
         ) {
-            upsertProfile(command.profile)
+            // Bios become visible only after the server accepts them. Keep the
+            // attempted text independently so permanent filter rejection is recoverable.
+            usePrepared("INSERT INTO profile_bio_drafts(accountId, draft, acceptedBio, operationId, error) SELECT userId, ?, bio, ?, NULL FROM profiles WHERE userId = ? ON CONFLICT(accountId) DO UPDATE SET draft=excluded.draft, operationId=excluded.operationId, error=NULL") { statement ->
+                statement.bindText(1, command.profile.bio)
+                statement.bindText(2, command.clientOperationId.value)
+                statement.bindText(3, command.accountId.value)
+                statement.step()
+            }
         }
     }
 
@@ -318,7 +343,14 @@ class ProductionMutationStore(
             }
 
             applyOptimisticMutation()
-            insertOperation(operation)
+            val sequenced = if (operation.kind == ProductionOperationKinds.SET_CHAT_COLOUR) {
+                val latest = usePrepared("SELECT MAX(createdAtEpochMillis) FROM pending_operations WHERE accountId = ? AND kind = 'SET_CHAT_COLOUR'") { statement ->
+                    statement.bindText(1, operation.accountId)
+                    if (statement.step() && !statement.isNull(0)) statement.getLong(0) else Long.MIN_VALUE
+                }
+                operation.copy(createdAtEpochMillis = maxOf(operation.createdAtEpochMillis, latest + 1))
+            } else operation
+            insertOperation(sequenced)
             OptimisticMutationResult.Enqueued(
                 operationId = operation.operationId,
                 value = value,
@@ -441,10 +473,14 @@ private suspend fun PooledConnection.upsertProfile(profile: UserProfile) {
     val entity = profile.toEntity()
     usePrepared(
         """
-        INSERT OR REPLACE INTO profiles
+        INSERT INTO profiles
             (userId, displayName, avatarKind, avatarValue, username, bio, age,
              countryCode, locationLabel, lastSeenAtEpochMillis, presence, updatedAtEpochMillis)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(userId) DO UPDATE SET displayName=excluded.displayName, avatarKind=excluded.avatarKind,
+            avatarValue=excluded.avatarValue, username=excluded.username, bio=excluded.bio, age=excluded.age,
+            countryCode=excluded.countryCode, locationLabel=excluded.locationLabel, lastSeenAtEpochMillis=excluded.lastSeenAtEpochMillis,
+            presence=excluded.presence, updatedAtEpochMillis=excluded.updatedAtEpochMillis
         """.trimIndent(),
     ) { statement ->
         statement.bindText(1, entity.userId)

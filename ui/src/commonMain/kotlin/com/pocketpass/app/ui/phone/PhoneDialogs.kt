@@ -92,7 +92,7 @@ fun PhoneDialogs(
         visible = root == PocketPassDestination.Activities && buyItem != null,
         tag = "buy_shop_item",
         title = "Buy ${retainedBuy.value?.name.orEmpty()}?",
-        body = "It costs ${retainedBuy.value?.priceTokens ?: 0} tokens. You have ${state.shop.tokenBalance}.",
+        body = retainedBuy.value?.let(state.shop::purchasePromptBody).orEmpty(),
         confirmLabel = "Buy",
         confirmFill = com.pocketpass.app.ui.screens.greenButtonBrush(),
         confirmBorder = PhoneGreenBorder,
@@ -114,6 +114,7 @@ fun PhoneDialogs(
     )
 
     PhoneMessageActionsSheet(
+        colour = state.profile?.chatBubbleColour ?: com.pocketpass.app.domain.model.ChatBubbleColour.Default,
         metrics = metrics,
         visible = state.routes.lastOrNull() is PocketPassRoute.MessageDetail &&
             state.messageActionMessageId != null,
@@ -156,6 +157,8 @@ fun PhoneDialogs(
         state = state,
         dispatch = dispatch,
     )
+
+    PhoneWidgetMakerDialogs(metrics = metrics, state = state, dispatch = dispatch)
 
     if (root == PocketPassDestination.Settings && state.miiSlotsVisible) {
         PhoneScrim(visible = true, tag = "mii_slots_scrim", onDismiss = { dispatch(PocketPassEvent.CloseMiiSlots) })
@@ -216,7 +219,7 @@ fun PhoneDialogs(
 }
 
 @Composable
-private fun DialogTitleRow(
+internal fun DialogTitleRow(
     metrics: DesignMetrics,
     title: String,
     color: Color,

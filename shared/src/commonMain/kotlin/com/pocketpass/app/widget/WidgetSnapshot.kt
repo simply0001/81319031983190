@@ -27,11 +27,23 @@ data class WidgetSnapshot(
     /** A [com.pocketpass.app.model.ThemeMode] name. */
     val themeMode: String,
     val updatedAtEpochMillis: Long,
+    val tokenBalance: Int = 0,
+    val stepsToday: Int = 0,
+    val friendCode: String? = null,
+    val achievementsUnlocked: Int = 0,
+    val achievementsTotal: Int = 0,
+    val bingoLines: Int = 0,
+    val worldTourCountries: Int = 0,
+    val leaderboardRank: Int? = null,
+    val leaderboardScope: String? = null,
+    val recentPeople: List<WidgetPerson> = emptyList(),
+    val onlineFriends: List<WidgetPerson> = emptyList(),
 ) {
     fun encode(): String = json.encodeToString(serializer(), this)
 
     companion object {
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
+        const val MAX_PEOPLE = 4
         const val PORTRAIT_FILE_NAME = "portrait.png"
         const val SNAPSHOT_FILE_NAME = "snapshot.json"
 
@@ -45,3 +57,12 @@ data class WidgetSnapshot(
             runCatching { json.decodeFromString(serializer(), text) }.getOrNull()
     }
 }
+
+@Serializable
+data class WidgetPerson(
+    val userId: String,
+    val displayName: String,
+    val avatarUrl: String? = null,
+    val avatarBundledKey: String? = null,
+    val occurredAtEpochMillis: Long? = null,
+)

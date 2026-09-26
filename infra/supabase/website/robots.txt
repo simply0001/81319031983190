@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /updates/
+
+Sitemap: https://pocketpass.xyz/sitemap.xml

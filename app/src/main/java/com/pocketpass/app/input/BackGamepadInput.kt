@@ -12,6 +12,8 @@ internal enum class BackGamepadKeyAction {
     Consume,
     Back,
     Backspace,
+    KeyboardEscape,
+    FocusParent,
 }
 
 internal fun classifyBackGamepadKey(
@@ -22,6 +24,8 @@ internal fun classifyBackGamepadKey(
     fromGamepad: Boolean = false,
     keyboardActive: Boolean = false,
     canBackspace: Boolean = false,
+    canEscape: Boolean = false,
+    hasFocusParent: Boolean = false,
 ): BackGamepadKeyAction {
     val isDown = action == KeyEvent.ACTION_DOWN
     if (keyboardActive && canBackspace && keyCode == KeyEvent.KEYCODE_BUTTON_B) {
@@ -35,10 +39,22 @@ internal fun classifyBackGamepadKey(
             BackGamepadKeyAction.Consume
         }
     }
+    // With nothing to erase, B first leaves the emoji or symbols page and
+    // only closes the keyboard from the letters page.
+    if (keyboardActive && canEscape && keyCode == KeyEvent.KEYCODE_BUTTON_B) {
+        return if (isDown && repeatCount == 0) {
+            BackGamepadKeyAction.KeyboardEscape
+        } else {
+            BackGamepadKeyAction.Consume
+        }
+    }
     val isGamepadBackButton = keyCode == KeyEvent.KEYCODE_BUTTON_B ||
         (keyboardActive && keyCode == KeyEvent.KEYCODE_BUTTON_X)
     val isBackKey = isGamepadBackButton || keyCode == KeyEvent.KEYCODE_BACK
     if (!isBackKey) return BackGamepadKeyAction.PassThrough
+    if (hasFocusParent && !keyboardActive) {
+        return if (isDown && repeatCount == 0) BackGamepadKeyAction.FocusParent else BackGamepadKeyAction.Consume
+    }
     if (!hasDismissableLayer) {
         return if (isGamepadBackButton || fromGamepad) {
             BackGamepadKeyAction.Consume
@@ -67,21 +83,34 @@ fun handleBackGamepadKeyEvent(
         keyCode = event.keyCode,
         action = event.action,
         repeatCount = event.repeatCount,
-        hasDismissableLayer = state.hasDismissableLayer(),
+        hasDismissableLayer = state.hasDismissableLayer() || focus?.transientBack != null,
         fromGamepad = event.source and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD,
         keyboardActive = focus?.keyboardActive() == true,
         canBackspace = focus?.keyboardCanBackspace() == true,
+        canEscape = focus?.keyboardCanEscape() == true,
+        hasFocusParent = focus?.canExitToParent() == true && focus.transientBack == null,
     )
 ) {
     BackGamepadKeyAction.PassThrough -> false
     BackGamepadKeyAction.Consume -> true
     BackGamepadKeyAction.Back -> {
-        dispatch(PocketPassEvent.Back)
+        val dismiss = focus?.transientBack
+        if(dismiss != null) dismiss() else dispatch(PocketPassEvent.Back)
         true
     }
 
     BackGamepadKeyAction.Backspace -> {
         focus?.keyboardBackspace?.invoke()
+        true
+    }
+
+    BackGamepadKeyAction.KeyboardEscape -> {
+        focus?.keyboardEscape?.invoke()
+        true
+    }
+
+    BackGamepadKeyAction.FocusParent -> {
+        focus?.exitToParent()
         true
     }
 }

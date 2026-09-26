@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull the latest PocketPass backup off-site from the production VM
+
+[Service]
+Type=oneshot
+Environment=PP_REMOTE=ubuntu@79.72.17.89
+Environment=PP_PULL_KEY=%h/.ssh/pocketpass-backup-pull
+Environment=PP_BACKUP_DIR=/media/data/pocketpass-backups
+ExecStart=%h/bin/pull-backups-offsite.sh

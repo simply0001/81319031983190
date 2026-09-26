@@ -21,7 +21,16 @@ fun Throwable.toRepositoryFailure(): RepositoryFailure {
             AuthErrorCode.BadOauthState,
             AuthErrorCode.FlowStateNotFound,
             AuthErrorCode.FlowStateExpired,
+            AuthErrorCode.UserNotFound,
+            AuthErrorCode.EmailNotConfirmed,
+            AuthErrorCode.ReauthenticationNeeded,
+            AuthErrorCode.ReauthenticationNotValid,
             -> RepositoryFailureKind.Unauthorized
+
+            AuthErrorCode.WeakPassword,
+            AuthErrorCode.SamePassword,
+            AuthErrorCode.ValidationFailed,
+            -> RepositoryFailureKind.Validation
 
             AuthErrorCode.ProviderDisabled,
             AuthErrorCode.EmailProviderDisabled,

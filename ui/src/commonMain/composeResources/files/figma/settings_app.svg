@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="142.65" height="142.65" viewBox="0 0 142.65 142.65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
+<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#ringTeal)" stroke-width="9"/>
+<path d="M71.33 42.33 L74.96 42.55 L78.83 35.09 L85.48 37.14 L84.49 45.49 L87.63 47.34 L91.83 50.82 L94.24 53.55 L102.25 51.01 L105.51 57.17 L98.91 62.36 L99.81 65.89 L100.33 71.33 L100.10 74.96 L107.56 78.83 L105.51 85.48 L97.16 84.49 L95.31 87.63 L91.83 91.83 L89.10 94.24 L91.64 102.25 L85.48 105.51 L80.29 98.91 L76.76 99.81 L71.33 100.33 L67.69 100.10 L63.82 107.56 L57.17 105.51 L58.16 97.16 L55.02 95.31 L50.82 91.83 L48.41 89.10 L40.40 91.64 L37.14 85.48 L43.74 80.29 L42.84 76.76 L42.33 71.33 L42.55 67.69 L35.09 63.82 L37.14 57.17 L45.49 58.16 L47.34 55.02 L50.82 50.82 L53.55 48.41 L51.01 40.40 L57.17 37.14 L62.36 43.74 L65.89 42.84Z M58.83 71.33 A12.5 12.5 0 1 0 83.83 71.33 A12.5 12.5 0 1 0 58.83 71.33Z" fill="url(#paint0_linear_app)" fill-rule="evenodd" stroke="url(#paint0_linear_app)" stroke-width="4" stroke-linejoin="round"/>
+</g>
+<defs>
+<linearGradient id="ringTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5E9AAC"/>
+<stop offset="1" stop-color="#21677B"/>
+</linearGradient>
+<linearGradient id="paint0_linear_app" x1="71.325" y1="34" x2="71.325" y2="108.65" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B7D90"/>
+<stop offset="1" stop-color="#1B5363"/>
+</linearGradient>
+</defs>
+</svg>

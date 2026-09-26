@@ -32,7 +32,8 @@ class RemotePendingOperationExecutor(
     private val nearbySecureStore: SecureStringStore? = null,
     private val encounterRepository: RoomEncounterRepository? = null,
     private val onEncounterResolved: (NearbyEncounter) -> Unit = {},
-    private val onEncounterSubmitted: (SubmitNearbyEncounterCommand, NearbyEncounter?) -> Unit = { _, _ -> },
+    private val onEncounterSubmitted: (SubmitNearbyEncounterCommand, NearbyEncounter?, Boolean) -> Unit =
+        { _, _, _ -> },
     private val shopRepository: RoomShopRepository? = null,
     private val messagePayloadCodec: MessageSendPayloadCodec =
         BinaryMessageSendPayloadCodec,
@@ -51,6 +52,7 @@ class RemotePendingOperationExecutor(
         LocalOperationKinds.EDIT_MESSAGE -> executeMessageEdit(operation)
         LocalOperationKinds.DELETE_MESSAGE -> executeMessageDelete(operation)
         ProductionOperationKinds.UPDATE_PROFILE -> executeProfileUpdate(operation)
+        ProductionOperationKinds.SET_CHAT_COLOUR -> executeChatColour(operation)
         ProductionOperationKinds.SEND_FRIEND_REQUEST -> executeFriendRequest(operation)
         ProductionOperationKinds.RESPOND_TO_FRIEND_REQUEST ->
             executeFriendRequestResponse(operation)
@@ -69,6 +71,26 @@ class RemotePendingOperationExecutor(
             code = "UNSUPPORTED_OPERATION",
             message = "Unsupported pending operation kind: ${operation.kind}",
         )
+    }
+
+    private suspend fun executeChatColour(operation: PendingOperationEntity): OutboxExecutionResult {
+        val command = decodeOrFailure {
+            ProductionOperationPayloadCodec.decodeChatColour(operation.payload, operation.payloadVersion).also {
+                operation.requireIdentity(it.accountId.value, it.clientOperationId.value, it.accountId.value)
+            }
+        } ?: return invalidPayload(operation)
+        return when (val result = remote.profiles.setChatBubbleColour(command)) {
+            is RepositoryResult.Success -> {
+                if (result.value.userId != command.accountId) return invalidPayload(operation)
+                reconciler.reconcileChatColour(command.accountId, operation.operationId, result.value.chatBubbleColour.key)
+                OutboxExecutionResult.Acknowledged
+            }
+            is RepositoryResult.Failure -> result.error.toOutboxResult().also {
+                if (it is OutboxExecutionResult.PermanentFailure) reconciler.reconcileChatColour(
+                    command.accountId, operation.operationId, command.colour.key, "Couldn't save your colour. Try saving again.",
+                )
+            }
+        }
     }
 
     private suspend fun executePurchase(
@@ -184,7 +206,7 @@ class RemotePendingOperationExecutor(
                 encounters.reconcile(result.value)
                 secureStore.remove(secureEntryKey)
                 onEncounterResolved(result.value)
-                onEncounterSubmitted(command, result.value)
+                onEncounterSubmitted(command, result.value, false)
                 OutboxExecutionResult.Acknowledged
             }
 
@@ -193,7 +215,11 @@ class RemotePendingOperationExecutor(
                 if (outboxResult is OutboxExecutionResult.PermanentFailure) {
                     secureStore.remove(secureEntryKey)
                 }
-                onEncounterSubmitted(command, null)
+                onEncounterSubmitted(
+                    command,
+                    null,
+                    outboxResult is OutboxExecutionResult.PermanentFailure,
+                )
                 outboxResult
             }
         }
@@ -375,7 +401,16 @@ class RemotePendingOperationExecutor(
         } ?: return invalidPayload(operation)
 
         return when (val result = remote.profiles.updateProfile(command)) {
-            is RepositoryResult.Failure -> result.error.toOutboxResult()
+            is RepositoryResult.Failure -> {
+                val outcome = result.error.toOutboxResult()
+                if (outcome is OutboxExecutionResult.PermanentFailure) {
+                    val accepted = remote.profiles.fetchProfile(command.accountId)
+                    if (accepted is RepositoryResult.Success && accepted.value != null) {
+                        reconciler.reconcileBioResult(command, accepted.value.bio, result.error.message)
+                    } else return OutboxExecutionResult.RetryableFailure("BIO_REJECTION_RECOVERY", "Recovering the last accepted bio")
+                }
+                outcome
+            }
             is RepositoryResult.Success -> {
                 if (result.value.userId != command.accountId) {
                     return OutboxExecutionResult.PermanentFailure(
@@ -384,6 +419,7 @@ class RemotePendingOperationExecutor(
                     )
                 }
                 reconciler.reconcileAcknowledgedProfile(result.value)
+                reconciler.reconcileBioResult(command, result.value.bio)
                 OutboxExecutionResult.Acknowledged
             }
         }

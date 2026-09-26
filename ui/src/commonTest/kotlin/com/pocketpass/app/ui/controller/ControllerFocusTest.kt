@@ -24,6 +24,29 @@ class ControllerFocusTest {
     )
 
     @Test
+    fun notificationBadgeCanAppearAndDisappearWithoutLosingFocus() {
+        val focus = ControllerFocus()
+        var activated = false
+        val buttonBounds = Rect(1008f, 297f, 1088f, 377f)
+        val badgeBounds = Rect(50f, -25f, 105f, 30f)
+        focus.register("notifications", 0, FocusDisplay.Bottom) { activated = true }
+        focus.updateBounds("notifications", buttonBounds)
+        focus.focus("notifications")
+
+        focus.updateBadgeBounds("notifications", badgeBounds)
+        assertEquals("notifications", focus.focusId)
+        assertEquals(buttonBounds, focus.focusedTarget(FocusDisplay.Bottom)?.bounds)
+        assertEquals(badgeBounds, focus.focusedTarget(FocusDisplay.Bottom)?.badgeBounds)
+        assertTrue(focus.activate())
+        assertTrue(activated)
+
+        focus.updateBadgeBounds("notifications", null)
+        assertEquals("notifications", focus.focusId)
+        assertEquals(buttonBounds, focus.focusedTarget(FocusDisplay.Bottom)?.bounds)
+        assertNull(focus.focusedTarget(FocusDisplay.Bottom)?.badgeBounds)
+    }
+
+    @Test
     fun nullCurrentSelectsTopLeftMost() {
         assertEquals("a", chooseNextFocus(vertical, null, FocusDirection.Down))
     }
@@ -153,6 +176,39 @@ class ControllerFocusTest {
         focus.focus("bottom_a")
         focus.add("top_a", 0f, display = FocusDisplay.Top)
         assertTrue(focus.canSwapDisplay())
+    }
+
+    @Test
+    fun swapHintOnlyShowsForVisibleFocusWithAnotherScreenAvailable() {
+        val focus = ControllerFocus()
+        focus.add("bottom", 0f)
+        focus.add("top", 0f, display = FocusDisplay.Top)
+        assertFalse(focus.showSwapHint())
+        focus.focus("bottom")
+        assertTrue(focus.showSwapHint())
+        focus.swapDisplay()
+        assertTrue(focus.showSwapHint())
+        focus.hide()
+        assertFalse(focus.showSwapHint())
+        focus.focus("bottom")
+        focus.unregister("top")
+        assertFalse(focus.showSwapHint())
+    }
+
+    @Test
+    fun swapHintDoesNotAdvertiseXWhileTheKeyboardOwnsIt() {
+        val focus = ControllerFocus()
+        focus.add("bottom", 0f, layer = 10)
+        focus.add("top", 0f, layer = 10, display = FocusDisplay.Top)
+        focus.focus("bottom")
+        assertTrue(focus.showSwapHint())
+        focus.keyboardLayer = 10
+        assertFalse(focus.showSwapHint())
+        focus.keyboardLayer = null
+        assertTrue(focus.showSwapHint())
+        focus.add("modal", 100f, layer = 20)
+        focus.focus("modal")
+        assertFalse(focus.showSwapHint())
     }
 
     @Test

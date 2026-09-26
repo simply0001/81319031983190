@@ -18,6 +18,7 @@ import com.pocketpass.app.data.local.dao.ProfileDao
 import com.pocketpass.app.data.local.dao.LeaderboardDao
 import com.pocketpass.app.data.local.dao.ShopDao
 import com.pocketpass.app.data.local.dao.WorldTourDao
+import com.pocketpass.app.data.local.dao.PassingStatsDao
 import com.pocketpass.app.data.local.dao.SyncCursorDao
 import com.pocketpass.app.data.local.entity.AchievementStateEntity
 import com.pocketpass.app.data.local.entity.BingoCellEntity
@@ -39,6 +40,11 @@ import com.pocketpass.app.data.local.entity.SupporterStatusEntity
 import com.pocketpass.app.data.local.entity.SyncCursorEntity
 import com.pocketpass.app.data.local.entity.TokenBalanceEntity
 import com.pocketpass.app.data.local.entity.WorldTourRegionEntity
+import com.pocketpass.app.data.local.entity.PassingStatsEntity
+import com.pocketpass.app.data.local.dao.PuzzleDao
+import com.pocketpass.app.data.local.entity.PuzzleCollectionEntity
+import com.pocketpass.app.data.local.entity.PuzzleEntity
+import com.pocketpass.app.data.local.entity.PuzzlePieceEntity
 
 @Database(
     entities = [
@@ -61,13 +67,21 @@ import com.pocketpass.app.data.local.entity.WorldTourRegionEntity
         LeaderboardEntryEntity::class,
         AchievementStateEntity::class,
         WorldTourRegionEntity::class,
+        PassingStatsEntity::class,
         BingoCellEntity::class,
+        PuzzleCollectionEntity::class,
+        PuzzleEntity::class,
+        PuzzlePieceEntity::class,
+        com.pocketpass.app.boards.BoardRecordEntity::class,
+        com.pocketpass.app.boards.BoardDraftEntity::class,
+        com.pocketpass.app.data.local.entity.BioDraftEntity::class,
     ],
-    version = 16,
+    version = 22,
     exportSchema = true,
 )
 @ConstructedBy(PocketPassDatabaseConstructor::class)
 abstract class PocketPassDatabase : RoomDatabase() {
+    abstract fun boardDao(): com.pocketpass.app.boards.BoardDao
     abstract fun profileDao(): ProfileDao
     abstract fun friendDao(): FriendDao
     abstract fun friendCodeDao(): FriendCodeDao
@@ -79,7 +93,9 @@ abstract class PocketPassDatabase : RoomDatabase() {
     abstract fun leaderboardDao(): LeaderboardDao
     abstract fun achievementDao(): AchievementDao
     abstract fun worldTourDao(): WorldTourDao
+    abstract fun passingStatsDao(): PassingStatsDao
     abstract fun bingoDao(): BingoDao
+    abstract fun puzzleDao(): PuzzleDao
     abstract fun nearbyEncounterDao(): NearbyEncounterDao
     abstract fun outboxDao(): OutboxDao
     abstract fun syncCursorDao(): SyncCursorDao

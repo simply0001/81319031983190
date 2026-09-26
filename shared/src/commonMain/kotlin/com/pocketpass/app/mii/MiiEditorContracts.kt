@@ -83,6 +83,8 @@ data class MiiEditorUiState(
     val renderRevision: Long = 0L,
     val presented: Boolean = true,
     val ownedHatTypes: Set<Int> = emptySet(),
+    val wearHatError: String? = null,
+    val wearHatInProgress: Boolean = false,
     val pretendoImport: PretendoImportState? = null,
 ) {
     val descriptor: MiiCategoryDescriptor
@@ -291,6 +293,7 @@ interface MiiEditorController {
 
     fun activateAccount(accountKey: String?)
     fun beginEdit(slot: Int = MII_FIRST_SLOT, wearHat: Int? = null)
+    fun wearHat(hatType: Int)
     fun setActiveSlot(slot: Int)
     fun deleteSlot(slot: Int)
     fun dispatch(event: MiiEditorEvent)

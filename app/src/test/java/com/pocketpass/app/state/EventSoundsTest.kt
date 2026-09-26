@@ -30,8 +30,12 @@ class EventSoundsTest {
 
     @Test
     fun openingSomethingNavigates() {
-        assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenSocial, PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Confirm, soundEffectFor(PocketPassEvent.OpenSocial, PocketPassDestination.Settings))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenContributors, PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenWidgetMaker, PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenWidgetEditor("d1"), PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Cancel, soundEffectFor(PocketPassEvent.CloseWidgetBlockPicker, PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Confirm, soundEffectFor(PocketPassEvent.PinWidgetDesign("d1"), PocketPassDestination.Settings))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenMessage("c1"), PocketPassDestination.Messages))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenNotification("n1"), PocketPassDestination.Home))
         assertEquals(SoundEffect.Navigation, soundEffectFor(PocketPassEvent.OpenNewGroup, PocketPassDestination.Messages))
@@ -87,9 +91,10 @@ class EventSoundsTest {
     }
 
     @Test
-    fun settingsChangesAreSilent() {
+    fun settingsSlidersAreSilentAndNearbyToggleConfirms() {
         assertNull(soundEffectFor(PocketPassEvent.SetSoundLevel(0.5f), PocketPassDestination.Settings))
         assertNull(soundEffectFor(PocketPassEvent.SetSfxLevel(0.5f), PocketPassDestination.Settings))
-        assertNull(soundEffectFor(PocketPassEvent.SetNearby(true), PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Confirm, soundEffectFor(PocketPassEvent.SetNearby(true), PocketPassDestination.Settings))
+        assertEquals(SoundEffect.Confirm, soundEffectFor(PocketPassEvent.SetNearby(false), PocketPassDestination.Settings))
     }
 }

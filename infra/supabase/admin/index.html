@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>PocketPass Admin</title>
+    <link rel="icon" type="image/png" href="/assets/pocketpass-leaf.png">
+    <link rel="stylesheet" href="/admin.css">
+    <script src="/config.js" defer></script>
+    <script src="/backdrop.js" defer></script>
+    <script src="/boards.js" defer></script>
+    <script src="/admin.js" defer></script>
+  </head>
+  <body>
+    <canvas id="backdrop" aria-hidden="true"></canvas>
+    <div id="login-shell" class="auth-shell" hidden>
+      <section id="view-login" class="auth-card" hidden>
+        <img class="auth-leaf" src="/assets/pocketpass-leaf.png" alt="" width="112" height="131">
+        <div class="auth-wordmark">PocketPass</div>
+        <div class="auth-kicker">Admin console</div>
+        <form id="login-email-form" class="stack">
+          <p class="auth-copy">Sign in with the email of your PocketPass account. We'll send you a 6-digit code.</p>
+          <label class="field">
+            <span>Email</span>
+            <input id="login-email" type="email" autocomplete="email" required placeholder="you@example.com">
+          </label>
+          <button type="submit" class="btn btn-green btn-block">Send code</button>
+        </form>
+        <form id="login-code-form" class="stack" hidden>
+          <p class="auth-copy" id="login-code-hint"></p>
+          <label class="field">
+            <span>Verification code</span>
+            <input id="login-code" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required placeholder="000000">
+          </label>
+          <button type="submit" class="btn btn-green btn-block">Verify</button>
+          <button type="button" id="login-back" class="btn btn-grey btn-block">Use another email</button>
+        </form>
+      </section>
+
+      <section id="view-forbidden" class="auth-card" hidden>
+        <img class="auth-leaf" src="/assets/pocketpass-leaf.png" alt="" width="112" height="131">
+        <div class="auth-wordmark">PocketPass</div>
+        <div class="auth-kicker">Admin console</div>
+        <h1 class="auth-title">Not an admin</h1>
+        <p class="auth-copy">You are signed in as <strong id="forbidden-email"></strong>, but this account isn't on the admin list.</p>
+        <button type="button" id="forbidden-sign-out" class="btn btn-grey btn-block">Sign out</button>
+      </section>
+    </div>
+
+    <div id="app-shell" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-leaf" src="/assets/pocketpass-leaf.png" alt="" width="34" height="40">
+          <span class="brand-name">PocketPass <span class="brand-thin">Admin</span></span>
+        </div>
+        <nav id="nav" class="nav">
+          <button type="button" class="nav-link is-active" data-view="overview">Overview</button>
+          <button type="button" class="nav-link" data-view="users">Users</button>
+          <button type="button" class="nav-link" data-view="apps">Apps</button>
+          <button type="button" class="nav-link" data-view="supporters">Supporters</button>
+          <button type="button" class="nav-link" data-view="boards">Boards</button>
+          <button type="button" class="nav-link" data-view="audit">Audit</button>
+          <button type="button" class="nav-link" data-view="admins">Admins</button>
+        </nav>
+        <div id="session" class="session">
+          <span id="session-email" class="session-email"></span>
+          <button type="button" id="open-studio" class="btn btn-grey btn-small" hidden>Open Studio</button>
+          <button type="button" id="sign-out" class="btn btn-grey btn-small">Sign out</button>
+        </div>
+      </header>
+
+      <main class="page">
+        <section id="view-boards" class="view" hidden>
+          <div class="view-head"><h1>Boards</h1><button type="button" class="btn btn-grey btn-small" data-refresh="boards">Refresh</button></div>
+          <div id="boards-console" class="stack"></div>
+        </section>
+        <section id="view-overview" class="view" hidden>
+          <div class="view-head">
+            <h1>Overview</h1>
+            <div class="view-actions">
+              <span id="overview-updated" class="muted" aria-live="polite"></span>
+              <button type="button" class="btn btn-grey btn-small" data-refresh="overview">Refresh</button>
+            </div>
+          </div>
+          <div id="stats" class="tiles"></div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Achievement unlocks</h2>
+              <p class="panel-sub">How many accounts have earned each one</p>
+            </div>
+            <div id="unlocks-by-key" class="chips"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Recent admin actions</h2>
+              <p class="panel-sub">Latest entries from the audit log</p>
+            </div>
+            <div id="overview-audit" class="table-wrap"></div>
+          </div>
+        </section>
+
+        <section id="view-users" class="view" hidden>
+          <div class="view-head">
+            <h1>Users</h1>
+            <form id="user-search-form" class="search">
+              <input id="user-search" type="search" placeholder="Search name, username, email or id" autocomplete="off">
+              <button type="submit" class="btn btn-green btn-small">Search</button>
+            </form>
+          </div>
+          <div class="panel">
+            <div id="users-table" class="table-wrap"></div>
+          </div>
+          <div class="pager">
+            <button type="button" id="users-prev" class="btn btn-grey btn-small">Previous</button>
+            <span id="users-page" class="pager-label"></span>
+            <button type="button" id="users-next" class="btn btn-grey btn-small">Next</button>
+          </div>
+        </section>
+
+        <section id="view-user" class="view" hidden>
+          <div class="view-head">
+            <button type="button" id="user-back" class="btn btn-grey btn-small">&larr; All users</button>
+            <button type="button" class="btn btn-grey btn-small" data-refresh="user">Refresh</button>
+          </div>
+          <div id="user-detail" class="view"></div>
+        </section>
+
+        <section id="view-apps" class="view" hidden>
+          <div class="view-head">
+            <h1>Developer apps</h1>
+            <form id="app-search-form" class="search">
+              <input id="app-search" type="search" placeholder="Search app name or owner" autocomplete="off">
+              <button type="submit" class="btn btn-green btn-small">Search</button>
+            </form>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Limit requests</h2>
+              <p class="panel-sub">Developers asking for higher rate limits or Realtime capacity. Approving applies the granted values to the app right away; the developer sees the decision and your note in the portal. Realtime numbers are recorded only — raise the shared Realtime cap by hand when you grant them.</p>
+            </div>
+            <div id="limit-requests-filter" class="actions">
+              <button type="button" class="btn btn-small btn-green" data-status="pending">Pending</button>
+              <button type="button" class="btn btn-small btn-grey" data-status="approved">Approved</button>
+              <button type="button" class="btn btn-small btn-grey" data-status="denied">Denied</button>
+            </div>
+            <div id="limit-requests-table" class="table-wrap"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Registered apps</h2>
+              <p class="panel-sub">Third-party apps from developer.pocketpass.xyz. Suspending one refuses every request and sign-in right away; reactivating restores it without users approving again.</p>
+            </div>
+            <div id="apps-table" class="table-wrap"></div>
+          </div>
+          <div class="pager">
+            <button type="button" id="apps-prev" class="btn btn-grey btn-small">Previous</button>
+            <span id="apps-page" class="pager-label"></span>
+            <button type="button" id="apps-next" class="btn btn-grey btn-small">Next</button>
+          </div>
+        </section>
+
+        <section id="view-supporters" class="view" hidden>
+          <div class="view-head">
+            <h1>Supporters</h1>
+            <button type="button" class="btn btn-grey btn-small" data-refresh="supporters">Refresh</button>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Ko-fi payments</h2>
+              <p class="panel-sub">Every webhook Ko-fi delivered. Membership payments unlock every hat for 36 days when the Ko-fi email matches a PocketPass account; link an unmatched email to a username and that payment, plus every future one from the same email, applies to the account.</p>
+            </div>
+            <div class="actions">
+              <span id="kofi-events-filter" class="actions">
+                <button type="button" class="btn btn-small btn-green" data-filter="unmatched">Unmatched</button>
+                <button type="button" class="btn btn-small btn-grey" data-filter="all">All</button>
+              </span>
+              <span id="kofi-events-count" class="muted"></span>
+            </div>
+            <div id="kofi-events-table" class="table-wrap"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Supporters</h2>
+              <p class="panel-sub">Accounts with every hat unlocked, and those that lapsed in the last 30 days. Set or remove a status by hand from the account page.</p>
+            </div>
+            <div id="supporters-table" class="table-wrap"></div>
+          </div>
+        </section>
+
+        <section id="view-audit" class="view" hidden>
+          <div class="view-head">
+            <h1>Audit log</h1>
+            <button type="button" class="btn btn-grey btn-small" data-refresh="audit">Refresh</button>
+          </div>
+          <div class="panel">
+            <div id="audit-table" class="table-wrap"></div>
+          </div>
+          <div class="pager">
+            <button type="button" id="audit-prev" class="btn btn-grey btn-small">Previous</button>
+            <span id="audit-page" class="pager-label"></span>
+            <button type="button" id="audit-next" class="btn btn-grey btn-small">Next</button>
+          </div>
+        </section>
+
+        <section id="view-admins" class="view" hidden>
+          <div class="view-head">
+            <h1>Admins</h1>
+            <button type="button" class="btn btn-grey btn-small" data-refresh="admins">Refresh</button>
+          </div>
+          <div class="panel panel-teal">
+            <div class="panel-head">
+              <h2>Add an admin</h2>
+              <p class="panel-sub">They sign in at this address with their own PocketPass account and only see what you tick here.</p>
+            </div>
+            <form id="admin-add-form" class="stack">
+              <div class="grid-2">
+                <label class="field">
+                  <span>PocketPass account email</span>
+                  <input name="email" type="email" required placeholder="friend@example.com" autocomplete="off">
+                </label>
+                <label class="field">
+                  <span>Note (optional)</span>
+                  <input name="note" type="text" maxlength="200" placeholder="Community moderator">
+                </label>
+              </div>
+              <div class="field">
+                <span>Permissions</span>
+                <div class="perm-grid" data-perm-grid></div>
+              </div>
+              <div class="row">
+                <button type="submit" class="btn btn-green">Add admin</button>
+              </div>
+            </form>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Current admins</h2>
+              <p class="panel-sub">Owners hold every permission and can only be changed with psql on the server.</p>
+            </div>
+            <div id="admins-table" class="table-wrap"></div>
+          </div>
+          <div id="admin-editor" class="panel" hidden>
+            <div class="panel-head">
+              <h2>Edit <span id="admin-editor-name"></span></h2>
+              <p class="panel-sub" id="admin-editor-hint"></p>
+            </div>
+            <form id="admin-edit-form" class="stack">
+              <div class="field">
+                <span>Permissions</span>
+                <div class="perm-grid" data-perm-grid></div>
+              </div>
+              <label class="field">
+                <span>Note</span>
+                <input name="note" type="text" maxlength="200" placeholder="Community moderator">
+              </label>
+              <div class="row">
+                <button type="submit" class="btn btn-green">Save</button>
+                <button type="button" id="admin-edit-cancel" class="btn btn-grey">Cancel</button>
+                <button type="button" id="admin-edit-remove" class="btn btn-red">Remove admin</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <template id="tpl-user-detail">
+      <div class="panel panel-teal user-head">
+        <div>
+          <h1 class="user-name"></h1>
+          <p class="user-sub"></p>
+        </div>
+        <div class="user-badges"></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>Account</h2></div>
+          <dl class="facts user-facts"></dl>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Legacy account</h2>
+            <p class="panel-sub">An account carried over from the old PocketPass app. Turning it on unlocks <strong>Day One</strong> right away.</p>
+          </div>
+          <p class="status-line">Status: <strong class="legacy-status"></strong></p>
+          <button type="button" class="btn btn-green legacy-toggle"></button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Tokens</h2>
+            <p class="panel-sub">Balance: <strong class="token-balance"></strong></p>
+          </div>
+          <form class="stack token-form">
+            <label class="field">
+              <span>Change (negative to remove)</span>
+              <input name="delta" type="number" step="1" required placeholder="+50">
+            </label>
+            <label class="field">
+              <span>Reason (audit only, never shown to the user)</span>
+              <input name="reason" type="text" maxlength="200" required placeholder="Contest prize">
+            </label>
+            <label class="field">
+              <span>Message to the user (optional)</span>
+              <input name="message" type="text" maxlength="500" placeholder="You won the weekend contest!">
+            </label>
+            <div class="row">
+              <button type="submit" class="btn btn-green">Apply</button>
+              <button type="button" class="btn btn-grey token-zero">Set to 0</button>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Supporter</h2>
+            <p class="panel-sub">Ko-fi members get every hat while their status is active; each membership payment adds 36 days. Set a date by hand for exceptions.</p>
+          </div>
+          <p class="status-line">Status: <strong class="supporter-status"></strong></p>
+          <p class="muted supporter-emails"></p>
+          <form class="stack supporter-form">
+            <label class="field">
+              <span>Every hat unlocked until</span>
+              <input name="until" type="datetime-local" required>
+            </label>
+            <label class="field">
+              <span>Reason (audit only, never shown to the user)</span>
+              <input name="reason" type="text" minlength="3" maxlength="500" required placeholder="Annual membership paid by hand">
+            </label>
+            <div class="row">
+              <button type="submit" class="btn btn-green">Set</button>
+              <button type="button" class="btn btn-red supporter-remove">Remove</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Achievements</h2>
+          <p class="panel-sub">Revoking one the user has genuinely earned only lasts until their next evaluation.</p>
+        </div>
+        <div class="table-wrap achievements"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Admin history for this account</h2></div>
+        <div class="table-wrap user-audit"></div>
+      </div>
+    </template>
+  </body>
+</html>

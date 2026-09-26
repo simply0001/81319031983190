@@ -67,6 +67,12 @@ data class BuyShopItemRpc(
 )
 
 @Serializable
+data class BuyPuzzlePieceRpc(
+    @SerialName("p_client_operation_id")
+    val clientOperationId: String,
+)
+
+@Serializable
 data class SetUserBlockRpc(
     @SerialName("p_user_id")
     val userId: String,

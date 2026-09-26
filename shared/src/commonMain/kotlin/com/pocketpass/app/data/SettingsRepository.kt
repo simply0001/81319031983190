@@ -6,7 +6,10 @@ import com.pocketpass.app.model.RecentInteractionsSort
 import com.pocketpass.app.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
+val GlobalLeaderboardLimits = listOf(20, 50, 75, 100)
+
 data class LocalSettings(
+    val boardsVisible: Boolean = true,
     val nearbyEnabled: Boolean = true,
     val nearbyOnboardingCompleted: Boolean = false,
     val soundLevel: Float = 0.45f,
@@ -18,20 +21,25 @@ data class LocalSettings(
     val encounterAlertsEnabled: Boolean = true,
     val nearbyRepairAlertsEnabled: Boolean = true,
     val updateAlertsEnabled: Boolean = true,
+    val messageAlertsEnabled: Boolean = true,
     val stepRewardsEnabled: Boolean = false,
     val lastNotifiedUpdateVersionCode: Int = 0,
     val lastSeenMinSupportedVersionCode: Int = 0,
     /** Passes created up to this server time have been announced (or predate this install). */
     val nearbyAlertsSeenThroughEpochMillis: Long = 0L,
     val leaderboardScope: LeaderboardScope = LeaderboardScope.Friends,
+    val globalLeaderboardLimit: Int = 20,
     val recentInteractionsSort: RecentInteractionsSort =
         RecentInteractionsSort.LatestEncounter,
     val friendsSort: RecentInteractionsSort =
         RecentInteractionsSort.LatestEncounter,
+    val pendingAccountSetupUserId: String? = null,
 )
 
 interface SettingsRepository {
     val settings: Flow<LocalSettings>
+
+    suspend fun setBoardsVisible(visible: Boolean) = Unit
 
     suspend fun setNearby(enabled: Boolean)
 
@@ -55,6 +63,8 @@ interface SettingsRepository {
 
     suspend fun setUpdateAlertsEnabled(enabled: Boolean)
 
+    suspend fun setMessageAlertsEnabled(enabled: Boolean)
+
     suspend fun setStepRewardsEnabled(enabled: Boolean)
 
     suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int)
@@ -63,11 +73,15 @@ interface SettingsRepository {
 
     suspend fun setNearbyAlertsSeenThrough(epochMillis: Long)
 
+    suspend fun setGlobalLeaderboardLimit(limit: Int)
+
     suspend fun setLeaderboardScope(scope: LeaderboardScope)
 
     suspend fun setRecentInteractionsSort(sort: RecentInteractionsSort)
 
     suspend fun setFriendsSort(sort: RecentInteractionsSort)
+
+    suspend fun setPendingAccountSetupUserId(userId: String?)
 
     suspend fun resetSettings()
 }

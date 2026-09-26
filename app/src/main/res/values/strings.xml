@@ -18,8 +18,12 @@
     <string name="update_available_title">Update available</string>
     <string name="update_available_text">PocketPass %1$s is ready to install.</string>
     <string name="update_available_action">View</string>
-    <string name="widget_summary_label">Street-pass</string>
-    <string name="widget_summary_description">Encounters today, your last pass and who is around.</string>
-    <string name="widget_profile_label">Profile card</string>
-    <string name="widget_profile_description">Your Mii, name and greeting, PocketPass style.</string>
+    <string name="widget_mini_label">PocketPass Mini</string>
+    <string name="widget_mini_description">A one-cell widget you design in Settings: one big block.</string>
+    <string name="widget_small_label">PocketPass Small</string>
+    <string name="widget_small_description">A square widget you design in Settings: one big block and three stats.</string>
+    <string name="widget_wide_label">PocketPass Wide</string>
+    <string name="widget_wide_description">A wide widget you design in Settings: one big block and three stats.</string>
+    <string name="widget_tall_label">PocketPass Tall</string>
+    <string name="widget_tall_description">A tall widget you design in Settings: one big block and four stats.</string>
 </resources>

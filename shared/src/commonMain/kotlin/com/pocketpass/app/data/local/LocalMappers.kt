@@ -17,6 +17,7 @@ import com.pocketpass.app.data.local.entity.ProfileEntity
 import com.pocketpass.app.data.local.entity.ShopCategoryEntity
 import com.pocketpass.app.data.local.entity.ShopItemEntity
 import com.pocketpass.app.data.local.entity.WorldTourRegionEntity
+import com.pocketpass.app.data.local.entity.PassingStatsEntity
 import com.pocketpass.app.domain.model.AchievementState
 import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.model.BingoCell
@@ -46,10 +47,25 @@ import com.pocketpass.app.domain.model.ShopItem
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
 import com.pocketpass.app.domain.state.PendingState
 import kotlin.time.Instant
+import com.pocketpass.app.data.local.entity.LocalPuzzleArtworkKinds
+import com.pocketpass.app.data.local.entity.LocalPuzzleKinds
+import com.pocketpass.app.data.local.entity.PuzzleCollectionEntity
+import com.pocketpass.app.data.local.entity.PuzzleEntity
+import com.pocketpass.app.data.local.entity.PuzzlePieceEntity
+import com.pocketpass.app.domain.model.PuzzleArtwork
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzleKind
+import com.pocketpass.app.domain.model.PuzzleProgress
 
 fun ProfileEntity.toDomain(): UserProfile = UserProfile(
+    chatBubbleColour = com.pocketpass.app.domain.model.ChatBubbleColour.fromKey(chatBubbleColour),
+    chatColourPending = chatColourOperationId != null,
+    chatColourError = chatColourError,
+    blockMessages = blockMessages,
+    blockInvites = blockInvites,
     userId = UserId(userId),
     displayName = displayName,
     avatar = avatarFromColumns(avatarKind, avatarValue),
@@ -156,6 +172,84 @@ fun BingoCell.toEntity(accountId: UserId): BingoCellEntity = BingoCellEntity(
     progressTarget = progressTarget,
 )
 
+fun PuzzleProgress.toEntity(accountId: UserId, position: Int): PuzzleEntity = PuzzleEntity(
+    accountId = accountId.value,
+    puzzleId = id,
+    position = position,
+    kind = when (kind) {
+        PuzzleKind.OwnPiip -> LocalPuzzleKinds.OWN_PIIP
+        PuzzleKind.Panel -> LocalPuzzleKinds.PANEL
+    },
+    title = title,
+    slug = slug,
+    imagePath = imagePath,
+    artworkKind = when (artwork) {
+        PuzzleArtwork.OwnPortrait -> LocalPuzzleArtworkKinds.OWN_PORTRAIT
+        is PuzzleArtwork.File -> LocalPuzzleArtworkKinds.FILE
+        is PuzzleArtwork.Bundled -> LocalPuzzleArtworkKinds.BUNDLED
+        is PuzzleArtwork.Remote -> LocalPuzzleArtworkKinds.REMOTE
+    },
+    artworkValue = when (val art = artwork) {
+        PuzzleArtwork.OwnPortrait -> null
+        is PuzzleArtwork.File -> art.path
+        is PuzzleArtwork.Bundled -> art.key
+        is PuzzleArtwork.Remote -> art.url
+    },
+    columnCount = columns,
+    rowCount = rows,
+    startedAtEpochMillis = startedAt?.toEpochMilliseconds(),
+    completedAtEpochMillis = completedAt?.toEpochMilliseconds(),
+    completedByHandover = completedByHandover,
+)
+
+fun PuzzleEntity.toDomain(pieces: Set<Int>): PuzzleProgress = PuzzleProgress(
+    id = puzzleId,
+    kind = if (kind == LocalPuzzleKinds.OWN_PIIP) PuzzleKind.OwnPiip else PuzzleKind.Panel,
+    title = title,
+    slug = slug,
+    artwork = when {
+        artworkKind == LocalPuzzleArtworkKinds.OWN_PORTRAIT -> PuzzleArtwork.OwnPortrait
+        artworkKind == LocalPuzzleArtworkKinds.FILE && artworkValue != null -> PuzzleArtwork.File(artworkValue)
+        artworkKind == LocalPuzzleArtworkKinds.REMOTE && artworkValue != null -> PuzzleArtwork.Remote(artworkValue)
+        artworkKind == LocalPuzzleArtworkKinds.BUNDLED && artworkValue != null -> PuzzleArtwork.Bundled(artworkValue)
+        kind == LocalPuzzleKinds.OWN_PIIP -> PuzzleArtwork.OwnPortrait
+        else -> PuzzleArtwork.Bundled(slug ?: puzzleId)
+    },
+    columns = columnCount,
+    rows = rowCount,
+    ownedPieces = pieces.filter { it in 0 until columnCount * rowCount }.toSet(),
+    startedAt = startedAtEpochMillis?.let(Instant::fromEpochMilliseconds),
+    completedAt = completedAtEpochMillis?.let(Instant::fromEpochMilliseconds),
+    completedByHandover = completedByHandover,
+    imagePath = imagePath,
+)
+
+fun PuzzleCollection.toEntity(accountId: UserId, updatedAt: Instant): PuzzleCollectionEntity =
+    PuzzleCollectionEntity(
+        accountId = accountId.value,
+        currentPuzzleId = current?.id,
+        piecePriceTokens = piecePriceTokens,
+        updatedAtEpochMillis = updatedAt.toEpochMilliseconds(),
+    )
+
+fun PuzzleCollectionEntity.toDomain(
+    puzzles: List<PuzzleEntity>,
+    pieces: List<PuzzlePieceEntity>,
+): PuzzleCollection {
+    val piecesByPuzzle = pieces.groupBy(PuzzlePieceEntity::puzzleId) { it.pieceIndex }
+    val ordered = puzzles
+        .sortedBy(PuzzleEntity::position)
+        .map { puzzle -> puzzle.toDomain(piecesByPuzzle[puzzle.puzzleId].orEmpty().toSet()) }
+    val currentIndex = currentPuzzleId
+        ?.let { id -> ordered.indexOfFirst { it.id == id } }
+        ?.takeIf { it >= 0 }
+    return PuzzleCollection(
+        puzzles = ordered,
+        currentIndex = currentIndex,
+        piecePriceTokens = piecePriceTokens.coerceAtLeast(0),
+    )
+}
+
 fun WorldTourRegionEntity.toDomain(): WorldTourRegion = WorldTourRegion(
     countryCode = countryCode,
     firstMetAt = Instant.fromEpochMilliseconds(firstMetAtEpochMillis),
@@ -169,6 +263,27 @@ fun WorldTourRegion.toEntity(
     countryCode = countryCode,
     firstMetAtEpochMillis = firstMetAt.toEpochMilliseconds(),
     position = position,
+)
+
+fun PassingStatsEntity.toDomain(): PassingStats = PassingStats(
+    currentStreak = currentStreak,
+    bestStreak = bestStreak,
+    weekPasses = weekPasses,
+    weekPeople = weekPeople,
+    weekRegions = weekRegions,
+)
+
+fun PassingStats.toEntity(
+    accountId: UserId,
+    updatedAt: Instant,
+): PassingStatsEntity = PassingStatsEntity(
+    accountId = accountId.value,
+    currentStreak = currentStreak,
+    bestStreak = bestStreak,
+    weekPasses = weekPasses,
+    weekPeople = weekPeople,
+    weekRegions = weekRegions,
+    updatedAtEpochMillis = updatedAt.toEpochMilliseconds(),
 )
 
 fun NearbyEncounterEntity.toDomain(): NearbyEncounter = NearbyEncounter(
@@ -212,6 +327,9 @@ fun NearbyEncounter.toEntity(): NearbyEncounterEntity {
 fun UserProfile.toEntity(): ProfileEntity {
     val avatarColumns = avatar.toColumns()
     return ProfileEntity(
+        chatBubbleColour = chatBubbleColour.key,
+        blockMessages = blockMessages,
+        blockInvites = blockInvites,
         userId = userId.value,
         displayName = displayName,
         avatarKind = avatarColumns.first,

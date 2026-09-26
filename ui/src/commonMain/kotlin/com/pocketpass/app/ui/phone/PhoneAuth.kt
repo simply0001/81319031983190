@@ -53,12 +53,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.pocketpass.app.auth.AuthEvent
+import com.pocketpass.app.auth.AuthIntent
 import com.pocketpass.app.auth.AuthStep
 import com.pocketpass.app.auth.AuthUiError
 import com.pocketpass.app.auth.AuthUiState
+import com.pocketpass.app.auth.FORGOT_PASSWORD_MESSAGE
+import com.pocketpass.app.auth.NO_PASSWORD_RESET_MESSAGE
 import com.pocketpass.app.auth.filterPocketPassOtp
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.model.PROFILE_NAME_MAX_LENGTH
@@ -75,6 +80,7 @@ import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.ui.platformAnimationsEnabled
+import com.pocketpass.app.ui.asksToRunInBackground
 import com.pocketpass.app.ui.requiresLegacyLocationPermission
 import com.pocketpass.app.ui.BOTTOM_DESIGN_HEIGHT
 import com.pocketpass.app.ui.BOTTOM_DESIGN_WIDTH
@@ -109,7 +115,7 @@ private fun PhoneOnboarding(
 ) {
     val insets = LocalPhoneInsets.current
     val colors = pocketPalette.background(PocketPassDestination.Home, top = false)
-    val wide = phoneLayout(metrics.designWidth, metrics.designHeight) == PhoneLayout.Wide
+    val wide = phoneLayout(metrics.designWidth - insets.start - insets.end, metrics.designHeight) == PhoneLayout.Wide
     Box(Modifier.fillMaxSize()) {
         PhoneBackdrop(metrics, colors.top, colors.bottom)
         if (wide) {
@@ -307,8 +313,10 @@ internal fun PhoneAuthScreen(
                 }
                 else -> when (state.step) {
                     AuthStep.Landing -> AuthLanding(metrics, state, send)
+                    AuthStep.Method -> AuthMethod(metrics, state, send)
                     AuthStep.Email -> AuthEmail(metrics, state, send)
                     AuthStep.Otp -> AuthOtp(metrics, state, send)
+                    AuthStep.Credentials -> AuthCredentials(metrics, state, send)
                 }
             }
         }
@@ -317,21 +325,50 @@ internal fun PhoneAuthScreen(
 
 @Composable
 private fun ColumnScope.AuthLanding(metrics: DesignMetrics, state: AuthUiState, send: (AuthEvent) -> Unit) {
-    AuthHeading(metrics, "Welcome!", "Continue with email or Discord.")
+    AuthHeading(metrics, "Welcome!", "Please login to use PocketPass.")
     Spacer(Modifier.height(metrics.dp(48f)))
     PhoneButton(
         metrics = metrics,
-        label = "Continue with Email",
+        label = "Login",
         modifier = Modifier.fillMaxWidth(),
         fill = PocketGreenButton,
         borderColor = PocketGreenBorder,
+        height = 150f,
+        tag = "auth_choose_sign_in",
+    ) { send(AuthEvent.ChooseSignIn) }
+    Spacer(Modifier.height(metrics.dp(28f)))
+    PhoneButton(
+        metrics = metrics,
+        label = "Sign Up",
+        modifier = Modifier.fillMaxWidth(),
+        fill = PocketWhitePanel,
+        borderColor = PocketBorder,
+        textColor = pocketPalette.ink(PocketTeal),
+        height = 150f,
+        tag = "auth_choose_sign_up",
+    ) { send(AuthEvent.ChooseSignUp) }
+    AuthErrorText(metrics, state.error)
+}
+
+@Composable
+private fun ColumnScope.AuthMethod(metrics: DesignMetrics, state: AuthUiState, send: (AuthEvent) -> Unit) {
+    val signUp = state.intent == AuthIntent.SignUp
+    AuthHeading(metrics, if (signUp) "Sign Up Method" else "Login Method", "How should we handle your profile?")
+    Spacer(Modifier.height(metrics.dp(48f)))
+    PhoneButton(
+        metrics = metrics,
+        label = "Email",
+        modifier = Modifier.fillMaxWidth(),
+        fill = PocketGreenButton,
+        borderColor = PocketGreenBorder,
+        enabled = !state.isSubmitting,
         height = 150f,
         tag = "auth_continue_email",
     ) { send(AuthEvent.ContinueWithEmail) }
     Spacer(Modifier.height(metrics.dp(28f)))
     PhoneButton(
         metrics = metrics,
-        label = "Continue with Discord",
+        label = "Discord",
         modifier = Modifier.fillMaxWidth(),
         fill = DiscordButton,
         borderColor = DiscordBorder,
@@ -339,14 +376,196 @@ private fun ColumnScope.AuthLanding(metrics: DesignMetrics, state: AuthUiState, 
         height = 150f,
         tag = "auth_continue_discord",
     ) { send(AuthEvent.ContinueWithDiscord) }
+    Spacer(Modifier.height(metrics.dp(28f)))
+    PhoneButton(
+        metrics = metrics,
+        label = "Username",
+        modifier = Modifier.fillMaxWidth(),
+        fill = PocketWhitePanel,
+        borderColor = PocketBorder,
+        textColor = pocketPalette.ink(PocketTeal),
+        enabled = !state.isSubmitting,
+        height = 150f,
+        tag = "auth_continue_credentials",
+    ) { send(AuthEvent.ContinueWithCredentials) }
+    Spacer(Modifier.height(metrics.dp(16f)))
+    PhoneTextAction(
+        metrics = metrics,
+        label = "Back",
+        tag = "auth_method_back",
+        onClick = { send(AuthEvent.Back) },
+        fontSize = 36f,
+        color = pocketPalette.ink(PocketGreenText),
+        enabled = !state.isSubmitting,
+    )
     AuthErrorText(metrics, state.error)
+}
+
+@Composable
+private fun ColumnScope.AuthCredentials(metrics: DesignMetrics, state: AuthUiState, send: (AuthEvent) -> Unit) {
+    val creating = state.isCreatingAccount
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    val masked = !state.showPassword
+    val passwordTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None
+    val submit = { if (state.canSubmitCredentials) send(AuthEvent.SubmitCredentials) }
+    AuthHeading(
+        metrics = metrics,
+        title = if (creating) "Sign Up" else "Login",
+        subtitle = state.error?.message ?: "Via Username",
+        error = state.error != null,
+    )
+    Spacer(Modifier.height(metrics.dp(36f)))
+    PhoneTextField(
+        metrics = metrics,
+        value = state.identifier,
+        onValueChange = { send(AuthEvent.IdentifierChanged(it)) },
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = if (creating) "username" else "username or email",
+        fontSize = 46f,
+        minHeight = 140f,
+        textColor = pocketPalette.ink(PocketTeal),
+        placeholderColor = pocketPalette.ink(PocketGreenText).copy(alpha = 0.56f),
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.None,
+            keyboardType = if (creating) KeyboardType.Ascii else KeyboardType.Email,
+            imeAction = ImeAction.Next,
+        ),
+        borderColor = PocketBorder,
+        tag = "auth_username_input",
+        focusRequester = focusRequester,
+    )
+    Spacer(Modifier.height(metrics.dp(20f)))
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        PhoneTextField(
+            metrics = metrics,
+            value = state.password,
+            onValueChange = { send(AuthEvent.PasswordChanged(it)) },
+            modifier = Modifier.weight(1f),
+            placeholder = "password",
+            fontSize = 46f,
+            minHeight = 140f,
+            textColor = pocketPalette.ink(PocketTeal),
+            placeholderColor = pocketPalette.ink(PocketGreenText).copy(alpha = 0.56f),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                keyboardType = KeyboardType.Password,
+                imeAction = if (creating) ImeAction.Next else ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            borderColor = PocketBorder,
+            tag = "auth_password_input",
+            visualTransformation = passwordTransformation,
+        )
+        PhoneTextAction(
+            metrics = metrics,
+            label = if (masked) "Show" else "Hide",
+            tag = "auth_show_password",
+            onClick = { send(AuthEvent.TogglePasswordVisibility) },
+            fontSize = 32f,
+            color = pocketPalette.ink(PocketGreenText),
+        )
+    }
+    if (creating) {
+        Spacer(Modifier.height(metrics.dp(20f)))
+        PhoneTextField(
+            metrics = metrics,
+            value = state.passwordRepeat,
+            onValueChange = { send(AuthEvent.PasswordRepeatChanged(it)) },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = "repeat password",
+            fontSize = 46f,
+            minHeight = 140f,
+            textColor = pocketPalette.ink(PocketTeal),
+            placeholderColor = pocketPalette.ink(PocketGreenText).copy(alpha = 0.56f),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            borderColor = PocketBorder,
+            tag = "auth_password_repeat_input",
+            visualTransformation = passwordTransformation,
+        )
+        Spacer(Modifier.height(metrics.dp(24f)))
+        Text(
+            text = NO_PASSWORD_RESET_MESSAGE,
+            modifier = Modifier.fillMaxWidth(),
+            color = pocketPalette.ink(PocketGreenText),
+            fontFamily = Rubik,
+            fontWeight = FontWeight.Medium,
+            fontSize = metrics.sp(30f),
+            textAlign = TextAlign.Center,
+            maxLines = 4,
+        )
+    }
+    if (!creating) {
+        Spacer(Modifier.height(metrics.dp(24f)))
+        Text(
+            text = FORGOT_PASSWORD_MESSAGE,
+            modifier = Modifier.fillMaxWidth(),
+            color = pocketPalette.ink(PocketGreenText),
+            fontFamily = Rubik,
+            fontWeight = FontWeight.Medium,
+            fontSize = metrics.sp(30f),
+            textAlign = TextAlign.Center,
+            maxLines = 4,
+        )
+    }
+    Spacer(Modifier.height(metrics.dp(28f)))
+    PhoneButton(
+        metrics = metrics,
+        label = when {
+            state.isSubmitting && creating -> "Creating account…"
+            state.isSubmitting -> "Signing in…"
+            creating -> "Create account"
+            else -> "Sign in"
+        },
+        modifier = Modifier.fillMaxWidth(),
+        fill = PocketGreenButton,
+        borderColor = PocketGreenBorder,
+        enabled = state.canSubmitCredentials,
+        height = 150f,
+        tag = "auth_submit_credentials",
+    ) { send(AuthEvent.SubmitCredentials) }
+    Spacer(Modifier.height(metrics.dp(8f)))
+    PhoneTextAction(
+        metrics = metrics,
+        label = if (creating) "I already have an account" else "Create an account instead",
+        tag = "auth_toggle_credentials_mode",
+        onClick = { send(AuthEvent.ToggleCredentialsMode) },
+        fontSize = 36f,
+        color = pocketPalette.ink(PocketGreenText),
+        enabled = !state.isSubmitting,
+    )
+    PhoneTextAction(
+        metrics = metrics,
+        label = "Back",
+        tag = "auth_credentials_back",
+        onClick = { send(AuthEvent.Back) },
+        fontSize = 36f,
+        color = pocketPalette.ink(PocketGreenText),
+    )
+    state.error?.let { error ->
+        Text(
+            text = error.code,
+            modifier = Modifier.fillMaxWidth(),
+            color = pocketPalette.ink(SetupErrorRed).copy(alpha = 0.62f),
+            fontFamily = Rubik,
+            fontWeight = FontWeight.Medium,
+            fontSize = metrics.sp(24f),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
+    }
 }
 
 @Composable
 private fun ColumnScope.AuthEmail(metrics: DesignMetrics, state: AuthUiState, send: (AuthEvent) -> Unit) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    AuthHeading(metrics, "Continue", "Via Email")
+    AuthHeading(metrics, if (state.intent == AuthIntent.SignUp) "Sign Up" else "Login", "Via Email")
     Spacer(Modifier.height(metrics.dp(44f)))
     PhoneTextField(
         metrics = metrics,
@@ -736,6 +955,15 @@ internal fun PhoneNearbyPermissionScreen(
                     "Shows that Nearby is running and tells you when you meet someone."
                 },
             )
+            if (asksToRunInBackground()) {
+                Spacer(Modifier.height(metrics.dp(28f)))
+                PermissionRow(
+                    metrics = metrics,
+                    icon = Assets.SettingsBackgroundRun,
+                    title = "Run in background",
+                    detail = "Keeps Nearby and step counting going with the screen off. Android asks once.",
+                )
+            }
             state.error?.let { error ->
                 Spacer(Modifier.height(metrics.dp(24f)))
                 Text(

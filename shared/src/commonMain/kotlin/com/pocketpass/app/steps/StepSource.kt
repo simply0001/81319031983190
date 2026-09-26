@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 
 /**
- * The platform's pedometer. It answers only three things: whether a counter
+ * The platform's step reader. It answers only three things: whether a source
  * exists, whether the app may read it, and how many steps it counted so far
  * in the current local day. Everything else lives in [StepRewardsTracker].
  */
@@ -23,8 +23,13 @@ interface StepSource {
 
     fun setLive(active: Boolean)
 
+    fun setBackgroundSampling(active: Boolean) = Unit
+
     /** Starts the platform's permission flow; the outcome arrives through [permission]. */
     fun requestPermission()
+
+    /** A user-initiated retry may ask again after an earlier optional-source denial. */
+    fun requestPermissionAgain() = requestPermission()
 
     /** Re-reads the permission state after the platform reported a result. */
     fun refreshPermission()

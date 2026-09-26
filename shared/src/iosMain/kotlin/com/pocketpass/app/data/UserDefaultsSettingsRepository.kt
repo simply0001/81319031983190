@@ -42,6 +42,7 @@ class UserDefaultsSettingsRepository(
     private fun load(): LocalSettings {
         val base = LocalSettings()
         return LocalSettings(
+            boardsVisible = bool("boardsVisible", base.boardsVisible),
             nearbyEnabled = bool("nearbyEnabled", base.nearbyEnabled),
             nearbyOnboardingCompleted = bool("nearbyOnboardingCompleted", base.nearbyOnboardingCompleted),
             soundLevel = float("soundLevel", base.soundLevel),
@@ -55,13 +56,16 @@ class UserDefaultsSettingsRepository(
             encounterAlertsEnabled = bool("encounterAlertsEnabled", base.encounterAlertsEnabled),
             nearbyRepairAlertsEnabled = bool("nearbyRepairAlertsEnabled", base.nearbyRepairAlertsEnabled),
             updateAlertsEnabled = bool("updateAlertsEnabled", base.updateAlertsEnabled),
+            messageAlertsEnabled = bool("messageAlertsEnabled", base.messageAlertsEnabled),
             stepRewardsEnabled = bool("stepRewardsEnabled", base.stepRewardsEnabled),
             lastNotifiedUpdateVersionCode = int("lastNotifiedUpdateVersionCode", base.lastNotifiedUpdateVersionCode),
             lastSeenMinSupportedVersionCode = int("lastSeenMinSupportedVersionCode", base.lastSeenMinSupportedVersionCode),
             nearbyAlertsSeenThroughEpochMillis = long("nearbyAlertsSeenThrough", base.nearbyAlertsSeenThroughEpochMillis),
+            globalLeaderboardLimit = int("globalLeaderboardLimit", 20).takeIf { it in GlobalLeaderboardLimits } ?: 20,
             leaderboardScope = enum("leaderboardScope", base.leaderboardScope),
             recentInteractionsSort = enum("recentInteractionsSort", base.recentInteractionsSort),
             friendsSort = enum("friendsSort", base.friendsSort),
+            pendingAccountSetupUserId = string("pendingAccountSetupUserId"),
         )
     }
 
@@ -71,6 +75,7 @@ class UserDefaultsSettingsRepository(
     }
 
     private fun persist(settings: LocalSettings) {
+        defaults.setBool(settings.boardsVisible, key("boardsVisible"))
         defaults.setBool(settings.nearbyEnabled, key("nearbyEnabled"))
         defaults.setBool(settings.nearbyOnboardingCompleted, key("nearbyOnboardingCompleted"))
         defaults.setFloat(settings.soundLevel, key("soundLevel"))
@@ -84,16 +89,23 @@ class UserDefaultsSettingsRepository(
         defaults.setBool(settings.encounterAlertsEnabled, key("encounterAlertsEnabled"))
         defaults.setBool(settings.nearbyRepairAlertsEnabled, key("nearbyRepairAlertsEnabled"))
         defaults.setBool(settings.updateAlertsEnabled, key("updateAlertsEnabled"))
+        defaults.setBool(settings.messageAlertsEnabled, key("messageAlertsEnabled"))
         defaults.setBool(settings.stepRewardsEnabled, key("stepRewardsEnabled"))
         defaults.setInteger(settings.lastNotifiedUpdateVersionCode.toLong(), key("lastNotifiedUpdateVersionCode"))
         defaults.setInteger(settings.lastSeenMinSupportedVersionCode.toLong(), key("lastSeenMinSupportedVersionCode"))
         defaults.setInteger(settings.nearbyAlertsSeenThroughEpochMillis, key("nearbyAlertsSeenThrough"))
+        defaults.setInteger(settings.globalLeaderboardLimit.toLong(), key("globalLeaderboardLimit"))
         defaults.setObject(settings.leaderboardScope.name, key("leaderboardScope"))
         defaults.setObject(settings.recentInteractionsSort.name, key("recentInteractionsSort"))
         defaults.setObject(settings.friendsSort.name, key("friendsSort"))
+        settings.pendingAccountSetupUserId
+            ?.let { defaults.setObject(it, key("pendingAccountSetupUserId")) }
+            ?: defaults.removeObjectForKey(key("pendingAccountSetupUserId"))
     }
 
     override suspend fun setNearby(enabled: Boolean) = mutate { it.copy(nearbyEnabled = enabled) }
+
+    override suspend fun setBoardsVisible(visible: Boolean) = mutate { it.copy(boardsVisible = visible) }
 
     override suspend fun setNearbyOnboardingCompleted(completed: Boolean) =
         mutate { it.copy(nearbyOnboardingCompleted = completed) }
@@ -121,6 +133,9 @@ class UserDefaultsSettingsRepository(
     override suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
         mutate { it.copy(updateAlertsEnabled = enabled) }
 
+    override suspend fun setMessageAlertsEnabled(enabled: Boolean) =
+        mutate { it.copy(messageAlertsEnabled = enabled) }
+
     override suspend fun setStepRewardsEnabled(enabled: Boolean) =
         mutate { it.copy(stepRewardsEnabled = enabled) }
 
@@ -133,6 +148,11 @@ class UserDefaultsSettingsRepository(
     override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) =
         mutate { it.copy(nearbyAlertsSeenThroughEpochMillis = epochMillis) }
 
+    override suspend fun setGlobalLeaderboardLimit(limit: Int) {
+        require(limit in GlobalLeaderboardLimits)
+        mutate { it.copy(globalLeaderboardLimit = limit) }
+    }
+
     override suspend fun setLeaderboardScope(scope: LeaderboardScope) =
         mutate { it.copy(leaderboardScope = scope) }
 
@@ -141,6 +161,9 @@ class UserDefaultsSettingsRepository(
 
     override suspend fun setFriendsSort(sort: RecentInteractionsSort) =
         mutate { it.copy(friendsSort = sort) }
+
+    override suspend fun setPendingAccountSetupUserId(userId: String?) =
+        mutate { it.copy(pendingAccountSetupUserId = userId) }
 
     override suspend fun resetSettings() = mutate { LocalSettings() }
 }

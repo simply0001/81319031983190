@@ -167,7 +167,7 @@ object MiiEditorCatalog {
                 ),
                 MiiTraitDescriptor(
                     MiiTraitField.HatType,
-                    10,
+                    11,
                     colorField = MiiColorField.Hat,
                     optional = true,
                 ),

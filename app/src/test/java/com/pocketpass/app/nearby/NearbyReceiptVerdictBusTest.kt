@@ -43,6 +43,14 @@ class NearbyReceiptVerdictBusTest {
     }
 
     @Test
+    fun aRejectedSubmissionIsNeitherUnknownNorAnEncounter() = runTest {
+        val bus = NearbyReceiptVerdictBus()
+        bus.report(NearbyReceiptOutcome(SUBMITTED, null, rejected = true))
+
+        assertEquals(NearbyReceiptVerdict.Rejected, bus.await(SUBMITTED, 500.milliseconds)?.verdict)
+    }
+
+    @Test
     fun awaitGivesUpAfterTheTimeout() = runTest {
         val bus = NearbyReceiptVerdictBus()
 

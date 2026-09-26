@@ -122,7 +122,7 @@ class MiiRendererFieldsTest {
         assertEquals(8, fields["eyeColor"])
         assertEquals(19, fields["glassType"])
         assertEquals(3, fields["eyebrowY"])
-        assertEquals(9, fields["hatType"])
+        assertEquals(10, fields["hatType"])
         assertEquals(-1, fields["hatFavoriteColor"])
     }
 

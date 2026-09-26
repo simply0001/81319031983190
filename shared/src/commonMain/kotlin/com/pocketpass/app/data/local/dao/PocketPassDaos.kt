@@ -27,10 +27,41 @@ import com.pocketpass.app.data.local.entity.SupporterStatusEntity
 import com.pocketpass.app.data.local.entity.SyncCursorEntity
 import com.pocketpass.app.data.local.entity.TokenBalanceEntity
 import com.pocketpass.app.data.local.entity.WorldTourRegionEntity
+import com.pocketpass.app.data.local.entity.PassingStatsEntity
 import kotlinx.coroutines.flow.Flow
+import com.pocketpass.app.data.local.entity.PuzzleCollectionEntity
+import com.pocketpass.app.data.local.entity.PuzzleEntity
+import com.pocketpass.app.data.local.entity.PuzzlePieceEntity
 
 @Dao
 interface ProfileDao {
+    @Query("SELECT * FROM profile_bio_drafts WHERE accountId = :accountId")
+    fun observeBioDraft(accountId: String): Flow<com.pocketpass.app.data.local.entity.BioDraftEntity?>
+    @Query("SELECT * FROM profile_bio_drafts WHERE accountId = :accountId")
+    suspend fun bioDraft(accountId: String): com.pocketpass.app.data.local.entity.BioDraftEntity?
+    @Upsert
+    suspend fun saveBioDraft(draft: com.pocketpass.app.data.local.entity.BioDraftEntity)
+    @Query("DELETE FROM profile_bio_drafts WHERE accountId = :accountId AND operationId = :operationId")
+    suspend fun acknowledgeBio(accountId: String, operationId: String)
+    @Query("UPDATE profiles SET bio = :bio WHERE userId = :accountId")
+    suspend fun setAcceptedBio(accountId: String, bio: String)
+    @Query("UPDATE profiles SET blockMessages = :blocked WHERE userId = :userId")
+    suspend fun setMessagePrivacy(userId: String, blocked: Boolean)
+    @Query("UPDATE profiles SET blockInvites = :blocked WHERE userId = :userId")
+    suspend fun setInvitesPrivacy(userId: String, blocked: Boolean)
+
+    @Query("SELECT * FROM profiles WHERE userId IN (SELECT senderId FROM messages WHERE accountId = :accountId AND conversationId = :conversationId UNION SELECT userId FROM conversation_members WHERE accountId = :accountId AND conversationId = :conversationId)")
+    fun observeMessageAuthors(accountId: String, conversationId: String): Flow<List<ProfileEntity>>
+
+    @Query("SELECT senderId FROM messages WHERE accountId = :accountId AND conversationId = :conversationId UNION SELECT userId FROM conversation_members WHERE accountId = :accountId AND conversationId = :conversationId")
+    suspend fun messageAuthorIds(accountId: String, conversationId: String): List<String>
+
+    @Query("UPDATE profiles SET chatBubbleColour = :colour, chatColourOperationId = NULL, chatColourError = NULL WHERE userId = :userId AND chatColourOperationId = :operationId")
+    suspend fun acknowledgeChatColour(userId: String, operationId: String, colour: String)
+
+    @Query("UPDATE profiles SET chatColourError = :error WHERE userId = :userId AND chatColourOperationId = :operationId")
+    suspend fun rejectChatColour(userId: String, operationId: String, error: String)
+
     @Query("SELECT * FROM profiles WHERE userId = :userId LIMIT 1")
     fun observe(userId: String): Flow<ProfileEntity?>
 
@@ -654,6 +685,60 @@ interface BingoDao {
 }
 
 @Dao
+interface PuzzleDao {
+    @Query("SELECT * FROM puzzle_collections WHERE accountId = :accountId")
+    fun observeCollection(accountId: String): Flow<PuzzleCollectionEntity?>
+
+    @Query(
+        """
+        SELECT * FROM puzzles
+        WHERE accountId = :accountId
+        ORDER BY position ASC
+        """,
+    )
+    fun observePuzzles(accountId: String): Flow<List<PuzzleEntity>>
+
+    @Query("SELECT * FROM puzzle_pieces WHERE accountId = :accountId")
+    fun observePieces(accountId: String): Flow<List<PuzzlePieceEntity>>
+
+    @Transaction
+    suspend fun replaceCollection(
+        accountId: String,
+        collection: PuzzleCollectionEntity,
+        puzzles: List<PuzzleEntity>,
+        pieces: List<PuzzlePieceEntity>,
+    ) {
+        deletePieces(accountId)
+        deletePuzzles(accountId)
+        deleteCollection(accountId)
+        insertCollection(collection)
+        insertPuzzles(puzzles)
+        insertPieces(pieces)
+    }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCollection(collection: PuzzleCollectionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPuzzles(puzzles: List<PuzzleEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPieces(pieces: List<PuzzlePieceEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPiece(piece: PuzzlePieceEntity)
+
+    @Query("DELETE FROM puzzle_pieces WHERE accountId = :accountId")
+    suspend fun deletePieces(accountId: String)
+
+    @Query("DELETE FROM puzzles WHERE accountId = :accountId")
+    suspend fun deletePuzzles(accountId: String)
+
+    @Query("DELETE FROM puzzle_collections WHERE accountId = :accountId")
+    suspend fun deleteCollection(accountId: String)
+}
+
+@Dao
 interface WorldTourDao {
     @Query(
         """
@@ -678,6 +763,15 @@ interface WorldTourDao {
 
     @Query("DELETE FROM world_tour_regions WHERE accountId = :accountId")
     suspend fun deleteRegions(accountId: String)
+}
+
+@Dao
+interface PassingStatsDao {
+    @Query("SELECT * FROM passing_stats WHERE accountId = :accountId")
+    fun observeStats(accountId: String): Flow<PassingStatsEntity?>
+
+    @Upsert
+    suspend fun upsertStats(stats: PassingStatsEntity)
 }
 
 @Dao
@@ -946,6 +1040,13 @@ abstract class OutboxDao {
         SELECT * FROM pending_operations
         WHERE accountId = :accountId
           AND nextAttemptAtEpochMillis <= :nowEpochMillis
+          AND (kind <> 'SET_CHAT_COLOUR' OR NOT EXISTS (
+            SELECT 1 FROM pending_operations earlier
+            WHERE earlier.accountId = pending_operations.accountId AND earlier.kind = 'SET_CHAT_COLOUR'
+              AND earlier.state IN ('PENDING', 'IN_FLIGHT', 'RETRYABLE')
+              AND (earlier.createdAtEpochMillis < pending_operations.createdAtEpochMillis
+                OR (earlier.createdAtEpochMillis = pending_operations.createdAtEpochMillis AND earlier.operationId < pending_operations.operationId))
+          ))
           AND (
               state IN ('PENDING', 'RETRYABLE')
               OR (

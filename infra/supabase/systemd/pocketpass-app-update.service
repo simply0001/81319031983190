@@ -1,0 +1,11 @@
+[Unit]
+Description=PocketPass app release poller
+Wants=network-online.target
+After=network-online.target
+OnFailure=pocketpass-onfailure@%n.service
+
+[Service]
+Type=oneshot
+Environment=ENV_FILE=/opt/pocketpass/app/infra/supabase/.env.production
+ExecStart=/opt/pocketpass/app/infra/supabase/scripts/poll-app-update.sh
+Nice=10

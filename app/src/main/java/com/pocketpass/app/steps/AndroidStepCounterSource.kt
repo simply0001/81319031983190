@@ -58,8 +58,11 @@ class AndroidStepCounterSource(
     override val samples: Flow<StepSample> = liveSamples.asSharedFlow()
 
     private val ledger = Mutex()
-    private val liveLock = Any()
-    private var liveListener: SensorEventListener? = null
+    private val listenerLock = Any()
+    private var live = false
+    private var backgroundSampling = false
+    private var listener: SensorEventListener? = null
+    private var listenerLatencyMicros = NO_LISTENER
 
     override suspend fun sample(): StepSample? {
         val stepSensor = sensor ?: return null
@@ -89,31 +92,58 @@ class AndroidStepCounterSource(
     }
 
     override fun setLive(active: Boolean) {
-        val manager = sensorManager ?: return
-        val stepSensor = sensor ?: return
-        synchronized(liveLock) {
-            if (!active) {
-                liveListener?.let(manager::unregisterListener)
-                liveListener = null
-                return
-            }
-            if (liveListener != null || !StepRewardsPermissionPolicy.isGranted(appContext)) return
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent) {
-                    val counter = event.values[0].toLong()
-                    scope.launch { record(counter)?.let(liveSamples::tryEmit) }
-                }
+        synchronized(listenerLock) {
+            live = active
+            applyListener()
+        }
+    }
 
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-            }
-            liveListener = listener
-            manager.registerListener(
-                listener,
-                stepSensor,
-                SensorManager.SENSOR_DELAY_NORMAL,
-                LIVE_REPORT_LATENCY_MICROS,
+    override fun setBackgroundSampling(active: Boolean) {
+        synchronized(listenerLock) {
+            backgroundSampling = active
+            applyListener()
+        }
+    }
+
+    suspend fun recordBoot() {
+        if (!supported) return
+        ledger.withLock {
+            val now = System.currentTimeMillis()
+            saveLedger(
+                StepDayLedger.bootBaseline(
+                    previous = loadLedger(),
+                    nowEpochMillis = now,
+                    bootEpochMillis = now - SystemClock.elapsedRealtime(),
+                    dayStartEpochMillis = startOfLocalDayEpochMillis(now),
+                ),
             )
         }
+    }
+
+    private fun applyListener() {
+        val manager = sensorManager ?: return
+        val stepSensor = sensor ?: return
+        val wanted = when {
+            !StepRewardsPermissionPolicy.isGranted(appContext) -> NO_LISTENER
+            live -> LIVE_REPORT_LATENCY_MICROS
+            backgroundSampling -> BACKGROUND_REPORT_LATENCY_MICROS
+            else -> NO_LISTENER
+        }
+        if (wanted == listenerLatencyMicros) return
+        listener?.let(manager::unregisterListener)
+        listener = null
+        listenerLatencyMicros = wanted
+        if (wanted == NO_LISTENER) return
+        val next = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val counter = event.values[0].toLong()
+                scope.launch { record(counter)?.let(liveSamples::tryEmit) }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        listener = next
+        manager.registerListener(next, stepSensor, SensorManager.SENSOR_DELAY_NORMAL, wanted)
     }
 
     override fun requestPermission() {
@@ -185,6 +215,8 @@ class AndroidStepCounterSource(
     private companion object {
         const val TAG = "PocketPassSteps"
         const val SAMPLE_TIMEOUT_MILLIS = 5_000L
+        const val NO_LISTENER = -1
         const val LIVE_REPORT_LATENCY_MICROS = 5_000_000
+        const val BACKGROUND_REPORT_LATENCY_MICROS = 600_000_000
     }
 }

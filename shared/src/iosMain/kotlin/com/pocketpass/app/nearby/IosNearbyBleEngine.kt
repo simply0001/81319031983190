@@ -7,6 +7,7 @@ import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.logPlatformInfo
 import com.pocketpass.app.logPlatformWarning
 import kotlin.time.Instant
+import kotlin.time.Clock
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.addressOf
@@ -64,11 +65,14 @@ class IosNearbyBleEngine(
     private val credentialPool: NearbyCredentialPool,
     private val accountId: UserId,
     private val scope: CoroutineScope,
+    private val deviceTagSecret: ByteArray? = null,
     private val onProof: (NearbyEncounterProof) -> Unit,
     private val onState: (NearbyRuntimeStatus, String?, Int, Instant?) -> Unit,
 ) {
-    private val invitationNonce = NearbyCrypto.randomNonce()
+    private val invitationNonce = NearbyDeviceTag.invitationNonce(deviceTagSecret)
     private val queue = dispatch_queue_create("xyz.pocketpass.nearby", null)
+    private var ownTagsDay = Long.MIN_VALUE
+    private var ownTags: Set<Int> = emptySet()
     private val links = mutableMapOf<String, Link>()
     private val heldPeripherals = mutableMapOf<String, CBPeripheral>()
     private val recentlyAttempted = mutableMapOf<String, Long>()
@@ -155,6 +159,7 @@ class IosNearbyBleEngine(
                 null
             }
             if (remoteNonce != null) {
+                if (isOwnDevice(remoteNonce)) return
                 if (
                     remoteNonce == invitationNonce ||
                     invitationNonce.toULong() <= remoteNonce.toULong()
@@ -609,6 +614,17 @@ class IosNearbyBleEngine(
         if (advertising && scanning) {
             onState(NearbyRuntimeStatus.Running, null, links.size, null)
         }
+    }
+
+    private fun isOwnDevice(nonce: Long): Boolean {
+        val secret = deviceTagSecret ?: return false
+        val now = Clock.System.now()
+        val day = NearbyDeviceTag.dayNumber(now)
+        if (day != ownTagsDay) {
+            ownTags = NearbyDeviceTag.acceptedTags(secret, now)
+            ownTagsDay = day
+        }
+        return NearbyDeviceTag.tagOf(nonce) in ownTags
     }
 
     private fun advertisedNonce(advertisementData: Map<Any?, *>): Long? {

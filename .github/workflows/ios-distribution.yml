@@ -1,0 +1,132 @@
+name: iOS TestFlight package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: TestFlight app version
+        required: true
+        default: '0.1.8'
+      build:
+        description: New build number (unused in App Store Connect)
+        required: true
+      non_exempt_encryption:
+        description: Export compliance answer (complete the assessment first)
+        type: choice
+        options: ['Not assessed', 'false', 'true']
+        default: 'Not assessed'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-distribution
+  cancel-in-progress: false
+
+jobs:
+  package:
+    # Match the existing iOS workflows' policy on paid private-repo Actions minutes.
+    if: github.repository == 'simply0001/81319031983190'
+    runs-on: macos-15
+    timeout-minutes: 90
+    environment: testflight
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      APP_VERSION: ${{ inputs.version }}
+      APP_BUILD: ${{ inputs.build }}
+      POCKETPASS_BACKEND_ENABLED: 'true'
+      POCKETPASS_SUPABASE_URL: https://api.pocketpass.xyz
+      POCKETPASS_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.POCKETPASS_SUPABASE_PUBLISHABLE_KEY }}
+      POCKETPASS_NON_EXEMPT_ENCRYPTION: ${{ inputs.non_exempt_encryption }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Select a stable Xcode 26.2 or newer
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re, subprocess
+          candidates = []
+          for app in pathlib.Path('/Applications').glob('Xcode*.app'):
+              if 'beta' in app.name.lower():
+                  continue
+              developer = str(app / 'Contents/Developer')
+              result = subprocess.run(['xcodebuild', '-version'], env={**os.environ, 'DEVELOPER_DIR': developer}, capture_output=True, text=True)
+              match = re.search(r'Xcode (\d+)\.(\d+)', result.stdout)
+              if match and tuple(map(int, match.groups())) >= (26, 2):
+                  candidates.append((tuple(map(int, match.groups())), developer))
+          if not candidates:
+              raise SystemExit('The runner needs a stable Xcode 26.2+ installation.')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('DEVELOPER_DIR=' + max(candidates)[1] + '\n')
+          PY
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Install signing inputs in a temporary keychain
+        env:
+          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          IOS_APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROFILE_BASE64 }}
+          IOS_WIDGET_PROFILE_BASE64: ${{ secrets.IOS_WIDGET_PROFILE_BASE64 }}
+          IOS_FIREBASE_PLIST_BASE64: ${{ secrets.IOS_FIREBASE_PLIST_BASE64 }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, os, pathlib, plistlib, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          profiles = pathlib.Path.home() / 'Library/Developer/Xcode/UserData/Provisioning Profiles'
+          profiles.mkdir(parents=True, exist_ok=True)
+          for secret, setting in [('IOS_APP_PROFILE_BASE64', 'POCKETPASS_APP_PROFILE'), ('IOS_WIDGET_PROFILE_BASE64', 'POCKETPASS_WIDGET_PROFILE')]:
+              encoded = os.environ.get(secret, '')
+              if not encoded:
+                  raise SystemExit('Missing required signing secret: ' + secret)
+              data = base64.b64decode(encoded, validate=True)
+              temporary = root / (setting + '.mobileprovision')
+              temporary.write_bytes(data)
+              profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(temporary)]))
+              if not all('\n' not in profile[field] and '\r' not in profile[field] for field in ['Name', 'UUID']):
+                  raise SystemExit('Invalid provisioning profile metadata')
+              (profiles / (profile['UUID'] + '.mobileprovision')).write_bytes(data)
+              with open(os.environ['GITHUB_ENV'], 'a') as output:
+                  output.write(setting + '=' + profile['Name'] + '\n')
+          for secret, path in [
+              ('IOS_DISTRIBUTION_P12_BASE64', root / 'pocketpass-distribution.p12'),
+              ('IOS_FIREBASE_PLIST_BASE64', pathlib.Path('ios-app/Config/GoogleService-Info.plist')),
+          ]:
+              if not os.environ.get(secret):
+                  raise SystemExit('Missing required signing secret: ' + secret)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(base64.b64decode(os.environ[secret], validate=True))
+          PY
+          keychain="$RUNNER_TEMP/pocketpass-signing.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/pocketpass-distribution.p12" -P "$IOS_DISTRIBUTION_P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+      - name: Build and validate the signed archive and IPA
+        run: bash ios-app/scripts/archive.sh
+      - name: Save package for review and TestFlight upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketPass-TestFlight-${{ inputs.version }}-${{ inputs.build }}
+          path: |
+            ios-app/build/TestFlight-*/
+            ios-app/build/PocketPass-*.xcarchive/dSYMs/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/pocketpass-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/pocketpass-distribution.p12" "$RUNNER_TEMP/POCKETPASS_APP_PROFILE.mobileprovision" "$RUNNER_TEMP/POCKETPASS_WIDGET_PROFILE.mobileprovision"

@@ -12,6 +12,20 @@ import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.state.RepositoryResult
 
 interface MutableProfileRepository : ProfileRepository {
+    suspend fun setInvitesPrivacy(command: com.pocketpass.app.domain.model.SetInvitesPrivacyCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(com.pocketpass.app.domain.state.RepositoryFailure(
+            com.pocketpass.app.domain.state.RepositoryFailureKind.NotFound, "Invitation privacy is unavailable", retryable = false))
+    fun observeBioDraft(accountId: com.pocketpass.app.domain.model.UserId): kotlinx.coroutines.flow.Flow<com.pocketpass.app.domain.model.BioSaveDraft?> = kotlinx.coroutines.flow.flowOf(null)
+    suspend fun setMessagePrivacy(command: com.pocketpass.app.domain.model.SetMessagePrivacyCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(com.pocketpass.app.domain.state.RepositoryFailure(
+            com.pocketpass.app.domain.state.RepositoryFailureKind.NotFound, "Message privacy is unavailable", retryable = false))
+
+    suspend fun setChatBubbleColour(command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand): RepositoryResult<Unit> =
+        RepositoryResult.Failure(com.pocketpass.app.domain.state.RepositoryFailure(
+            kind = com.pocketpass.app.domain.state.RepositoryFailureKind.NotFound,
+            message = "Chat colours are unavailable", retryable = false,
+        ))
+
     suspend fun updateProfile(
         command: UpdateProfileCommand,
     ): RepositoryResult<UserProfile>

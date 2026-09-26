@@ -2,10 +2,12 @@ package com.pocketpass.app.audio
 
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.model.PocketPassUiState
+import com.pocketpass.app.model.PocketPassDestination
 
 enum class BackgroundMusicTrack {
     Home,
     MiiMaker,
+    Boards,
 }
 
 fun backgroundMusicTrack(state: PocketPassUiState): BackgroundMusicTrack? {
@@ -16,9 +18,9 @@ fun backgroundMusicTrack(state: PocketPassUiState): BackgroundMusicTrack? {
         !state.accountSetup.required &&
         !state.nearbyPermissionUi.visible
     if (!allowed) return null
-    return if (state.miiEditor.isEditorVisible) {
-        BackgroundMusicTrack.MiiMaker
-    } else {
-        BackgroundMusicTrack.Home
+    return when {
+        state.miiEditor.isEditorVisible -> BackgroundMusicTrack.MiiMaker
+        state.rootDestination == PocketPassDestination.Messages -> BackgroundMusicTrack.Boards
+        else -> BackgroundMusicTrack.Home
     }
 }

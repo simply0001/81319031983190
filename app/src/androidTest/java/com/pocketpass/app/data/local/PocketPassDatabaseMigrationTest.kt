@@ -25,6 +25,55 @@ class PocketPassDatabaseMigrationTest {
     }
 
     @Test
+    fun migrationNineteenToTwentyDefaultsToUnblockedAndPreservesProfiles() {
+        helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context).name(databaseName).callback(
+                object : SupportSQLiteOpenHelper.Callback(19) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        db.execSQL("CREATE TABLE profiles (userId TEXT PRIMARY KEY NOT NULL, bio TEXT NOT NULL)")
+                        db.execSQL("INSERT INTO profiles VALUES ('existing', 'Keep my bio')")
+                    }
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+                },
+            ).build(),
+        )
+        val database = requireNotNull(helper).writableDatabase
+        PocketPassDatabase.Migration19To20.migrate(database)
+        database.query("SELECT bio, blockMessages FROM profiles WHERE userId='existing'").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Keep my bio", it.getString(0))
+            assertEquals(0, it.getInt(1))
+        }
+    }
+
+    @Test
+    fun migrationTwentyOneToTwentyTwoPreservesFormerCombinedPrivacyChoice() {
+        helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context).name(databaseName).callback(
+                object : SupportSQLiteOpenHelper.Callback(21) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        db.execSQL("CREATE TABLE profiles (userId TEXT PRIMARY KEY NOT NULL, blockMessages INTEGER NOT NULL DEFAULT 0)")
+                        db.execSQL("INSERT INTO profiles VALUES ('blocked', 1), ('open', 0)")
+                    }
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+                },
+            ).build(),
+        )
+        val database = requireNotNull(helper).writableDatabase
+        invitesPrivacyMigrationSql.forEach(database::execSQL)
+        database.query("SELECT userId, blockMessages, blockInvites FROM profiles ORDER BY userId").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("blocked", it.getString(0))
+            assertEquals(1, it.getInt(1))
+            assertEquals(1, it.getInt(2))
+            assertTrue(it.moveToNext())
+            assertEquals("open", it.getString(0))
+            assertEquals(0, it.getInt(1))
+            assertEquals(0, it.getInt(2))
+        }
+    }
+
+    @Test
     fun migrationOneToTwoCreatesUsableActivitySnapshotTable() {
         helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
@@ -68,6 +117,30 @@ class PocketPassDatabaseMigrationTest {
             assertEquals(3, cursor.getInt(2))
             assertEquals(12, cursor.getInt(3))
             assertEquals(3, cursor.getInt(4))
+        }
+    }
+
+    @Test
+    fun migrationEighteenToNineteenPreservesProfilesAndDefaultsColours() {
+        helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context).name(databaseName).callback(
+                object : SupportSQLiteOpenHelper.Callback(18) {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        db.execSQL("CREATE TABLE profiles (userId TEXT PRIMARY KEY NOT NULL, bio TEXT NOT NULL)")
+                        db.execSQL("INSERT INTO profiles VALUES ('existing', 'Keep my bio')")
+                    }
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+                },
+            ).build(),
+        )
+        val database = requireNotNull(helper).writableDatabase
+        PocketPassDatabase.Migration18To19.migrate(database)
+        database.query("SELECT bio, chatBubbleColour, chatColourOperationId, chatColourError FROM profiles WHERE userId='existing'").use {
+            assertTrue(it.moveToFirst())
+            assertEquals("Keep my bio", it.getString(0))
+            assertEquals("default", it.getString(1))
+            assertTrue(it.isNull(2))
+            assertTrue(it.isNull(3))
         }
     }
 
@@ -318,6 +391,103 @@ class PocketPassDatabaseMigrationTest {
         database.query("PRAGMA index_list('conversation_members')").use { cursor ->
             val names = generateSequence { if (cursor.moveToNext()) cursor.getString(1) else null }.toList()
             assertTrue(names.contains("index_conversation_members_accountId_conversationId"))
+        }
+    }
+
+    @Test
+    fun migrationSixteenToSeventeenCreatesPuzzleTables() {
+        helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(databaseName)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(16) {
+                        override fun onCreate(db: SupportSQLiteDatabase) = Unit
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) = Unit
+                    },
+                )
+                .build(),
+        )
+        val database = requireNotNull(helper).writableDatabase
+
+        PocketPassDatabase.Migration16To17.migrate(database)
+
+        database.execSQL(
+            "INSERT INTO puzzle_collections (accountId, currentPuzzleId, piecePriceTokens, updatedAtEpochMillis) " +
+                "VALUES ('account-one', 'own_piip', 15, 1785100000000)",
+        )
+        database.execSQL(
+            "INSERT INTO puzzles (accountId, puzzleId, position, kind, title, slug, imagePath, artworkKind, artworkValue, " +
+                "columnCount, rowCount, startedAtEpochMillis, completedAtEpochMillis, completedByHandover) " +
+                "VALUES ('account-one', 'own_piip', 0, 'OwnPiip', 'Your Piip', NULL, NULL, 'OWN_PORTRAIT', NULL, 4, 4, NULL, NULL, 0)",
+        )
+        database.execSQL(
+            "INSERT INTO puzzle_pieces (accountId, puzzleId, pieceIndex) VALUES ('account-one', 'own_piip', 5)",
+        )
+        database.execSQL(
+            "INSERT OR IGNORE INTO puzzle_pieces (accountId, puzzleId, pieceIndex) VALUES ('account-one', 'own_piip', 5)",
+        )
+        database.query(
+            "SELECT COUNT(*) FROM puzzle_pieces WHERE accountId = 'account-one' AND puzzleId = 'own_piip'",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+        }
+        database.query("SELECT currentPuzzleId FROM puzzle_collections WHERE accountId = 'account-one'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("own_piip", cursor.getString(0))
+        }
+        database.query("PRAGMA index_list('puzzles')").use { cursor ->
+            val names = generateSequence { if (cursor.moveToNext()) cursor.getString(1) else null }.toList()
+            assertTrue(names.contains("index_puzzles_accountId_position"))
+        }
+        database.query("PRAGMA index_list('puzzle_pieces')").use { cursor ->
+            val names = generateSequence { if (cursor.moveToNext()) cursor.getString(1) else null }.toList()
+            assertTrue(names.contains("index_puzzle_pieces_accountId_puzzleId"))
+        }
+    }
+
+    @Test
+    fun migrationSeventeenToEighteenCreatesPassingStats() {
+        helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(databaseName)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(17) {
+                        override fun onCreate(db: SupportSQLiteDatabase) = Unit
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int,
+                        ) = Unit
+                    },
+                )
+                .build(),
+        )
+        val database = requireNotNull(helper).writableDatabase
+
+        PocketPassDatabase.Migration17To18.migrate(database)
+
+        database.execSQL(
+            "INSERT INTO passing_stats (accountId, currentStreak, bestStreak, weekPasses, weekPeople, weekRegions, updatedAtEpochMillis) " +
+                "VALUES ('account-one', 5, 9, 12, 7, 3, 1785100000000)",
+        )
+        database.execSQL(
+            "INSERT OR REPLACE INTO passing_stats (accountId, currentStreak, bestStreak, weekPasses, weekPeople, weekRegions, updatedAtEpochMillis) " +
+                "VALUES ('account-one', 6, 9, 13, 8, 3, 1785200000000)",
+        )
+        database.query(
+            "SELECT currentStreak, weekPasses FROM passing_stats WHERE accountId = 'account-one'",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(6, cursor.getInt(0))
+            assertEquals(13, cursor.getInt(1))
+            assertTrue(!cursor.moveToNext())
         }
     }
 }

@@ -45,6 +45,8 @@ enum class EntranceMotion {
     PanelRise,
     PanelFromLeft,
     PanelFromRight,
+    BoardOpen,
+    BoardActivityFade,
     OverlayPop,
 }
 
@@ -135,6 +137,10 @@ private fun EntranceMotion.values(): EntranceValues = when (this) {
         EntranceValues(scale = 0.985f, x = -30f, dampingRatio = 0.82f, stiffness = 470f)
     EntranceMotion.PanelFromRight ->
         EntranceValues(scale = 0.985f, x = 30f, dampingRatio = 0.82f, stiffness = 470f)
+    EntranceMotion.BoardOpen ->
+        EntranceValues(scale = 0.965f, alpha = 0f, dampingRatio = 1f, stiffness = 420f)
+    EntranceMotion.BoardActivityFade ->
+        EntranceValues(alpha = 0f, dampingRatio = 1f, stiffness = 500f)
     EntranceMotion.OverlayPop ->
         EntranceValues(
             scale = 0.92f,

@@ -30,13 +30,20 @@ import com.pocketpass.app.domain.model.ShopCategory
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
+import com.pocketpass.app.domain.state.RepositoryFailure
+import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.SyncState
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
 
 interface SessionRepository {
     val sessionState: StateFlow<SessionState>
@@ -58,7 +65,50 @@ interface SessionRepository {
     ): RepositoryResult<SessionState>
 
     suspend fun signOut(): RepositoryResult<Unit>
+
+    val accountEmail: StateFlow<String?>
+        get() = NoAccountEmail
+
+    suspend fun isUsernameAvailable(username: String): RepositoryResult<Boolean> =
+        passwordAccountsUnavailable()
+
+    suspend fun signUpWithPassword(
+        loginEmail: String,
+        password: String,
+        username: String,
+    ): RepositoryResult<SessionState> = passwordAccountsUnavailable()
+
+    suspend fun signInWithPassword(
+        loginEmail: String,
+        password: String,
+    ): RepositoryResult<SessionState> = passwordAccountsUnavailable()
+
+    suspend fun requestEmailLink(email: String): RepositoryResult<Unit> =
+        passwordAccountsUnavailable()
+
+    suspend fun verifyEmailLink(
+        email: String,
+        sixDigitCode: String,
+    ): RepositoryResult<Unit> = passwordAccountsUnavailable()
+
+    suspend fun requestReauthentication(): RepositoryResult<Unit> =
+        passwordAccountsUnavailable()
+
+    suspend fun changePassword(
+        newPassword: String,
+        nonce: String,
+    ): RepositoryResult<Unit> = passwordAccountsUnavailable()
 }
+
+private val NoAccountEmail: StateFlow<String?> = MutableStateFlow(null)
+
+private fun <T> passwordAccountsUnavailable(): RepositoryResult<T> = RepositoryResult.Failure(
+    RepositoryFailure(
+        kind = RepositoryFailureKind.Misconfigured,
+        message = "Password accounts are not available in this build",
+        retryable = false,
+    ),
+)
 
 fun interface AccountDeleter {
     suspend fun deleteAccount(accountId: UserId): RepositoryResult<Unit>
@@ -91,6 +141,11 @@ interface ConnectedAppsSource {
 }
 
 interface ProfileRepository {
+    fun observeMessageColours(accountId: UserId, conversationId: ConversationId): Flow<Map<UserId, com.pocketpass.app.domain.model.ChatBubbleColour>> =
+        kotlinx.coroutines.flow.flowOf(emptyMap())
+
+    suspend fun refreshMessageColours(accountId: UserId, conversationId: ConversationId): RepositoryResult<Unit> = RepositoryResult.Success(Unit)
+
     fun observeProfile(userId: UserId): Flow<UserProfile?>
 
     suspend fun refreshProfile(userId: UserId): RepositoryResult<Unit>
@@ -244,10 +299,24 @@ interface WorldTourRepository {
     suspend fun refresh(accountId: UserId): RepositoryResult<Unit>
 }
 
+interface PassingStatsRepository {
+    fun observeStats(accountId: UserId): Flow<PassingStats?>
+
+    suspend fun refresh(accountId: UserId): RepositoryResult<Unit>
+}
+
 interface BingoRepository {
     fun observeBoard(accountId: UserId): Flow<List<BingoCell>>
 
     suspend fun refresh(accountId: UserId): RepositoryResult<Unit>
+}
+
+interface PuzzleRepository {
+    fun observeCollection(accountId: UserId): Flow<PuzzleCollection>
+
+    suspend fun refresh(accountId: UserId): RepositoryResult<Unit>
+
+    suspend fun buyPiece(command: BuyPuzzlePieceCommand): RepositoryResult<PuzzlePiecePurchaseOutcome>
 }
 
 interface EncounterRepository {

@@ -18,6 +18,14 @@ data class ProfileEntity(
     val lastSeenAtEpochMillis: Long?,
     val presence: String,
     val updatedAtEpochMillis: Long,
+    @androidx.room.ColumnInfo(defaultValue = "'default'")
+    val chatBubbleColour: String = "default",
+    val chatColourOperationId: String? = null,
+    val chatColourError: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val blockMessages: Boolean = false,
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val blockInvites: Boolean = false,
 )
 
 @Entity(
@@ -254,6 +262,50 @@ data class BingoCellEntity(
 )
 
 @Entity(
+    tableName = "puzzle_collections",
+    primaryKeys = ["accountId"],
+)
+data class PuzzleCollectionEntity(
+    val accountId: String,
+    val currentPuzzleId: String?,
+    val piecePriceTokens: Int,
+    val updatedAtEpochMillis: Long,
+)
+
+@Entity(
+    tableName = "puzzles",
+    primaryKeys = ["accountId", "puzzleId"],
+    indices = [Index(value = ["accountId", "position"])],
+)
+data class PuzzleEntity(
+    val accountId: String,
+    val puzzleId: String,
+    val position: Int,
+    val kind: String,
+    val title: String,
+    val slug: String?,
+    val imagePath: String?,
+    val artworkKind: String,
+    val artworkValue: String?,
+    val columnCount: Int,
+    val rowCount: Int,
+    val startedAtEpochMillis: Long?,
+    val completedAtEpochMillis: Long?,
+    val completedByHandover: Boolean,
+)
+
+@Entity(
+    tableName = "puzzle_pieces",
+    primaryKeys = ["accountId", "puzzleId", "pieceIndex"],
+    indices = [Index(value = ["accountId", "puzzleId"])],
+)
+data class PuzzlePieceEntity(
+    val accountId: String,
+    val puzzleId: String,
+    val pieceIndex: Int,
+)
+
+@Entity(
     tableName = "world_tour_regions",
     primaryKeys = ["accountId", "countryCode"],
     indices = [Index(value = ["accountId", "position"])],
@@ -263,6 +315,17 @@ data class WorldTourRegionEntity(
     val countryCode: String,
     val firstMetAtEpochMillis: Long,
     val position: Int,
+)
+
+@Entity(tableName = "passing_stats")
+data class PassingStatsEntity(
+    @PrimaryKey val accountId: String,
+    val currentStreak: Int,
+    val bestStreak: Int,
+    val weekPasses: Int,
+    val weekPeople: Int,
+    val weekRegions: Int,
+    val updatedAtEpochMillis: Long,
 )
 
 @Entity(
@@ -349,6 +412,18 @@ data class SyncCursorEntity(
 )
 
 object LocalAvatarKinds {
+    const val BUNDLED = "BUNDLED"
+    const val REMOTE = "REMOTE"
+}
+
+object LocalPuzzleKinds {
+    const val OWN_PIIP = "OwnPiip"
+    const val PANEL = "Panel"
+}
+
+object LocalPuzzleArtworkKinds {
+    const val OWN_PORTRAIT = "OWN_PORTRAIT"
+    const val FILE = "FILE"
     const val BUNDLED = "BUNDLED"
     const val REMOTE = "REMOTE"
 }

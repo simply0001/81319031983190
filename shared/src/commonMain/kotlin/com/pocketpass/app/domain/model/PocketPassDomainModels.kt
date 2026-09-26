@@ -29,6 +29,11 @@ data class UserProfile(
     val lastSeenAt: Instant? = null,
     val presence: PresenceStatus = PresenceStatus.Unknown,
     val updatedAt: Instant,
+    val chatBubbleColour: ChatBubbleColour = ChatBubbleColour.Default,
+    val chatColourPending: Boolean = false,
+    val chatColourError: String? = null,
+    val blockMessages: Boolean = false,
+    val blockInvites: Boolean = false,
 ) {
     val greeting: String
         get() = bio
@@ -174,7 +179,7 @@ data class ShopItem(
 ) {
     init {
         require(priceTokens >= 0) { "An item cannot cost negative tokens" }
-        require(miiHatType == null || miiHatType in 0..9) { "A hat item must map to a renderer hat" }
+        require(miiHatType == null || miiHatType in 0..10) { "A hat item must map to a renderer hat" }
     }
 }
 
@@ -217,12 +222,32 @@ data class ActivitySnapshot(
     val nearbyCount: Int,
     val locationCount: Int,
     val updatedAt: Instant,
+    val streakDays: Int = 0,
+    val weekPasses: Int = 0,
 ) {
     init {
         require(coinCount >= 0)
         require(puzzleCount >= 0)
         require(nearbyCount >= 0)
         require(locationCount >= 0)
+        require(streakDays >= 0)
+        require(weekPasses >= 0)
+    }
+}
+
+data class PassingStats(
+    val currentStreak: Int,
+    val bestStreak: Int,
+    val weekPasses: Int,
+    val weekPeople: Int,
+    val weekRegions: Int,
+) {
+    init {
+        require(currentStreak >= 0)
+        require(bestStreak >= currentStreak)
+        require(weekPasses >= 0)
+        require(weekPeople in 0..weekPasses)
+        require(weekRegions in 0..weekPeople)
     }
 }
 

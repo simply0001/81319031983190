@@ -35,6 +35,7 @@ import com.pocketpass.app.domain.model.BingoCell
 import com.pocketpass.app.domain.model.LeaderboardEntry
 import com.pocketpass.app.domain.model.LeaderboardScope
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
 import com.pocketpass.app.domain.model.NearbyEncounter
 import com.pocketpass.app.domain.model.EncounterId
 import com.pocketpass.app.domain.model.IssuedNearbyCredential
@@ -62,6 +63,7 @@ import com.pocketpass.app.domain.repository.AchievementsRepository
 import com.pocketpass.app.domain.repository.BingoRepository
 import com.pocketpass.app.domain.repository.LeaderboardRepository
 import com.pocketpass.app.domain.repository.WorldTourRepository
+import com.pocketpass.app.domain.repository.PassingStatsRepository
 import com.pocketpass.app.domain.repository.ShopRepository
 import com.pocketpass.app.domain.repository.MessageRepository
 import com.pocketpass.app.domain.repository.MutableFriendsRepository
@@ -74,8 +76,10 @@ import com.pocketpass.app.domain.repository.SyncRepository
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
+import com.pocketpass.app.nearby.NearbyDeviceTag
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.SyncState
+import com.pocketpass.app.nearby.NearbyEncoding
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -90,6 +94,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleArtwork
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzleKind
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
+import com.pocketpass.app.domain.model.PuzzleProgress
+import com.pocketpass.app.domain.model.PuzzlePurchaseRejection
+import com.pocketpass.app.domain.repository.PuzzleRepository
 
 object FixtureData {
     val CurrentUserId = UserId("fixture-petah")
@@ -271,6 +283,7 @@ object FixtureData {
                 fixtureHat("cat_hat", "Cat Hat", 70, 7),
                 fixtureHat("bike_helmet", "Bike Helmet", 150, 8),
                 fixtureHat("halo", "Halo", 90, 9),
+                fixtureHat("hijab", "Hijab", 0, 10),
             ),
         ),
     )
@@ -337,6 +350,57 @@ object FixtureData {
             firstMetAt = fixtureTime.minus((index * 86_400L).seconds),
         )
     }
+
+    val passingStats = PassingStats(
+        currentStreak = 5,
+        bestStreak = 9,
+        weekPasses = 12,
+        weekPeople = 7,
+        weekRegions = 3,
+    )
+
+    val puzzleCollection = PuzzleCollection(
+        puzzles = listOf(
+            PuzzleProgress(
+                id = PuzzleCollection.OWN_PIIP_ID,
+                kind = PuzzleKind.OwnPiip,
+                title = PuzzleCollection.OWN_PIIP_TITLE,
+                slug = null,
+                artwork = PuzzleArtwork.OwnPortrait,
+                columns = 4,
+                rows = 4,
+                ownedPieces = (0 until 16).toSet(),
+                startedAt = fixtureTime.minus((20 * 86_400L).seconds),
+                completedAt = fixtureTime.minus((12 * 86_400L).seconds),
+            ),
+            PuzzleProgress(
+                id = "panel:pocki_happy",
+                kind = PuzzleKind.Panel,
+                title = "Pocki Happy",
+                slug = "pocki_happy",
+                artwork = PuzzleArtwork.Bundled("pocki_happy"),
+                columns = 3,
+                rows = 5,
+                ownedPieces = setOf(0, 1, 3, 4, 6, 7, 10, 12, 14),
+                startedAt = fixtureTime.minus((12 * 86_400L).seconds),
+                completedAt = null,
+            ),
+            PuzzleProgress(
+                id = "panel:coming_soon",
+                kind = PuzzleKind.Panel,
+                title = "Coming Soon",
+                slug = "coming_soon",
+                artwork = PuzzleArtwork.Bundled("coming_soon"),
+                columns = 5,
+                rows = 4,
+                ownedPieces = emptySet(),
+                startedAt = null,
+                completedAt = null,
+            ),
+        ),
+        currentIndex = 1,
+        piecePriceTokens = PuzzleCollection.DEFAULT_PIECE_PRICE_TOKENS,
+    )
 
     val bingoBoard = (0..24).filterNot { it == 12 }.mapIndexed { index, position ->
         BingoCell(
@@ -460,6 +524,9 @@ class FixtureSessionRepository(
     private val mutableSessionState = MutableStateFlow<SessionState>(SessionState.Initializing)
     override val sessionState: StateFlow<SessionState> = mutableSessionState.asStateFlow()
 
+    private val mutableAccountEmail = MutableStateFlow<String?>("petah.griffin@users.pocketpass.xyz")
+    override val accountEmail: StateFlow<String?> = mutableAccountEmail.asStateFlow()
+
     override suspend fun initialize(): RepositoryResult<SessionState> {
         mutableSessionState.value = initializedState
         return RepositoryResult.Success(initializedState)
@@ -493,6 +560,25 @@ class FixtureSessionRepository(
         return RepositoryResult.Success(Unit)
     }
 
+    override suspend fun requestEmailLink(email: String): RepositoryResult<Unit> =
+        RepositoryResult.Success(Unit)
+
+    override suspend fun verifyEmailLink(
+        email: String,
+        sixDigitCode: String,
+    ): RepositoryResult<Unit> {
+        mutableAccountEmail.value = email
+        return RepositoryResult.Success(Unit)
+    }
+
+    override suspend fun requestReauthentication(): RepositoryResult<Unit> =
+        RepositoryResult.Success(Unit)
+
+    override suspend fun changePassword(
+        newPassword: String,
+        nonce: String,
+    ): RepositoryResult<Unit> = RepositoryResult.Success(Unit)
+
     private fun fixtureAuthenticationFailure() = RepositoryResult.Failure(
         RepositoryFailure(
             kind = RepositoryFailureKind.Misconfigured,
@@ -509,6 +595,32 @@ class FixtureProfileRepository(
         ).distinctBy(UserProfile::userId),
 ) : MutableProfileRepository {
     private val profiles = MutableStateFlow(initialProfiles.associateBy(UserProfile::userId))
+
+    override fun observeMessageColours(accountId: UserId, conversationId: ConversationId) = profiles.map { rows ->
+        rows.mapValues { it.value.chatBubbleColour }
+    }
+
+    override suspend fun setMessagePrivacy(command: com.pocketpass.app.domain.model.SetMessagePrivacyCommand): RepositoryResult<UserProfile> {
+        val profile = profiles.value[command.accountId] ?: return RepositoryResult.Failure(
+            RepositoryFailure(RepositoryFailureKind.NotFound, "Profile not found", retryable = false))
+        val updated = profile.copy(blockMessages = command.blocked)
+        profiles.update { it + (command.accountId to updated) }
+        return RepositoryResult.Success(updated)
+    }
+    override suspend fun setInvitesPrivacy(command: com.pocketpass.app.domain.model.SetInvitesPrivacyCommand): RepositoryResult<UserProfile> {
+        val profile = profiles.value[command.accountId] ?: return RepositoryResult.Failure(
+            RepositoryFailure(RepositoryFailureKind.NotFound, "Profile not found", retryable = false))
+        val updated = profile.copy(blockInvites = command.blocked)
+        profiles.update { it + (command.accountId to updated) }
+        return RepositoryResult.Success(updated)
+    }
+
+    override suspend fun setChatBubbleColour(command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand): RepositoryResult<Unit> {
+        if (command.accountId !in profiles.value) return RepositoryResult.Failure(
+            RepositoryFailure(RepositoryFailureKind.NotFound, "Profile not found", retryable = false))
+        profiles.update { rows -> rows + (command.accountId to rows.getValue(command.accountId).copy(chatBubbleColour = command.colour)) }
+        return RepositoryResult.Success(Unit)
+    }
 
     override fun observeProfile(userId: UserId): Flow<UserProfile?> = profiles
         .map { it[userId] }
@@ -1237,12 +1349,21 @@ class FixtureShopRepository(
             val ownedIds = owned.filterNot(OwnedShopItem::pending).map(OwnedShopItem::itemId).toSet()
             val active = until != null && until > now()
             catalog.flatMap(ShopCategory::items)
-                .filter { active || it.id in ownedIds }
+                .filter { active || it.priceTokens == 0 || it.id in ownedIds }
                 .mapNotNull(ShopItem::miiHatType)
                 .toSet()
         }
 
     override fun observeSupporterUntil(accountId: UserId): Flow<Instant?> = supporter
+
+    fun currentTokens(): Int = tokens.value ?: 0
+
+    fun spendTokens(amount: Int): Boolean {
+        val current = tokens.value ?: 0
+        if (amount > current) return false
+        tokens.value = current - amount
+        return true
+    }
 
     override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> =
         RepositoryResult.Success(Unit)
@@ -1321,6 +1442,17 @@ class FixtureWorldTourRepository(
         RepositoryResult.Success(Unit)
 }
 
+class FixturePassingStatsRepository(
+    initial: PassingStats? = FixtureData.passingStats,
+) : PassingStatsRepository {
+    private val stats = MutableStateFlow(initial)
+
+    override fun observeStats(accountId: UserId): Flow<PassingStats?> = stats
+
+    override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> =
+        RepositoryResult.Success(Unit)
+}
+
 class FixtureBingoRepository(
     initial: List<BingoCell> = FixtureData.bingoBoard,
 ) : BingoRepository {
@@ -1330,6 +1462,70 @@ class FixtureBingoRepository(
 
     override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> =
         RepositoryResult.Success(Unit)
+}
+
+class FixturePuzzleRepository(
+    initial: PuzzleCollection = FixtureData.puzzleCollection,
+    private val ledger: FixtureShopRepository? = null,
+    private val now: () -> Instant = Clock.System::now,
+) : PuzzleRepository {
+    private val collection = MutableStateFlow(initial)
+
+    override fun observeCollection(accountId: UserId): Flow<PuzzleCollection> = collection
+
+    override suspend fun refresh(accountId: UserId): RepositoryResult<Unit> =
+        RepositoryResult.Success(Unit)
+
+    override suspend fun buyPiece(
+        command: BuyPuzzlePieceCommand,
+    ): RepositoryResult<PuzzlePiecePurchaseOutcome> {
+        val current = collection.value
+        val index = current.currentIndex
+            ?: return RepositoryResult.Success(
+                PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.CollectionComplete),
+            )
+        val puzzle = current.puzzles[index]
+        if (puzzle.isComplete) {
+            return RepositoryResult.Success(
+                PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.CollectionComplete),
+            )
+        }
+        if (ledger?.spendTokens(current.piecePriceTokens) == false) {
+            return RepositoryResult.Success(
+                PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.InsufficientTokens),
+            )
+        }
+        val piece = (0 until puzzle.totalPieces).first { it !in puzzle.ownedPieces }
+        val timestamp = now()
+        val grown = puzzle.copy(
+            ownedPieces = puzzle.ownedPieces + piece,
+            startedAt = puzzle.startedAt ?: timestamp,
+        )
+        val finished = if (grown.isComplete) grown.copy(completedAt = timestamp) else grown
+        val puzzles = current.puzzles.toMutableList()
+        puzzles[index] = finished
+        var nextIndex: Int? = index
+        if (finished.isComplete) {
+            nextIndex = puzzles.indices.firstOrNull { it > index && !puzzles[it].isComplete }
+            if (nextIndex != null) {
+                val next = puzzles[nextIndex]
+                puzzles[nextIndex] = next.copy(
+                    ownedPieces = next.ownedPieces + 0,
+                    startedAt = next.startedAt ?: timestamp,
+                )
+            }
+        }
+        collection.value = current.copy(puzzles = puzzles, currentIndex = nextIndex)
+        return RepositoryResult.Success(
+            PuzzlePiecePurchaseOutcome.Completed(
+                puzzleId = puzzle.id,
+                pieceIndex = piece,
+                balance = ledger?.currentTokens() ?: 0,
+                puzzleCompleted = finished.isComplete,
+                nextPuzzleId = nextIndex?.takeIf { finished.isComplete }?.let { puzzles[it].id },
+            ),
+        )
+    }
 }
 
 class FixtureEncounterRepository(
@@ -1344,6 +1540,11 @@ class FixtureEncounterRepository(
 }
 
 class FixtureEncounterRemoteDataSource : EncounterRemoteDataSource {
+    override suspend fun fetchDeviceTagSecret(
+        accountId: UserId,
+    ): RepositoryResult<ByteArray> =
+        RepositoryResult.Success(ByteArray(NearbyDeviceTag.SECRET_BYTES) { (it * 7 + 3).toByte() })
+
     override suspend fun issueCredentials(
         accountId: UserId,
         signingPublicKeys: List<String>,
@@ -1351,10 +1552,7 @@ class FixtureEncounterRemoteDataSource : EncounterRemoteDataSource {
         RepositoryResult.Success(
             signingPublicKeys.map { publicKey ->
                 IssuedNearbyCredential(
-                    token = Random.nextBytes(16)
-                        .joinToString("") { byte ->
-                            (byte.toInt() and 0xFF).toString(16).padStart(2, '0')
-                        },
+                    token = NearbyEncoding.bytesToUuidString(Random.nextBytes(16)),
                     signingPublicKey = publicKey,
                     expiresAt = Clock.System.now().plus((7 * 24 * 60 * 60).seconds),
                 )
@@ -1408,7 +1606,9 @@ data class FixtureRepositoryBundle(
     val leaderboard: LeaderboardRepository = FixtureLeaderboardRepository(),
     val achievements: AchievementsRepository = FixtureAchievementsRepository(),
     val worldTour: WorldTourRepository = FixtureWorldTourRepository(),
+    val passingStats: PassingStatsRepository = FixturePassingStatsRepository(),
     val bingo: BingoRepository = FixtureBingoRepository(),
+    val puzzle: PuzzleRepository = FixturePuzzleRepository(ledger = shop as? FixtureShopRepository),
     val encounters: EncounterRepository = FixtureEncounterRepository(),
     val presence: PresenceRepository = FixturePresenceRepository(),
     val sync: SyncRepository = FixtureSyncRepository(),

@@ -4,9 +4,12 @@ import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +69,8 @@ import com.pocketpass.app.ui.controller.controllerFocusBarrier
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.theme.pocketPalette
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 private const val NOTIFICATION_OVERLAY_WIDTH = 928f
 private const val NOTIFICATION_BACKDROP_WHITE_STOP = 0.69231f
@@ -84,6 +90,27 @@ private const val UNREAD_BADGE_WIDTH = 76f
 private const val UNREAD_BADGE_HEIGHT = 34f
 private const val NOTIFICATION_FOCUS_LAYER = 10
 private const val CLEAR_ALL_FOCUS_TAG = "clear_all_notifications"
+
+@Composable
+private fun Modifier.notificationTextScroll(text: String): Modifier {
+    val scroll = remember(text) { ScrollState(0) }
+    LaunchedEffect(scroll) {
+        snapshotFlow { scroll.maxValue }.collectLatest { overflow ->
+            scroll.scrollTo(0)
+            if (overflow <= 0 || overflow == Int.MAX_VALUE) return@collectLatest
+            while (true) {
+                delay(2_500)
+                scroll.animateScrollTo(
+                    overflow,
+                    tween(durationMillis = (overflow / 35f * 1_000).roundToInt().coerceAtLeast(1), easing = LinearEasing),
+                )
+                delay(1_500)
+                scroll.scrollTo(0)
+            }
+        }
+    }
+    return horizontalScroll(scroll, enabled = false)
+}
 
 internal val PocketPassNotification.announcesNewFriend: Boolean
     get() = kind == NotificationKind.FriendAccepted ||
@@ -448,23 +475,26 @@ private fun NotificationCard(
                 27f,
                 if (notification.isUnread) TITLE_TEXT_WIDTH_WITH_BADGE else TITLE_TEXT_WIDTH,
                 66f,
-            ),
+            ).notificationTextScroll(displayTitle),
             color = pocketPalette.teal,
             fontFamily = Rubik,
             fontWeight = FontWeight.Bold,
             fontSize = metrics.sp(55f),
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
         )
         Text(
             text = notification.body,
-            modifier = Modifier.designBounds(metrics, 39f, 96f, 430f, 42f),
+            modifier = Modifier.designBounds(metrics, 39f, 96f, 430f, 42f)
+                .notificationTextScroll(notification.body),
             color = pocketPalette.tealSoft,
             fontFamily = Rubik,
             fontWeight = FontWeight.SemiBold,
             fontSize = metrics.sp(30.295f),
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
         )
         if (notification.isUnread) {
             NotificationUnreadBadge(metrics)
@@ -637,23 +667,27 @@ private fun NotificationActorHeader(
     )
     Text(
         text = displayName,
-        modifier = Modifier.designBounds(metrics, 161f, 34f, textWidth, 65f),
+        modifier = Modifier.designBounds(metrics, 161f, 34f, textWidth, 65f)
+            .notificationTextScroll(displayName),
         color = pocketPalette.teal,
         fontFamily = Rubik,
         fontWeight = FontWeight.Bold,
         fontSize = metrics.sp(55f),
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
     )
     Text(
         text = body,
-        modifier = Modifier.designBounds(metrics, 161f, 99f, textWidth, 36f),
+        modifier = Modifier.designBounds(metrics, 161f, 99f, textWidth, 36f)
+            .notificationTextScroll(body),
         color = pocketPalette.tealSoft,
         fontFamily = Rubik,
         fontWeight = FontWeight.SemiBold,
         fontSize = metrics.sp(30.295f),
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
     )
 }
 

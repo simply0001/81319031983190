@@ -1,0 +1,14 @@
+{
+  "name": "PocketPass",
+  "subtitle": "Friends along the way",
+  "promotional_text": "Make a Piip, meet other players nearby, and keep in touch wherever the day takes you.",
+  "description": "PocketPass brings a little company to your everyday adventures. Make a Piip of your own, exchange encounters with nearby players over Bluetooth, and keep your friends close with messages and group chats.\n\nThere is plenty to do between encounters. Collect puzzle pieces, play Bingo, work through World Tour, and earn tokens for walking when you enable Step Rewards. Use your rewards to make your Piip feel more like you.\n\nKeep up with conversations through message alerts, and put a PocketPass widget on your Home Screen for a quick look at your day.\n\nNearby encounters use Bluetooth. Step Rewards uses your daily step count when you choose to enable it. An internet connection and a PocketPass account are required for online features.",
+  "keywords": "friends,nearby,avatar,chat,messages,bluetooth,walking,puzzles,bingo,widget",
+  "marketing_url": "https://pocketpass.xyz/",
+  "support_url": "https://pocketpass.xyz/#community",
+  "privacy_policy_url": "https://pocketpass.xyz/privacy",
+  "primary_category": "Social Networking",
+  "secondary_category": "Games",
+  "release_mode": "TestFlight beta first; public App Store release deferred",
+  "status": "Draft for a future App Store submission; validate the iPhone build through TestFlight first"
+}

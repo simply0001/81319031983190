@@ -14,11 +14,15 @@ import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.SyncState
+import com.pocketpass.app.feature.AccountSecurityUiState
 import com.pocketpass.app.feature.AccountSetupUiState
 import com.pocketpass.app.mii.MiiEditorUiState
 import com.pocketpass.app.nearby.NearbyPermissionUiState
 import com.pocketpass.app.nearby.NearbyRuntimeState
 import com.pocketpass.app.update.AppUpdateUiState
+import com.pocketpass.app.widget.WidgetBlock
+import com.pocketpass.app.widget.WidgetDesign
+import com.pocketpass.app.widget.upserted
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -36,7 +40,16 @@ sealed interface PocketPassRoute : NavKeyMarker {
     data object Accessibility : PocketPassRoute
 
     @Serializable
+    data object AppSettings : PocketPassRoute
+
+    @Serializable
+    data object ChatColours : PocketPassRoute
+
+    @Serializable
     data object Social : PocketPassRoute
+
+    @Serializable
+    data object AccountSecurity : PocketPassRoute
 
     @Serializable
     data object Contributors : PocketPassRoute
@@ -46,9 +59,17 @@ sealed interface PocketPassRoute : NavKeyMarker {
 
     @Serializable
     data object AppUpdate : PocketPassRoute
+
+    @Serializable
+    data object WidgetMaker : PocketPassRoute
+
+    @Serializable
+    data class WidgetEditor(val designId: String) : PocketPassRoute
 }
 
 data class PocketPassUiState(
+    val boardsVisible: Boolean = true,
+    val boards: com.pocketpass.app.boards.BoardsUiState = com.pocketpass.app.boards.BoardsUiState(),
     val routes: List<PocketPassRoute> =
         listOf(PocketPassRoute.Root(PocketPassDestination.Home)),
     val activityVariant: ActivityVariant = ActivityVariant.Default,
@@ -58,6 +79,13 @@ data class PocketPassUiState(
     val soundLevel: Float = 0.45f,
     val sfxLevel: Float = 0.6f,
     val themeMode: ThemeMode = ThemeMode.System,
+    val messagePrivacySaving: Boolean = false,
+    val messagePrivacyError: String? = null,
+    val invitesPrivacySaving: Boolean = false,
+    val invitesPrivacyError: String? = null,
+    val chatColourSaving: Boolean = false,
+    val chatColourSaveError: String? = null,
+    val messageAuthorColours: Map<UserId, com.pocketpass.app.domain.model.ChatBubbleColour> = emptyMap(),
     val recentInteractionsSort: RecentInteractionsSort =
         RecentInteractionsSort.LatestEncounter,
     val friendsSort: RecentInteractionsSort =
@@ -68,6 +96,8 @@ data class PocketPassUiState(
     val encounterAlertsEnabled: Boolean = true,
     val nearbyRepairAlertsEnabled: Boolean = true,
     val updateAlertsEnabled: Boolean = true,
+    val messageAlertsEnabled: Boolean = true,
+    val messagePushSupported: Boolean = false,
     val stepRewardsEnabled: Boolean = false,
     val stepRewards: StepRewardsState = StepRewardsState(),
     val accountSetup: AccountSetupUiState = AccountSetupUiState(),
@@ -85,6 +115,8 @@ data class PocketPassUiState(
     val selectedConversationId: ConversationId? = null,
     val selectedConversation: ConversationSummary? = null,
     val selectedMessages: List<Message> = emptyList(),
+    val previewConversationId: ConversationId? = null,
+    val previewMessages: List<Message> = emptyList(),
     val messageDraft: String = "",
     val typingConversationIds: Set<String> = emptySet(),
     val messageActionRailExpanded: Boolean = false,
@@ -96,6 +128,7 @@ data class PocketPassUiState(
     val groupInfoOpen: Boolean = false,
     val groupOperationInProgress: Boolean = false,
     val groupOperationError: String? = null,
+    val groupMemberFriendStates: Map<UserId, GroupMemberFriendState> = emptyMap(),
     val conversationNotice: String? = null,
     val selectedMembersById: Map<UserId, ConversationMember> = emptyMap(),
     val typingUserIds: Set<UserId> = emptySet(),
@@ -118,6 +151,7 @@ data class PocketPassUiState(
     val notificationOperationError: String? = null,
     val messageBadgeOverride: String? = null,
     val auth: AuthUiState = AuthUiState(),
+    val accountSecurity: AccountSecurityUiState = AccountSecurityUiState(),
     val sessionState: SessionState = SessionState.Initializing,
     val syncState: SyncState = SyncState.Idle,
     val integrityCompromised: Boolean = false,
@@ -138,11 +172,14 @@ data class PocketPassUiState(
     val achievements: AchievementsUiState = AchievementsUiState(),
     val worldTour: WorldTourUiState = WorldTourUiState(),
     val bingo: BingoUiState = BingoUiState(),
+    val puzzle: PuzzleUiState = PuzzleUiState(),
     val deleteAccountVisible: Boolean = false,
     val deleteAccountInProgress: Boolean = false,
     val deleteAccountError: String? = null,
     val removeFriendPromptVisible: Boolean = false,
     val appUpdate: AppUpdateUiState = AppUpdateUiState(),
+    val widgetDesigns: List<WidgetDesign> = emptyList(),
+    val widgetMaker: WidgetMakerUiState = WidgetMakerUiState(),
     val status: StatusInfo = StatusInfo(),
 ) {
     val rootDestination: PocketPassDestination
@@ -167,8 +204,10 @@ data class PocketPassUiState(
 object PocketPassReducer {
     fun reduce(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState =
         when (event) {
+            is PocketPassEvent.Boards, is PocketPassEvent.PreviewMessage -> state
             is PocketPassEvent.Auth -> state
             is PocketPassEvent.AccountSetup -> state
+            is PocketPassEvent.AccountSecurity -> state
             is PocketPassEvent.Mii -> state
 
             PocketPassEvent.OpenMiiEditor,
@@ -221,6 +260,7 @@ object PocketPassReducer {
                 miiDeleteError = null,
                 themePickerExpanded = false,
                 sortMenuOpen = false,
+                widgetMaker = state.widgetMaker.closed(),
             )
 
             is PocketPassEvent.OpenMessage -> {
@@ -268,6 +308,7 @@ object PocketPassReducer {
             PocketPassEvent.CloseGroupInfo,
             is PocketPassEvent.AddGroupMembers,
             is PocketPassEvent.RemoveGroupMember,
+            is PocketPassEvent.AddGroupMemberFriend,
             PocketPassEvent.LeaveGroup,
             is PocketPassEvent.RenameGroup,
             PocketPassEvent.DismissConversationNotice,
@@ -290,11 +331,20 @@ object PocketPassReducer {
             PocketPassEvent.CloseBingoSquare,
             PocketPassEvent.OpenWorldTourRegions,
             PocketPassEvent.CloseWorldTourRegions,
+            PocketPassEvent.PreviousPuzzle,
+            PocketPassEvent.NextPuzzle,
+            PocketPassEvent.OpenBuyPuzzlePiece,
+            PocketPassEvent.CloseBuyPuzzlePiece,
+            PocketPassEvent.ConfirmBuyPuzzlePiece,
+            PocketPassEvent.DismissPuzzleNotice,
+            PocketPassEvent.OpenPuzzleInfo,
+            PocketPassEvent.ClosePuzzleInfo,
             PocketPassEvent.OpenLeaderboard,
             PocketPassEvent.CloseLeaderboard,
             PocketPassEvent.OpenLeaderboardSettings,
             PocketPassEvent.CloseLeaderboardSettings,
             is PocketPassEvent.SetLeaderboardScope,
+            is PocketPassEvent.SetGlobalLeaderboardLimit,
             PocketPassEvent.OpenAchievements,
             PocketPassEvent.CloseAchievements,
             PocketPassEvent.OpenAddFriend,
@@ -324,22 +374,37 @@ object PocketPassReducer {
 
             is PocketPassEvent.OpenBuyShopItem -> {
                 val item = state.shop.item(event.itemId)
-                if (item != null && state.shop.statusOf(item) == ShopItemStatus.Available) {
+                if (item != null && state.shop.canBuy(item)) {
                     state.copy(shop = state.shop.copy(buyPromptItemId = event.itemId))
                 } else {
                     state
                 }
             }
 
+            is PocketPassEvent.OpenShopCategory -> {
+                if (state.shop.visible && state.shop.categories.any { it.id == event.categoryId }) {
+                    state.copy(shop = state.shop.copy(selectedCategoryId = event.categoryId))
+                } else {
+                    state
+                }
+            }
+
+            PocketPassEvent.CloseShopCategory ->
+                state.copy(shop = state.shop.copy(selectedCategoryId = null))
+
             PocketPassEvent.CloseBuyShopItem,
             PocketPassEvent.ConfirmBuyShopItem,
             is PocketPassEvent.WearShopItem,
-            PocketPassEvent.CloseShop,
             -> state.copy(shop = state.shop.copy(buyPromptItemId = null))
+
+            PocketPassEvent.CloseShop ->
+                state.copy(shop = state.shop.copy(buyPromptItemId = null, selectedCategoryId = null))
 
             PocketPassEvent.Back -> when {
                 state.shop.buyPromptItemId != null ->
                     state.copy(shop = state.shop.copy(buyPromptItemId = null))
+                state.shop.selectedCategoryId != null ->
+                    state.copy(shop = state.shop.copy(selectedCategoryId = null))
                 state.removeFriendPromptVisible -> state.copy(removeFriendPromptVisible = false)
                 state.miiDeleteSlot != null && !state.miiDeleteInProgress -> state.copy(
                     miiDeleteSlot = null,
@@ -349,8 +414,23 @@ object PocketPassReducer {
                 state.miiSlotsVisible -> state.copy(miiSlotsVisible = false)
                 state.sortMenuOpen -> state.copy(sortMenuOpen = false)
                 state.themePickerExpanded -> state.copy(themePickerExpanded = false)
+                state.widgetMaker.blockPicker != null ->
+                    state.copy(widgetMaker = state.widgetMaker.copy(blockPicker = null))
+                state.widgetMaker.deletePromptVisible ->
+                    state.copy(widgetMaker = state.widgetMaker.copy(deletePromptVisible = false))
+                state.widgetMaker.renameDraft != null ->
+                    state.copy(widgetMaker = state.widgetMaker.copy(renameDraft = null))
+                state.routes.size <= 1 && state.rootDestination == PocketPassDestination.Messages ->
+                    state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home)))
                 state.routes.size <= 1 -> state
-                else -> state.copy(routes = state.routes.dropLast(1))
+                else -> state.copy(
+                    routes = state.routes.dropLast(1),
+                    widgetMaker = if (state.routes.last() == PocketPassRoute.WidgetMaker) {
+                        state.widgetMaker.copy(assigningAppWidgetId = null)
+                    } else {
+                        state.widgetMaker
+                    },
+                )
             }
 
             PocketPassEvent.ShuffleActivities -> state.copy(
@@ -383,11 +463,29 @@ object PocketPassReducer {
                 } else {
                     state.copy(routes = state.routes + PocketPassRoute.Accessibility)
                 }
+            PocketPassEvent.OpenAppSettings ->
+                if (state.routes.lastOrNull() == PocketPassRoute.AppSettings) {
+                    state
+                } else {
+                    state.copy(routes = state.routes + PocketPassRoute.AppSettings)
+                }
+            PocketPassEvent.OpenChatColours -> if (state.routes.lastOrNull() == PocketPassRoute.ChatColours) state
+                else state.copy(routes = state.routes + PocketPassRoute.ChatColours, chatColourSaveError = null)
+            is PocketPassEvent.SetMessagePrivacy -> state
+            is PocketPassEvent.SetInvitesPrivacy -> state
+            is PocketPassEvent.SetBoardsVisible -> state
+            is PocketPassEvent.SaveChatColour -> state
             PocketPassEvent.OpenSocial ->
                 if (state.routes.lastOrNull() == PocketPassRoute.Social) {
                     state
                 } else {
                     state.copy(routes = state.routes + PocketPassRoute.Social)
+                }
+            PocketPassEvent.OpenAccountSecurity ->
+                if (state.routes.lastOrNull() == PocketPassRoute.AccountSecurity) {
+                    state
+                } else {
+                    state.copy(routes = state.routes + PocketPassRoute.AccountSecurity)
                 }
             PocketPassEvent.OpenContributors ->
                 if (state.routes.lastOrNull() == PocketPassRoute.Contributors) {
@@ -413,6 +511,100 @@ object PocketPassReducer {
             PocketPassEvent.DownloadAppUpdate,
             PocketPassEvent.InstallAppUpdate,
             -> state
+
+            PocketPassEvent.OpenWidgetMaker ->
+                if (state.routes.lastOrNull() == PocketPassRoute.WidgetMaker) {
+                    state
+                } else {
+                    state.copy(
+                        routes = state.routes + PocketPassRoute.WidgetMaker,
+                        widgetMaker = state.widgetMaker.copy(message = null),
+                    )
+                }
+            is PocketPassEvent.OpenWidgetEditor -> {
+                val route = PocketPassRoute.WidgetEditor(event.designId)
+                if (state.routes.lastOrNull() == route) {
+                    state
+                } else {
+                    state.copy(
+                        routes = state.routes + route,
+                        widgetMaker = state.widgetMaker.copy(
+                            blockPicker = null,
+                            deletePromptVisible = false,
+                            renameDraft = null,
+                            message = null,
+                        ),
+                    )
+                }
+            }
+            PocketPassEvent.CreateWidgetDesign,
+            is PocketPassEvent.PinWidgetDesign,
+            -> state
+            is PocketPassEvent.UpdateWidgetDesign ->
+                state.copy(widgetDesigns = state.widgetDesigns.upserted(event.design))
+            is PocketPassEvent.DeleteWidgetDesign -> state.copy(
+                widgetDesigns = state.widgetDesigns.filterNot { it.id == event.designId },
+                routes = state.routes.filterNot { it == PocketPassRoute.WidgetEditor(event.designId) },
+                widgetMaker = state.widgetMaker.copy(
+                    blockPicker = null,
+                    deletePromptVisible = false,
+                    renameDraft = null,
+                ),
+            )
+            PocketPassEvent.OpenWidgetDeletePrompt ->
+                state.copy(widgetMaker = state.widgetMaker.copy(deletePromptVisible = true))
+            PocketPassEvent.CloseWidgetDeletePrompt ->
+                state.copy(widgetMaker = state.widgetMaker.copy(deletePromptVisible = false))
+            is PocketPassEvent.OpenWidgetBlockPicker ->
+                state.copy(widgetMaker = state.widgetMaker.copy(blockPicker = event.slot))
+            PocketPassEvent.CloseWidgetBlockPicker ->
+                state.copy(widgetMaker = state.widgetMaker.copy(blockPicker = null))
+            is PocketPassEvent.PickWidgetBlock -> {
+                val picked = state.widgetDesignAfterPick(event.block)
+                state.copy(
+                    widgetDesigns = picked?.let { state.widgetDesigns.upserted(it) } ?: state.widgetDesigns,
+                    widgetMaker = state.widgetMaker.copy(blockPicker = null),
+                )
+            }
+            PocketPassEvent.OpenWidgetRename -> state.copy(
+                widgetMaker = state.widgetMaker.copy(
+                    renameDraft = state.editingWidgetDesign?.name.orEmpty(),
+                ),
+            )
+            is PocketPassEvent.UpdateWidgetNameDraft -> state.copy(
+                widgetMaker = state.widgetMaker.copy(
+                    renameDraft = event.value.take(WidgetDesign.MAX_NAME_LENGTH),
+                ),
+            )
+            PocketPassEvent.SaveWidgetName -> {
+                val renamed = state.widgetDesignAfterRename()
+                state.copy(
+                    widgetDesigns = renamed?.let { state.widgetDesigns.upserted(it) } ?: state.widgetDesigns,
+                    widgetMaker = state.widgetMaker.copy(renameDraft = null),
+                )
+            }
+            PocketPassEvent.CloseWidgetRename ->
+                state.copy(widgetMaker = state.widgetMaker.copy(renameDraft = null))
+            is PocketPassEvent.BeginWidgetAssign -> state.copy(
+                routes = listOf(
+                    PocketPassRoute.Root(PocketPassDestination.Settings),
+                    PocketPassRoute.WidgetMaker,
+                ),
+                widgetMaker = state.widgetMaker.closed().copy(
+                    assigningAppWidgetId = event.appWidgetId,
+                    message = null,
+                ),
+            )
+            is PocketPassEvent.AssignWidgetDesign -> state.copy(
+                widgetMaker = state.widgetMaker.copy(
+                    assigningAppWidgetId = null,
+                    message = state.widgetDesigns.firstOrNull { it.id == event.designId }
+                        ?.let { "Your widget now shows ${it.name}" }
+                        ?: "Widget updated",
+                ),
+            )
+            PocketPassEvent.DismissWidgetMessage ->
+                state.copy(widgetMaker = state.widgetMaker.copy(message = null))
             is PocketPassEvent.SetMoodEmojisEnabled -> state.copy(
                 moodEmojisEnabled = event.enabled,
             )
@@ -428,6 +620,9 @@ object PocketPassReducer {
             is PocketPassEvent.SetUpdateAlertsEnabled -> state.copy(
                 updateAlertsEnabled = event.enabled,
             )
+            is PocketPassEvent.SetMessageAlertsEnabled -> state.copy(
+                messageAlertsEnabled = event.enabled,
+            )
             is PocketPassEvent.SetStepRewardsEnabled -> state.copy(
                 stepRewardsEnabled = event.enabled,
             )
@@ -442,6 +637,7 @@ object PocketPassReducer {
                 encounterAlertsEnabled = true,
                 nearbyRepairAlertsEnabled = true,
                 updateAlertsEnabled = true,
+                messageAlertsEnabled = true,
                 stepRewardsEnabled = false,
             )
             PocketPassEvent.SignOut -> state
@@ -478,6 +674,8 @@ fun PocketPassUiState.blocksShoulderTabs(): Boolean {
     val nestedDialogOpen = shop.buyPromptItemId != null ||
         games.bingoGoalIndex != null ||
         games.worldTourRegionsVisible ||
+        games.puzzleBuyPromptVisible ||
+        games.puzzleInfoVisible ||
         leaderboard.settingsVisible
     if (nestedDialogOpen) return true
     return copy(
@@ -488,6 +686,7 @@ fun PocketPassUiState.blocksShoulderTabs(): Boolean {
 }
 
 fun PocketPassUiState.hasDismissableLayer(): Boolean =
+    (rootDestination == PocketPassDestination.Messages) ||
     (accountSetup.resolved && accountSetup.required) ||
         profileViewer.visible ||
         shop.visible ||
@@ -504,6 +703,7 @@ fun PocketPassUiState.hasDismissableLayer(): Boolean =
         (miiEditor.isEditorVisible && miiEditor.mode == com.pocketpass.app.mii.MiiEditorMode.EditExisting) ||
         themePickerExpanded ||
         sortMenuOpen ||
+        widgetMaker.hasOverlay ||
         deleteAccountVisible ||
         homeMoodPickerExpanded ||
         bioEditor.visible ||
@@ -514,3 +714,33 @@ fun PocketPassUiState.hasDismissableLayer(): Boolean =
         editingMessageId != null ||
         groupInfoOpen ||
         routes.size > 1
+
+fun WidgetMakerUiState.closed(): WidgetMakerUiState = copy(
+    assigningAppWidgetId = null,
+    blockPicker = null,
+    deletePromptVisible = false,
+    renameDraft = null,
+)
+
+val PocketPassUiState.editingWidgetDesign: WidgetDesign?
+    get() {
+        val route = routes.lastOrNull { it is PocketPassRoute.WidgetEditor } as? PocketPassRoute.WidgetEditor
+            ?: return null
+        return widgetDesigns.firstOrNull { it.id == route.designId }
+    }
+
+fun PocketPassUiState.widgetDesignAfterPick(block: WidgetBlock?): WidgetDesign? {
+    val design = editingWidgetDesign ?: return null
+    return when (val slot = widgetMaker.blockPicker) {
+        null -> null
+        WidgetSlot.Hero -> design.withHero(block, design.updatedAtEpochMillis)
+        is WidgetSlot.Tile -> design.withTile(slot.index, block, design.updatedAtEpochMillis)
+    }
+}
+
+fun PocketPassUiState.widgetDesignAfterRename(): WidgetDesign? {
+    val design = editingWidgetDesign ?: return null
+    val draft = widgetMaker.renameDraft?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    if (draft == design.name) return null
+    return design.withName(draft, design.updatedAtEpochMillis)
+}

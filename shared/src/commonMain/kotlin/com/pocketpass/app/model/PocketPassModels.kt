@@ -5,9 +5,29 @@ import com.pocketpass.app.domain.model.MAX_GROUP_MEMBERS
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.model.isValidProfileName
+import com.pocketpass.app.feature.AccountSecurityEvent
 import com.pocketpass.app.feature.AccountSetupEvent
 import com.pocketpass.app.mii.MiiEditorEvent
+import com.pocketpass.app.widget.WidgetBlock
+import com.pocketpass.app.widget.WidgetDesign
 import kotlinx.serialization.Serializable
+
+sealed interface WidgetSlot {
+    data object Hero : WidgetSlot
+    data class Tile(val index: Int) : WidgetSlot
+}
+
+data class WidgetMakerUiState(
+    val assigningAppWidgetId: Int? = null,
+    val pinSupported: Boolean = true,
+    val message: String? = null,
+    val blockPicker: WidgetSlot? = null,
+    val deletePromptVisible: Boolean = false,
+    val renameDraft: String? = null,
+) {
+    val hasOverlay: Boolean
+        get() = blockPicker != null || deletePromptVisible || renameDraft != null
+}
 
 @Serializable
 enum class PocketPassDestination {
@@ -66,6 +86,7 @@ enum class ShopItemStatus {
 data class ShopUiState(
     val visible: Boolean = false,
     val categories: List<com.pocketpass.app.domain.model.ShopCategory> = emptyList(),
+    val selectedCategoryId: String? = null,
     val tokenBalance: Int = 0,
     val refreshError: String? = null,
     val ownedItemIds: Set<String> = emptySet(),
@@ -74,6 +95,9 @@ data class ShopUiState(
     val purchaseError: String? = null,
     val buyPromptItemId: String? = null,
 ) {
+    val selectedCategory: com.pocketpass.app.domain.model.ShopCategory?
+        get() = categories.firstOrNull { it.id == selectedCategoryId }
+
     val items: List<com.pocketpass.app.domain.model.ShopItem>
         get() = categories.flatMap { it.items }
 
@@ -85,11 +109,25 @@ data class ShopUiState(
 
     fun statusOf(item: com.pocketpass.app.domain.model.ShopItem): ShopItemStatus = when {
         item.id in ownedItemIds -> ShopItemStatus.Owned
-        item.id in unlockedItemIds -> ShopItemStatus.Unlocked
         item.id in purchasingItemIds -> ShopItemStatus.Purchasing
+        item.id in unlockedItemIds -> ShopItemStatus.Unlocked
         item.priceTokens <= tokenBalance -> ShopItemStatus.Available
         else -> ShopItemStatus.Unaffordable
     }
+
+    fun canBuy(item: com.pocketpass.app.domain.model.ShopItem): Boolean =
+        item.id !in ownedItemIds &&
+            item.id !in purchasingItemIds &&
+            !(item.priceTokens == 0 && item.id in unlockedItemIds) &&
+            item.priceTokens <= tokenBalance
+
+    fun purchasePromptBody(item: com.pocketpass.app.domain.model.ShopItem): String =
+        "It costs ${item.priceTokens} tokens. You have $tokenBalance." +
+            if (item.id in unlockedItemIds) {
+                " Yours to keep after your subscription ends."
+            } else {
+                ""
+            }
 }
 
 enum class GameTarget {
@@ -103,9 +141,12 @@ data class GamesUiState(
     val activeGame: GameTarget? = null,
     val bingoGoalIndex: Int? = null,
     val worldTourRegionsVisible: Boolean = false,
+    val puzzleBuyPromptVisible: Boolean = false,
+    val puzzleInfoVisible: Boolean = false,
 )
 
 data class LeaderboardUiState(
+    val globalLimit: Int = 20,
     val visible: Boolean = false,
     val settingsVisible: Boolean = false,
     val scope: com.pocketpass.app.domain.model.LeaderboardScope =
@@ -152,6 +193,34 @@ data class BingoUiState(
     val refreshError: String? = null,
 )
 
+data class PuzzleUiState(
+    val collection: com.pocketpass.app.domain.model.PuzzleCollection =
+        com.pocketpass.app.domain.model.PuzzleCollection.Empty,
+    val viewedIndex: Int? = null,
+    val tokenBalance: Int = 0,
+    val buying: Boolean = false,
+    val refreshError: String? = null,
+    val purchaseError: String? = null,
+) {
+    val viewed: com.pocketpass.app.domain.model.PuzzleProgress?
+        get() = viewedIndex?.let(collection.puzzles::getOrNull)
+
+    val isViewingCurrent: Boolean
+        get() = viewedIndex != null && viewedIndex == collection.currentIndex
+
+    val canBrowseBack: Boolean
+        get() = (viewedIndex ?: 0) > 0
+
+    val canBrowseForward: Boolean
+        get() = viewedIndex != null && viewedIndex < (collection.lastBrowsableIndex ?: -1)
+
+    val canBuy: Boolean
+        get() = isViewingCurrent &&
+            collection.current?.isComplete == false &&
+            !buying &&
+            tokenBalance >= collection.piecePriceTokens
+}
+
 const val BIO_MAX_LENGTH = 50
 
 data class BioEditorUiState(
@@ -185,9 +254,19 @@ data class GroupComposerState(
         get() = (MAX_GROUP_MEMBERS - 1 - selectedMemberIds.size).coerceAtLeast(0)
 }
 
+enum class GroupMemberFriendState(val label: String, val canSend: Boolean = false) {
+    Available("Add friend", true),
+    Sending("Sending…"),
+    Pending("Pending"),
+    Friends("Friends"),
+    Unavailable("Unavailable"),
+    Failed("Retry", true),
+}
+
 enum class ProfileViewerSource {
     RecentInteraction,
     Friend,
+    Board,
 }
 
 enum class ProfileFriendRequestState {
@@ -227,8 +306,10 @@ data class StatusInfo(
 )
 
 sealed interface PocketPassEvent {
+    data class Boards(val action: com.pocketpass.app.boards.BoardAction) : PocketPassEvent
     data class Auth(val event: AuthEvent) : PocketPassEvent
     data class AccountSetup(val event: AccountSetupEvent) : PocketPassEvent
+    data class AccountSecurity(val event: AccountSecurityEvent) : PocketPassEvent
     data class Mii(val event: MiiEditorEvent) : PocketPassEvent
     data object OpenMiiEditor : PocketPassEvent
     data object OpenMiiSlots : PocketPassEvent
@@ -252,6 +333,7 @@ sealed interface PocketPassEvent {
     data class SetActiveMiiSlot(val slot: Int) : PocketPassEvent
     data class SelectDestination(val destination: PocketPassDestination) : PocketPassEvent
     data class OpenMessage(val conversationId: String) : PocketPassEvent
+    data class PreviewMessage(val conversationId: String?) : PocketPassEvent
     data class UpdateMessageDraft(val value: String) : PocketPassEvent
     data object SendMessage : PocketPassEvent
     data object ToggleMessageActions : PocketPassEvent
@@ -271,12 +353,15 @@ sealed interface PocketPassEvent {
     data object CloseGroupInfo : PocketPassEvent
     data class AddGroupMembers(val userIds: List<String>) : PocketPassEvent
     data class RemoveGroupMember(val userId: String) : PocketPassEvent
+    data class AddGroupMemberFriend(val userId: String) : PocketPassEvent
     data object LeaveGroup : PocketPassEvent
     data class RenameGroup(val title: String) : PocketPassEvent
     data object DismissConversationNotice : PocketPassEvent
     data object Back : PocketPassEvent
     data object OpenShop : PocketPassEvent
     data object CloseShop : PocketPassEvent
+    data class OpenShopCategory(val categoryId: String) : PocketPassEvent
+    data object CloseShopCategory : PocketPassEvent
     data class OpenBuyShopItem(val itemId: String) : PocketPassEvent
     data object CloseBuyShopItem : PocketPassEvent
     data object ConfirmBuyShopItem : PocketPassEvent
@@ -288,10 +373,19 @@ sealed interface PocketPassEvent {
     data object CloseBingoSquare : PocketPassEvent
     data object OpenWorldTourRegions : PocketPassEvent
     data object CloseWorldTourRegions : PocketPassEvent
+    data object PreviousPuzzle : PocketPassEvent
+    data object NextPuzzle : PocketPassEvent
+    data object OpenBuyPuzzlePiece : PocketPassEvent
+    data object CloseBuyPuzzlePiece : PocketPassEvent
+    data object ConfirmBuyPuzzlePiece : PocketPassEvent
+    data object DismissPuzzleNotice : PocketPassEvent
+    data object OpenPuzzleInfo : PocketPassEvent
+    data object ClosePuzzleInfo : PocketPassEvent
     data object OpenLeaderboard : PocketPassEvent
     data object CloseLeaderboard : PocketPassEvent
     data object OpenLeaderboardSettings : PocketPassEvent
     data object CloseLeaderboardSettings : PocketPassEvent
+    data class SetGlobalLeaderboardLimit(val limit: Int) : PocketPassEvent
     data class SetLeaderboardScope(
         val scope: com.pocketpass.app.domain.model.LeaderboardScope,
     ) : PocketPassEvent
@@ -323,10 +417,35 @@ sealed interface PocketPassEvent {
         val sort: RecentInteractionsSort,
     ) : PocketPassEvent
     data object OpenAccessibility : PocketPassEvent
+    data object OpenAppSettings : PocketPassEvent
+    data class SetMessagePrivacy(val blocked: Boolean) : PocketPassEvent
+    data class SetInvitesPrivacy(val blocked: Boolean) : PocketPassEvent
+    data class SetBoardsVisible(val visible: Boolean) : PocketPassEvent
+    data object OpenChatColours : PocketPassEvent
+    data class SaveChatColour(val colour: com.pocketpass.app.domain.model.ChatBubbleColour) : PocketPassEvent
     data object OpenSocial : PocketPassEvent
+    data object OpenAccountSecurity : PocketPassEvent
     data object OpenContributors : PocketPassEvent
     data object OpenNotificationSettings : PocketPassEvent
     data object OpenAppUpdate : PocketPassEvent
+    data object OpenWidgetMaker : PocketPassEvent
+    data class OpenWidgetEditor(val designId: String) : PocketPassEvent
+    data object CreateWidgetDesign : PocketPassEvent
+    data class UpdateWidgetDesign(val design: WidgetDesign) : PocketPassEvent
+    data class DeleteWidgetDesign(val designId: String) : PocketPassEvent
+    data object OpenWidgetDeletePrompt : PocketPassEvent
+    data object CloseWidgetDeletePrompt : PocketPassEvent
+    data class OpenWidgetBlockPicker(val slot: WidgetSlot) : PocketPassEvent
+    data object CloseWidgetBlockPicker : PocketPassEvent
+    data class PickWidgetBlock(val block: WidgetBlock?) : PocketPassEvent
+    data object OpenWidgetRename : PocketPassEvent
+    data class UpdateWidgetNameDraft(val value: String) : PocketPassEvent
+    data object SaveWidgetName : PocketPassEvent
+    data object CloseWidgetRename : PocketPassEvent
+    data class PinWidgetDesign(val designId: String) : PocketPassEvent
+    data class BeginWidgetAssign(val appWidgetId: Int) : PocketPassEvent
+    data class AssignWidgetDesign(val designId: String) : PocketPassEvent
+    data object DismissWidgetMessage : PocketPassEvent
     data object CheckForAppUpdate : PocketPassEvent
     data object DownloadAppUpdate : PocketPassEvent
     data object InstallAppUpdate : PocketPassEvent
@@ -335,6 +454,7 @@ sealed interface PocketPassEvent {
     data class SetEncounterAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetNearbyRepairAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetUpdateAlertsEnabled(val enabled: Boolean) : PocketPassEvent
+    data class SetMessageAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetStepRewardsEnabled(val enabled: Boolean) : PocketPassEvent
     data object RequestStepRewardsPermission : PocketPassEvent
     data object ResetSettings : PocketPassEvent

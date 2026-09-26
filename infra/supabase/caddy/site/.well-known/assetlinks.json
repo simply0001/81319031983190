@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.pocketpass.app",
+      "sha256_cert_fingerprints": [
+        "8A:EB:D2:A2:25:02:5C:6A:E3:1F:08:9A:35:7F:98:C8:EB:61:B5:DB:1E:00:27:46:16:65:2F:DA:3B:DA:F3:58",
+        "48:AB:C7:44:F3:49:1B:F0:40:BE:EC:4C:81:CD:46:7E:8D:B4:1E:2E:97:C8:07:1A:5F:FA:C2:1A:C1:37:FA:DA"
+      ]
+    }
+  }
+]

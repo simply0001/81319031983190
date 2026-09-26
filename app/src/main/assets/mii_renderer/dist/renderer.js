@@ -36924,7 +36924,9 @@ var HatTypeList = [
   0 /* HEAD */,
   1 /* HAT */,
   1 /* HAT */,
-  1 /* HAT */
+  1 /* HAT */,
+  0 /* HEAD */,
+  2 /* FACE_ONLY */
 ];
 var ClothesTypeList = [
   0 /* COLOR_MIXED */,

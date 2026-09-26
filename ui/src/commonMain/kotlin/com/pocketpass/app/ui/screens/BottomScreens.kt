@@ -63,6 +63,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -155,6 +156,7 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.BOTTOM_DESIGN_HEIGHT
 import com.pocketpass.app.ui.BOTTOM_DESIGN_WIDTH
 import com.pocketpass.app.ui.DesignAnchor
+import com.pocketpass.app.ui.LocalDesignOrigin
 import com.pocketpass.app.ui.DesignBox
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.LocalDesignMetrics
@@ -226,8 +228,17 @@ fun BottomScreen(
             state = state,
             dispatch = dispatch,
         )
+        PocketPassRoute.AppSettings -> AppSettingsBottom(
+            state = state,
+            dispatch = dispatch,
+        )
+        PocketPassRoute.ChatColours -> ChatColoursBottom(state, dispatch)
         PocketPassRoute.Social -> SocialBottom(
             state = state,
+            dispatch = dispatch,
+        )
+        PocketPassRoute.AccountSecurity -> AccountSecurityBottom(
+            state = state.accountSecurity,
             dispatch = dispatch,
         )
         PocketPassRoute.Contributors -> ContributorsBottom(dispatch = dispatch)
@@ -239,10 +250,16 @@ fun BottomScreen(
             state = state,
             dispatch = dispatch,
         )
+        PocketPassRoute.WidgetMaker -> WidgetsBottom(state = state, dispatch = dispatch)
+        is PocketPassRoute.WidgetEditor -> WidgetEditorBottom(
+            state = state,
+            dispatch = dispatch,
+            designId = route.designId,
+        )
         is PocketPassRoute.Root -> when (route.destination) {
             PocketPassDestination.Home -> HomeBottom(state, dispatch)
             PocketPassDestination.Activities -> ActivitiesBottom(state, dispatch, extensions)
-            PocketPassDestination.Messages -> MessagesBottom(state, dispatch)
+            PocketPassDestination.Messages -> if (state.boardsVisible) BoardsBottom(state, dispatch) else MessagesBottom(state, dispatch)
             PocketPassDestination.Friends -> FriendsBottom(state, dispatch)
             PocketPassDestination.Settings -> SettingsBottom(state, dispatch, extensions)
         }
@@ -352,7 +369,7 @@ private fun SortMenu(
     if (open) {
         Box(
             modifier = Modifier
-                .designBounds(metrics, 0f, 0f, 1240f, 1080f)
+                .anchoredBounds(metrics, 0f, 0f, 1240f, 1080f, DesignAnchor.Stretch, DesignAnchor.Stretch)
                 .testTag("${tagPrefix}_scrim")
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -400,12 +417,12 @@ private fun SortMenu(
         val panelShape = RoundedCornerShape(metrics.dp(48f))
         Box(
             Modifier
-                .designBounds(metrics, 632f, 411f, 558f, 356f)
+                .anchoredBounds(metrics, 632f, 411f, 558f, 356f, DesignAnchor.End)
                 .pocketShadow(metrics, 48f),
         )
         Column(
             modifier = Modifier
-                .designBounds(metrics, 632f, 399f, 558f, 356f)
+                .anchoredBounds(metrics, 632f, 399f, 558f, 356f, DesignAnchor.End)
                 .clip(panelShape)
                 .pocketFrame(pocketPalette.surface, metrics.dp(8f), borderColor, panelShape)
                 .padding(vertical = metrics.dp(22f)),
@@ -644,7 +661,7 @@ internal fun EmptyStateRow(
         }
         Text(
             text = title,
-            modifier = Modifier.designBounds(metrics, 210f, 42f, 900f, 76f),
+            modifier = Modifier.anchoredBounds(metrics, 210f, 42f, 900f, 76f, DesignAnchor.Stretch),
             color = pocketPalette.textPrimary,
             fontFamily = Rubik,
             fontWeight = FontWeight.Bold,
@@ -653,7 +670,7 @@ internal fun EmptyStateRow(
         )
         Text(
             text = subtitle,
-            modifier = Modifier.designBounds(metrics, 210f, 117f, 900f, 55f),
+            modifier = Modifier.anchoredBounds(metrics, 210f, 117f, 900f, 55f, DesignAnchor.Stretch),
             color = pocketPalette.textSecondary,
             fontFamily = Rubik,
             fontWeight = FontWeight.SemiBold,
@@ -723,7 +740,7 @@ internal fun FriendsStatusPanel(
         )
         Text(
             text = subtitle,
-            modifier = Modifier.designBounds(metrics, 210f, 117f, 820f, 55f),
+            modifier = Modifier.anchoredBounds(metrics, 210f, 117f, 820f, 55f, DesignAnchor.Stretch),
             color = pocketPalette.textSecondary,
             fontFamily = Rubik,
             fontWeight = FontWeight.SemiBold,
@@ -779,12 +796,12 @@ private fun FriendsHeaderActions(
     val shape = RoundedCornerShape(metrics.dp(40f))
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1008f, 303f, 80f, 80f)
+            .anchoredBounds(metrics, 1008f, 303f, 80f, 80f, DesignAnchor.End)
             .pocketShadow(metrics, 40f),
     )
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1008f, 297f, 80f, 80f)
+            .anchoredBounds(metrics, 1008f, 297f, 80f, 80f, DesignAnchor.End)
             .clip(shape)
             .pocketFrame(
                 Brush.verticalGradient(
@@ -831,12 +848,12 @@ private fun MessagesHeaderActions(
     val shape = RoundedCornerShape(metrics.dp(40f))
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1008f, 303f, 80f, 80f)
+            .anchoredBounds(metrics, 1008f, 303f, 80f, 80f, DesignAnchor.End)
             .pocketShadow(metrics, 40f),
     )
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1008f, 297f, 80f, 80f)
+            .anchoredBounds(metrics, 1008f, 297f, 80f, 80f, DesignAnchor.End)
             .clip(shape)
             .pocketFrame(
                 Brush.verticalGradient(
@@ -884,12 +901,12 @@ private fun NotificationHeaderAction(
     val shape = RoundedCornerShape(metrics.dp(40f))
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1008f, 303f, 80f, 80f)
+            .anchoredBounds(metrics, 1008f, 303f, 80f, 80f, DesignAnchor.End)
             .pocketShadow(metrics, 40f),
     )
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1008f, 297f, 80f, 80f)
+            .anchoredBounds(metrics, 1008f, 297f, 80f, 80f, DesignAnchor.End)
             .clip(shape)
             .pocketFrame(
                 Brush.verticalGradient(
@@ -899,7 +916,10 @@ private fun NotificationHeaderAction(
                 pocketPalette.tealBorder,
                 shape,
             )
-            .controllerTarget("notifications") { onClick() }
+            .controllerTarget(
+                "notifications",
+                badgeBounds = if (unreadCount > 0) androidx.compose.ui.geometry.Rect(50f, -25f, 105f, 30f) else null,
+            ) { onClick() }
             .testTag("notifications")
             .clickable(
                 interactionSource = interaction,
@@ -955,7 +975,7 @@ private fun NotificationHeaderAction(
     if (unreadCount > 0) {
         Box(
             modifier = Modifier
-                .designBounds(metrics, 1058f, 272f, 55f, 55f)
+                .anchoredBounds(metrics, 1058f, 272f, 55f, 55f, DesignAnchor.End)
                 .clip(RoundedCornerShape(metrics.dp(27.5f)))
                 .pocketFrame(
                     Color(0xFFF44F4F),
@@ -1740,7 +1760,7 @@ fun NameEditorBottomOverlay(
     )
 }
 
-private const val NAME_EDITOR_FOCUS_LAYER = 10
+internal const val NAME_EDITOR_FOCUS_LAYER = 10
 
 @Composable
 private fun SectionTitle(
@@ -1754,7 +1774,7 @@ private fun SectionTitle(
 ) {
     Text(
         text = title,
-        modifier = Modifier.designBounds(metrics, 50f, 294f, 834.68f, 96f),
+        modifier = Modifier.anchoredBounds(metrics, 50f, 294f, 834.68f, 96f, DesignAnchor.Start),
         color = color,
         fontFamily = Rubik,
         fontWeight = FontWeight.SemiBold,
@@ -1764,12 +1784,12 @@ private fun SectionTitle(
     val shape = RoundedCornerShape(metrics.dp(40f))
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1110f, 303f, 80f, 80f)
+            .anchoredBounds(metrics, 1110f, 303f, 80f, 80f, DesignAnchor.End)
             .pocketShadow(metrics, 40f),
     )
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1110f, 297f, 80f, 80f)
+            .anchoredBounds(metrics, 1110f, 297f, 80f, 80f, DesignAnchor.End)
             .clip(shape)
             .pocketFrame(
                 Brush.verticalGradient(listOf(pocketPalette.surface, buttonTint)),
@@ -1826,7 +1846,7 @@ private fun HorizontalCards(
                     val viewport = scroll.viewportSize
                         .takeIf { it > 0 }
                         ?.toFloat()
-                        ?: with(density) { metrics.dp(1240f).toPx() }
+                        ?: with(density) { metrics.dp(1240f + 2f * metrics.overscanX).toPx() }
                     val margin = with(density) { metrics.dp(50f).toPx() }
                     val target = when {
                         cardLeft - margin < scroll.value -> cardLeft - margin
@@ -1844,13 +1864,16 @@ private fun HorizontalCards(
     }
     Box(
         modifier = Modifier
-            .designBounds(metrics, 0f, 419f, 1240f, 661f)
+            .anchoredBounds(metrics, 0f, 419f, 1240f, 661f, DesignAnchor.Stretch)
             .clipToBounds()
             .horizontalScroll(scroll),
     ) {
         Box(
             Modifier.requiredSize(
-                metrics.dp((50f + people.size * 502.303f).coerceAtLeast(1240f)),
+                metrics.dp(
+                    (50f + people.size * 502.303f)
+                        .coerceAtLeast(1240f + 2f * metrics.overscanX),
+                ),
                 metrics.dp(661f),
             ),
         ) {
@@ -2098,6 +2121,22 @@ private fun ActivitiesBottom(
             state.leaderboard.visible || state.achievements.visible
         val returnGeneration = remember { mutableIntStateOf(0) }
         var overlayWasOpen by remember { mutableStateOf(overlayOpen) }
+        val focus = LocalControllerFocus.current
+        val openActivityFocusId = when {
+            state.shop.visible -> "activity_Shop"
+            state.games.visible -> "activity_Games"
+            state.leaderboard.visible -> "activity_Leaderboard"
+            else -> null
+        }
+        var returnActivityFocusId by remember { mutableStateOf<String?>(openActivityFocusId) }
+        LaunchedEffect(openActivityFocusId, focus) {
+            if (openActivityFocusId != null) {
+                returnActivityFocusId = openActivityFocusId
+            } else {
+                returnActivityFocusId?.let { focus?.focus(it) }
+                returnActivityFocusId = null
+            }
+        }
         LaunchedEffect(overlayOpen) {
             if (overlayWasOpen && !overlayOpen) returnGeneration.intValue++
             overlayWasOpen = overlayOpen
@@ -2170,6 +2209,24 @@ fun ShopBottomOverlay(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val blockInteraction = remember { MutableInteractionSource() }
+    val selectedCategory = state.shop.selectedCategory
+    val focus = LocalControllerFocus.current
+    var returnCategorySlug by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.shop.visible, selectedCategory?.id) {
+        if (!state.shop.visible) return@LaunchedEffect
+        if (selectedCategory != null) {
+            returnCategorySlug = selectedCategory.slug
+            focus?.focus(
+                selectedCategory.items.firstOrNull()?.let { "shop_item_${it.slug}" }
+                    ?: "shop_category_back",
+                reveal = false,
+            )
+        } else {
+            val slug = returnCategorySlug ?: state.shop.categories.firstOrNull()?.slug
+            if (slug != null) focus?.focus("shop_category_$slug", reveal = false)
+            returnCategorySlug = null
+        }
+    }
     PatternBackground(
         metrics = metrics,
         pattern = Assets.PatternActivitiesBottom,
@@ -2189,25 +2246,92 @@ fun ShopBottomOverlay(
                 indication = null,
             ) {},
     )
-    (state.shop.purchaseError ?: state.shop.refreshError)?.let { message ->
+    (state.miiEditor.wearHatError ?: state.shop.purchaseError ?: state.shop.refreshError)?.let { message ->
         ShopNotice(metrics = metrics, message = message)
     }
-    Column(
-        modifier = Modifier
-            .designBounds(metrics, 40f, 287f, 1160f, 753f)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(metrics.dp(40f)),
-    ) {
-        state.shop.categories.forEachIndexed { index, category ->
-            MotionLayer(
-                entrance = EntranceMotion.OverlayPop,
-                delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS +
-                    index * OVERLAY_POP_STAGGER_MILLIS,
-            ) {
-                ShopCategoryPanel(
+    if (selectedCategory == null) {
+        Text(
+            text = "Categories",
+            modifier = Modifier.designBounds(metrics, 56f, 282f, 1128f, 84f),
+            color = pocketPalette.ink(ShopTitleColor),
+            fontFamily = Rubik,
+            fontWeight = FontWeight.Bold,
+            fontSize = metrics.sp(68f),
+        )
+        Column(
+            modifier = Modifier
+                .designBounds(metrics, 40f, 382f, 1160f, 658f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(metrics.dp(28f)),
+        ) {
+            state.shop.categories.forEachIndexed { index, category ->
+                MotionLayer(
+                    entrance = EntranceMotion.OverlayPop,
+                    delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS +
+                        index * OVERLAY_POP_STAGGER_MILLIS,
+                ) {
+                    ShopCategoryCard(metrics, category) {
+                        dispatch(PocketPassEvent.OpenShopCategory(category.id))
+                    }
+                }
+            }
+        }
+    } else {
+        val backShape = RoundedCornerShape(metrics.dp(38f))
+        Box(
+            Modifier
+                .designBounds(metrics, 40f, 290f, 282f, 80f)
+                .clip(backShape)
+                .pocketFrame(shopPanelBrush(), metrics.dp(8f), ShopBorder, backShape)
+                .testTag("shop_category_back")
+                .controllerTarget("shop_category_back", layer = 10, cornerRadius = 38f) {
+                    dispatch(PocketPassEvent.CloseShopCategory)
+                }
+                .clickable { dispatch(PocketPassEvent.CloseShopCategory) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "‹ Categories",
+                color = pocketPalette.ink(ShopTitleColor),
+                fontFamily = Rubik,
+                fontWeight = FontWeight.Bold,
+                fontSize = metrics.sp(34f),
+            )
+        }
+        Text(
+            text = selectedCategory.title,
+            modifier = Modifier.designBounds(metrics, 354f, 285f, 610f, 86f),
+            color = pocketPalette.ink(ShopTitleColor),
+            fontFamily = Rubik,
+            fontWeight = FontWeight.Bold,
+            fontSize = metrics.sp(68f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = "${selectedCategory.items.size} items",
+            modifier = Modifier.designBounds(metrics, 972f, 309f, 218f, 50f),
+            color = pocketPalette.ink(ShopTitleColor).copy(alpha = 0.7f),
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(30f),
+            textAlign = TextAlign.End,
+        )
+        Column(
+            modifier = Modifier
+                .designBounds(metrics, 40f, 390f, 1160f, 650f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(metrics.dp(24f)),
+        ) {
+            selectedCategory.items.forEach { item ->
+                ShopItemCard(
                     metrics = metrics,
-                    category = category,
-                    state = state,
+                    item = item,
+                    status = state.shop.statusOf(item),
+                    canBuy = state.shop.canBuy(item),
+                    wearEnabled = state.miiEditorEnabled,
+                    previewAppearance = state.miiEditor.draft,
+                    wearHatInProgress = state.miiEditor.wearHatInProgress,
                     dispatch = dispatch,
                 )
             }
@@ -2217,7 +2341,7 @@ fun ShopBottomOverlay(
         BuyShopItemConfirmDialog(
             metrics = metrics,
             item = item,
-            availableTokens = state.shop.tokenBalance,
+            body = state.shop.purchasePromptBody(item),
             dispatch = dispatch,
         )
     }
@@ -2244,33 +2368,35 @@ private fun ShopNotice(
 }
 
 @Composable
-internal fun ShopCategoryPanel(
+internal fun ShopCategoryCard(
     metrics: DesignMetrics,
     category: ShopCategory,
-    state: PocketPassUiState,
-    dispatch: (PocketPassEvent) -> Unit,
+    onClick: () -> Unit,
 ) {
-    val panelShape = RoundedCornerShape(metrics.dp(118f))
-    Box(Modifier.requiredSize(metrics.dp(1160f), metrics.dp(531.65f))) {
+    val panelShape = RoundedCornerShape(metrics.dp(88f))
+    Box(Modifier.requiredSize(metrics.dp(1160f), metrics.dp(260f))) {
         Box(
             Modifier
-                .designBounds(metrics, 0f, 15.674f, 1160f, 531.65f)
-                .pocketShadow(metrics, 118f),
+                .designBounds(metrics, 0f, 12f, 1160f, 248f)
+                .pocketShadow(metrics, 88f),
         )
         Box(
             Modifier
-                .designBounds(metrics, 0f, 0f, 1160f, 531.65f)
+                .designBounds(metrics, 0f, 0f, 1160f, 248f)
                 .clip(panelShape)
-                .pocketFrame(shopPanelBrush(), metrics.dp(20.152f), ShopBorder, panelShape),
+                .pocketFrame(shopPanelBrush(), metrics.dp(16f), ShopBorder, panelShape)
+                .testTag("shop_category_${category.slug}")
+                .controllerTarget("shop_category_${category.slug}", layer = 10, cornerRadius = 88f, onActivate = onClick)
+                .clickable(onClick = onClick),
         ) {
             shopAssetForKey(category.iconKey)?.let { icon ->
                 FigmaAsset(
                     resource = icon,
-                    modifier = Modifier.designBounds(metrics, 52f, 52f, 124.65f, 124.65f),
+                    modifier = Modifier.designBounds(metrics, 50f, 42f, 158f, 158f),
                 )
             }
             Column(
-                modifier = Modifier.designBounds(metrics, 210f, 28.33f, 767f, 174f),
+                modifier = Modifier.designBounds(metrics, 248f, 24f, 720f, 198f),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
@@ -2278,55 +2404,29 @@ internal fun ShopCategoryPanel(
                     color = pocketPalette.ink(ShopTitleColor),
                     fontFamily = Rubik,
                     fontWeight = FontWeight.Bold,
-                    fontSize = metrics.sp(64f),
+                    fontSize = metrics.sp(68f),
                 )
-                Spacer(Modifier.requiredHeight(metrics.dp(19f)))
+                Spacer(Modifier.requiredHeight(metrics.dp(6f)))
                 Text(
                     text = category.subtitle,
                     color = pocketPalette.ink(Color(0xFF861F00)).copy(alpha = 0.56f),
                     fontFamily = Rubik,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = metrics.sp(45f),
+                    fontSize = metrics.sp(36f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            Box(
-                Modifier
-                    .designBounds(metrics, 52f, 201.65f, 1056f, 9f)
-                    .alpha(0.34f)
-                    .clip(RoundedCornerShape(metrics.dp(100f)))
-                    .background(Color(0xFFB59486).copy(alpha = 0.43f)),
+            Text(
+                text = "${category.items.size} items  ›",
+                modifier = Modifier.designBounds(metrics, 944f, 91f, 190f, 62f),
+                color = pocketPalette.ink(ShopTitleColor),
+                fontFamily = Rubik,
+                fontWeight = FontWeight.Bold,
+                fontSize = metrics.sp(32f),
+                textAlign = TextAlign.End,
+                maxLines = 1,
             )
-            Box(Modifier.designBounds(metrics, 52f, 235.65f, 1068f, 244f)) {
-                CompositionLocalProvider(LocalControllerFocusGroup provides "shop_${category.slug}") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(metrics.dp(40f)),
-                    ) {
-                        category.items.forEach { item ->
-                            ShopItemCard(
-                                metrics = metrics,
-                                item = item,
-                                status = state.shop.statusOf(item),
-                                wearEnabled = state.miiEditorEnabled,
-                                previewAppearance = state.miiEditor.draft,
-                                dispatch = dispatch,
-                            )
-                        }
-                    }
-                }
-                Box(
-                    Modifier
-                        .designBounds(metrics, 0f, 0f, 1114f, 244f)
-                        .background(
-                            Brush.horizontalGradient(
-                                0.57212f to Color.Transparent,
-                                1f to pocketPalette.surface,
-                            ),
-                        ),
-                )
-            }
         }
     }
 }
@@ -2336,12 +2436,20 @@ internal fun ShopItemCard(
     metrics: DesignMetrics,
     item: ShopItem,
     status: ShopItemStatus,
+    canBuy: Boolean,
     wearEnabled: Boolean,
     previewAppearance: MiiAppearance,
+    wearHatInProgress: Boolean = false,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val cardShape = RoundedCornerShape(metrics.dp(64f))
     val imageShape = RoundedCornerShape(metrics.dp(27f))
+    val subscriptionItem = status == ShopItemStatus.Unlocked && item.priceTokens > 0
+    val applyingHat = wearHatInProgress && item.miiHatType == previewAppearance.extHatType
+    val wearingHat = !wearHatInProgress && item.miiHatType == previewAppearance.extHatType
+    val canWearHat = wearEnabled && !wearHatInProgress && !wearingHat
+    val focus = LocalControllerFocus.current
+    val cardId = "shop_item_${item.slug}"
     val action: (() -> Unit)? = when (status) {
         ShopItemStatus.Available -> {
             { dispatch(PocketPassEvent.OpenBuyShopItem(item.id)) }
@@ -2349,7 +2457,7 @@ internal fun ShopItemCard(
 
         ShopItemStatus.Owned,
         ShopItemStatus.Unlocked,
-        -> if (wearEnabled) {
+        -> if (canWearHat) {
             { dispatch(PocketPassEvent.WearShopItem(item.id)) }
         } else {
             null
@@ -2361,21 +2469,21 @@ internal fun ShopItemCard(
     }
     Box(
         Modifier
-            .requiredSize(metrics.dp(656f), metrics.dp(244f))
+            .requiredSize(metrics.dp(1160f), metrics.dp(218f))
             .clip(cardShape)
             .pocketFrame(shopPanelBrush(), metrics.dp(20.152f), ShopBorder, cardShape)
-            .testTag("shop_item_${item.slug}")
-            .controllerTarget("shop_item_${item.slug}", layer = 10, cornerRadius = 64f) {
-                action?.invoke()
+            .testTag(cardId)
+            .controllerTarget(cardId, layer = 10, cornerRadius = 64f) {
+                focus?.enterChildren(cardId)
             }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = action != null,
+                enabled = action != null && !subscriptionItem,
             ) { action?.invoke() },
     ) {
         val imageModifier = Modifier
-            .designBounds(metrics, 42f, 42f, 166f, 160f)
+            .designBounds(metrics, 30f, 24f, 172f, 170f)
             .clip(imageShape)
             .pocketBorder(
                 metrics.dp(16.793f),
@@ -2415,7 +2523,7 @@ internal fun ShopItemCard(
             }
         }
         Column(
-            modifier = Modifier.designBounds(metrics, 232f, 42f, 382f, 160f),
+            modifier = Modifier.designBounds(metrics, 238f, 20f, 872f, 178f),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
@@ -2423,21 +2531,61 @@ internal fun ShopItemCard(
                 color = pocketPalette.ink(ShopTitleColor),
                 fontFamily = Rubik,
                 fontWeight = FontWeight.Bold,
-                fontSize = metrics.sp(59.939f),
+                fontSize = metrics.sp(if (subscriptionItem) 50f else 54f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             val statusModifier = Modifier.testTag("shop_item_${item.slug}_status")
-            when (status) {
-                ShopItemStatus.Available -> Text(
-                    text = "${item.priceTokens} Tokens",
+            if (subscriptionItem) {
+                Text(
+                    text = "Included with Ko-fi",
                     modifier = statusModifier,
-                    color = pocketPalette.ink(ShopPriceColor),
+                    color = pocketPalette.ink(Color(0xFF1D6B25)),
                     fontFamily = Rubik,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = metrics.sp(38.924f),
+                    fontSize = metrics.sp(28f),
                     maxLines = 1,
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(metrics.dp(20f)),
+                ) {
+                    ShopItemActionButton(
+                        metrics = metrics,
+                        label = "Buy · ${item.priceTokens}",
+                        tag = "shop_item_${item.slug}_buy",
+                        width = 212f,
+                        enabled = canBuy,
+                        controllerEnabled = canBuy,
+                        parentId = cardId,
+                    ) { dispatch(PocketPassEvent.OpenBuyShopItem(item.id)) }
+                    if (wearEnabled) {
+                        ShopItemActionButton(
+                            metrics = metrics,
+                            label = when {
+                                applyingHat -> "Saving"
+                                wearingHat -> "Wearing"
+                                else -> "Wear"
+                            },
+                            tag = "shop_item_${item.slug}_wear",
+                            width = 170f,
+                            enabled = canWearHat,
+                            controllerEnabled = canWearHat,
+                            selected = wearingHat,
+                            parentId = cardId,
+                        ) { dispatch(PocketPassEvent.WearShopItem(item.id)) }
+                    }
+                }
+            } else when (status) {
+                ShopItemStatus.Available -> ShopItemActionButton(
+                    metrics = metrics,
+                    label = "Buy · ${item.priceTokens}",
+                    tag = "${cardId}_buy",
+                    width = 280f,
+                    enabled = canBuy,
+                    controllerEnabled = canBuy,
+                    parentId = cardId,
+                ) { dispatch(PocketPassEvent.OpenBuyShopItem(item.id)) }
 
                 ShopItemStatus.Unaffordable -> {
                     Text(
@@ -2476,7 +2624,11 @@ internal fun ShopItemCard(
                     horizontalArrangement = Arrangement.spacedBy(metrics.dp(28f)),
                 ) {
                     Text(
-                        text = if (status == ShopItemStatus.Unlocked) "Unlocked" else "Owned",
+                        text = when {
+                            status != ShopItemStatus.Unlocked -> "Owned"
+                            item.priceTokens == 0 -> "Free"
+                            else -> "Unlocked"
+                        },
                         modifier = statusModifier,
                         color = pocketPalette.ink(Color(0xFF1D6B25)),
                         fontFamily = Rubik,
@@ -2485,33 +2637,20 @@ internal fun ShopItemCard(
                         maxLines = 1,
                     )
                     if (wearEnabled) {
-                        val pillShape = RoundedCornerShape(metrics.dp(32f))
-                        Box(
-                            modifier = Modifier
-                                .requiredSize(metrics.dp(150f), metrics.dp(64f))
-                                .clip(pillShape)
-                                .pocketFrame(
-                                    greenButtonBrush(),
-                                    metrics.dp(10f),
-                                    Color(0xFF3CBC29),
-                                    pillShape,
-                                )
-                                .testTag("shop_item_${item.slug}_wear")
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                ) { dispatch(PocketPassEvent.WearShopItem(item.id)) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "Wear",
-                                color = Color.White,
-                                fontFamily = Rubik,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = metrics.sp(32f),
-                                maxLines = 1,
-                            )
-                        }
+                        ShopItemActionButton(
+                            metrics = metrics,
+                            label = when {
+                                applyingHat -> "Saving"
+                                wearingHat -> "Wearing"
+                                else -> "Wear"
+                            },
+                            tag = "${cardId}_wear",
+                            width = 170f,
+                            enabled = canWearHat,
+                            controllerEnabled = canWearHat,
+                            selected = wearingHat,
+                            parentId = cardId,
+                        ) { dispatch(PocketPassEvent.WearShopItem(item.id)) }
                     }
                 }
             }
@@ -2520,13 +2659,61 @@ internal fun ShopItemCard(
 }
 
 @Composable
+private fun ShopItemActionButton(
+    metrics: DesignMetrics,
+    label: String,
+    tag: String,
+    width: Float,
+    enabled: Boolean = true,
+    controllerEnabled: Boolean,
+    selected: Boolean = false,
+    parentId: String,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(metrics.dp(32f))
+    Box(
+        modifier = Modifier
+            .requiredSize(metrics.dp(width), metrics.dp(64f))
+            .alpha(if (enabled || selected) 1f else 0.45f)
+            .clip(shape)
+            .pocketFrame(greenButtonBrush(), metrics.dp(10f), Color(0xFF3CBC29), shape)
+            .testTag(tag)
+            .then(
+                if (controllerEnabled) Modifier.controllerTarget(tag, layer = 10, cornerRadius = 32f, parentId = parentId) {
+                    onClick()
+                } else Modifier,
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(32f),
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 internal fun BuyShopItemConfirmDialog(
     metrics: DesignMetrics,
     item: ShopItem,
-    availableTokens: Int,
+    body: String,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val focus = LocalControllerFocus.current
+    val returnTarget = remember { focus?.focusedTarget(null) }
+    DisposableEffect(focus) {
+        onDispose { returnTarget?.let { focus?.restoreFocus(it) } }
+    }
     LaunchedEffect(Unit) { focus?.focus("shop_buy_cancel", reveal = false) }
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
@@ -2573,7 +2760,7 @@ internal fun BuyShopItemConfirmDialog(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = "It costs ${item.priceTokens} tokens. You have $availableTokens.",
+            text = body,
             modifier = Modifier.designBounds(metrics, 90f, 148f, 900f, 130f),
             color = pocketPalette.textSecondary,
             fontFamily = Rubik,
@@ -2650,6 +2837,10 @@ fun GamesBottomOverlay(
     metrics: DesignMetrics,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
+    val focus = LocalControllerFocus.current
+    LaunchedEffect(focus) {
+        focus?.focus("game_row_${GameEntries.first().target.name}")
+    }
     val blockInteraction = remember { MutableInteractionSource() }
     PatternBackground(
         metrics = metrics,
@@ -2792,6 +2983,18 @@ fun LeaderboardBottomOverlay(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
+    val focus = LocalControllerFocus.current
+    val self = selfLeaderboardEntry(state)
+    val firstRow = state.leaderboard.entries.firstOrNull { it.userId != self?.first?.userId }
+    val initialFocusId = when {
+        state.leaderboard.settingsVisible -> "leaderboard_scope_friends"
+        self != null -> "leaderboard_you_card"
+        firstRow != null -> leaderboardRowTag(firstRow)
+        else -> "leaderboard_empty"
+    }
+    LaunchedEffect(focus, initialFocusId) {
+        focus?.focus(initialFocusId)
+    }
     val blockInteraction = remember { MutableInteractionSource() }
     PatternBackground(
         metrics = metrics,
@@ -2815,7 +3018,6 @@ fun LeaderboardBottomOverlay(
         LeaderboardSettingsBottom(metrics, state, dispatch)
         return
     }
-    val self = selfLeaderboardEntry(state)
     Box(
         modifier = Modifier.designBounds(metrics, 40f, 287f, 1160f, 753f),
         contentAlignment = Alignment.TopCenter,
@@ -2884,33 +3086,19 @@ private fun LeaderboardSettingsBottom(
             maxLines = 1,
         )
     }
-    MotionLayer(
-        modifier = Modifier.fillMaxSize(),
-        entrance = EntranceMotion.OverlayPop,
-        delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + OVERLAY_POP_STAGGER_MILLIS,
-    ) {
-        LeaderboardScopeOption(
-            metrics = metrics,
-            y = 537f,
-            title = "Friends",
-            subtitle = "Just you and your friends",
-            selected = state.leaderboard.scope == LeaderboardScope.Friends,
-            tag = "leaderboard_scope_friends",
-        ) { dispatch(PocketPassEvent.SetLeaderboardScope(LeaderboardScope.Friends)) }
-    }
-    MotionLayer(
-        modifier = Modifier.fillMaxSize(),
-        entrance = EntranceMotion.OverlayPop,
-        delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + 2 * OVERLAY_POP_STAGGER_MILLIS,
-    ) {
-        LeaderboardScopeOption(
-            metrics = metrics,
-            y = 807f,
-            title = "Global",
-            subtitle = "Everyone on PocketPass",
-            selected = state.leaderboard.scope == LeaderboardScope.Global,
-            tag = "leaderboard_scope_global",
-        ) { dispatch(PocketPassEvent.SetLeaderboardScope(LeaderboardScope.Global)) }
+    DesignBox(metrics, 0f, 510f, 1240f, 570f, DesignAnchor.Stretch, DesignAnchor.Stretch,
+        modifier = Modifier.clipToBounds().verticalScroll(rememberScrollState()).testTag("leaderboard_settings_scroll")) {
+        Box(Modifier.requiredWidth(metrics.dp(1240f + 2f * metrics.overscanX)).requiredHeight(metrics.dp(860f))) {
+            LeaderboardScopeOption(metrics, 27f, "Friends", "Just you and your friends",
+                state.leaderboard.scope == LeaderboardScope.Friends, "leaderboard_scope_friends") {
+                dispatch(PocketPassEvent.SetLeaderboardScope(LeaderboardScope.Friends))
+            }
+            LeaderboardScopeOption(metrics, 297f, "Global", "Everyone on PocketPass",
+                state.leaderboard.scope == LeaderboardScope.Global, "leaderboard_scope_global") {
+                dispatch(PocketPassEvent.SetLeaderboardScope(LeaderboardScope.Global))
+            }
+            LeaderboardLimitPanel(metrics, 567f, state, dispatch)
+        }
     }
 }
 
@@ -2958,7 +3146,7 @@ internal fun LeaderboardScopeOption(
         )
         Box(
             modifier = Modifier
-                .designBounds(metrics, 992f, 74f, 72f, 72f)
+                .anchoredBounds(metrics, 992f, 74f, 72f, 72f, DesignAnchor.End)
                 .clip(CircleShape)
                 .pocketFrame(
                     if (selected) Color(0xFF3CBC29) else Color.Transparent,
@@ -3119,7 +3307,8 @@ internal fun LeaderboardPanel(
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .requiredHeight(metrics.dp(124.65f)),
+                            .requiredHeight(metrics.dp(124.65f))
+                            .controllerTarget("leaderboard_empty", layer = 10, cornerRadius = LEADERBOARD_RING_RADIUS) {},
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -3755,16 +3944,16 @@ private fun MessagesBottom(
                 metrics.overscanY.coerceIn(0f, MESSAGE_PANEL_OVERSCAN_MAX)
         Box(
             modifier = Modifier
-                .designBounds(metrics, 50f, MESSAGE_PANEL_TOP, 1140f, panelHeight + 16f),
+                .anchoredBounds(metrics, 50f, MESSAGE_PANEL_TOP, 1140f, panelHeight + 16f, DesignAnchor.Stretch),
         ) {
             Box(
                 modifier = Modifier
-                    .designBounds(metrics, 0f, 15.674f, 1140f, panelHeight)
+                    .designBounds(metrics, 0f, 15.674f, 1140f + 2f * metrics.overscanX, panelHeight)
                     .pocketShadow(metrics, 104f),
             )
             Box(
                 modifier = Modifier
-                    .designBounds(metrics, 0f, 0f, 1140f, panelHeight)
+                    .designBounds(metrics, 0f, 0f, 1140f + 2f * metrics.overscanX, panelHeight)
                     .clip(panelShape)
                     .pocketFrame(
                         pocketPalette.surface,
@@ -3786,28 +3975,11 @@ private fun MessagesBottom(
                 ) {
                     Box(
                         modifier = Modifier
-                            .requiredWidth(metrics.dp(1140f))
+                            .requiredWidth(metrics.dp(1140f + 2f * metrics.overscanX))
                             .requiredHeight(metrics.dp(rowsHeight.coerceAtLeast(panelHeight))),
                     ) {
                         conversations.forEachIndexed { index, conversation ->
-                            val theme = pocketPalette
-                            val palette = if (index % 2 == 0) {
-                                MessageRowPalette(
-                                    name = theme.ink(Color(0xFFC99E1B)),
-                                    preview = theme.ink(Color(0xFFE5AA00)),
-                                    count = Color(0xFFF4B900),
-                                    tintBottom = theme.tint(Color(0xFFFFF0B9)),
-                                    avatarBorder = theme.tint(Color(0xFFFFF0BD)),
-                                )
-                            } else {
-                                MessageRowPalette(
-                                    name = theme.ink(Color(0xFF2365D3)),
-                                    preview = theme.ink(Color(0xFF5B83E5)),
-                                    count = Color(0xFF1371F5),
-                                    tintBottom = theme.tint(Color(0xFFDDE7FC)),
-                                    avatarBorder = theme.tint(Color(0xFFE2E4F0)),
-                                )
-                            }
+                            val palette = messageListRowPalette()
                             MessageRow(
                                 metrics = metrics,
                                 y = MESSAGE_ROW_INSET + index * MESSAGE_ROW_HEIGHT,
@@ -3834,6 +4006,8 @@ internal fun MessageRow(
     palette: MessageRowPalette,
     onClick: () -> Unit,
     selfId: UserId? = null,
+    focusLayer: Int = 0,
+    neighbors: Map<FocusDirection, String> = emptyMap(),
 ) {
     val id = conversation.id.value
     val interaction = remember(id) { MutableInteractionSource() }
@@ -3843,14 +4017,14 @@ internal fun MessageRow(
                 metrics,
                 0f,
                 y - MESSAGE_ROW_INSET,
-                1140f,
+                1140f + 2f * metrics.overscanX,
                 MESSAGE_ROW_HEIGHT + MESSAGE_ROW_INSET * 2f,
             )
-            .controllerTarget("message_$id", cornerRadius = 104f) { onClick() },
+            .controllerTarget("message_$id", layer = focusLayer, cornerRadius = 104f, neighbors = neighbors) { onClick() },
     )
     Box(
         modifier = Modifier
-            .designBounds(metrics, 4f, y, 1132f, 187f)
+            .designBounds(metrics, 4f, y, 1132f + 2f * metrics.overscanX, 187f)
             .background(
                 Brush.verticalGradient(
                     colorStops = arrayOf(
@@ -3911,7 +4085,7 @@ internal fun MessageRow(
         }
         Text(
             text = conversation.title,
-            modifier = Modifier.designBounds(metrics, 193f, 24f, 700f, 104f),
+            modifier = Modifier.designBounds(metrics, 193f, 24f, 700f + 2f * metrics.overscanX, 104f),
             color = palette.name,
             fontFamily = Rubik,
             fontWeight = FontWeight.Bold,
@@ -3922,7 +4096,7 @@ internal fun MessageRow(
             text = conversation.latestMessagePreview.let { preview ->
                 if (preview.startsWith(">") || preview.isBlank()) preview else "> $preview"
             },
-            modifier = Modifier.designBounds(metrics, 193f, 105f, 620f, 60f),
+            modifier = Modifier.designBounds(metrics, 193f, 105f, 620f + 2f * metrics.overscanX, 60f),
             color = palette.preview,
             fontFamily = Rubik,
             fontWeight = FontWeight.Medium,
@@ -3931,7 +4105,7 @@ internal fun MessageRow(
         )
         Text(
             text = conversation.unreadCount.toString(),
-            modifier = Modifier.designBounds(metrics, 934f, 47f, 133f, 105f),
+            modifier = Modifier.designBounds(metrics, 934f + 2f * metrics.overscanX, 47f, 133f, 105f),
             color = palette.count,
             fontFamily = Rubik,
             fontWeight = FontWeight.Bold,
@@ -3940,6 +4114,18 @@ internal fun MessageRow(
             maxLines = 1,
         )
     }
+}
+
+@Composable
+internal fun messageListRowPalette(): MessageRowPalette {
+    val theme = pocketPalette
+    return MessageRowPalette(
+        name = theme.ink(Color(0xFF2365D3)),
+        preview = theme.ink(Color(0xFF5B83E5)),
+        count = Color(0xFF1371F5),
+        tintBottom = theme.tint(Color(0xFFDDE7FC)),
+        avatarBorder = theme.tint(Color(0xFFE2E4F0)),
+    )
 }
 
 internal data class MessageRowPalette(
@@ -4178,6 +4364,7 @@ private fun MessageDetailBottom(
             height = MESSAGE_KEYBOARD_HEIGHT,
             canBackspace = state.messageDraft.isNotEmpty(),
             emojiKey = true,
+            submitSound = null,
             topRowUpTarget = { centerX ->
                 if (centerX < BOTTOM_DESIGN_WIDTH / 2f) "message_field" else "message_send"
             },
@@ -4216,6 +4403,7 @@ private fun MessageDetailBottom(
         if (actionMessage != null) retainedAction.value = actionMessage
         retainedAction.value?.let { retained ->
             MessageActionsSheet(
+                colour = state.messageColour(retained.senderId),
                 metrics = metrics,
                 message = retained,
                 visible = actionMessage != null,
@@ -4241,10 +4429,11 @@ internal fun MessageBubble(
     onLongPress: (() -> Unit)? = null,
     selected: Boolean = false,
     senderLabel: SenderLabel? = null,
+    colour: com.pocketpass.app.domain.model.ChatBubbleColour = com.pocketpass.app.domain.model.ChatBubbleColour.Default,
 ) {
     val failed = message.pendingState as? PendingState.Failed
     val attachment = message.attachment
-    val palette = if (outgoing) OutgoingBubble else IncomingBubble
+    val palette = remember(colour, outgoing) { chatBubblePalette(colour, outgoing) }
     val pressInteraction = remember(message.id.value) { MutableInteractionSource() }
     val sendEntrance = remember(message.id.value) {
         Animatable(
@@ -4362,6 +4551,7 @@ internal fun MessageBubble(
                     caption = message.body.takeUnless {
                         it == IMAGE_MESSAGE_PLACEHOLDER_BODY
                     },
+                    onLongPress = onLongPress,
                 )
             } else {
                 Box(
@@ -4383,7 +4573,7 @@ internal fun MessageBubble(
                     Column {
                         Text(
                             text = message.body,
-                            color = Color.White,
+                            color = palette.text,
                             fontFamily = Rubik,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = metrics.sp(BUBBLE_TEXT_SIZE),
@@ -4394,7 +4584,7 @@ internal fun MessageBubble(
                             Text(
                                 text = "Edited",
                                 modifier = Modifier.padding(top = metrics.dp(6f)),
-                                color = Color.White.copy(alpha = 0.72f),
+                                color = palette.text.copy(alpha = 0.8f),
                                 fontFamily = Rubik,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = metrics.sp(24f),
@@ -4403,7 +4593,7 @@ internal fun MessageBubble(
                     }
                 }
             }
-            MessageBubbleTail(metrics, palette.tail, outgoing)
+            MessageBubbleTail(metrics, palette, outgoing)
             if (failed != null) {
                 val retryInteraction = remember(message.id) { MutableInteractionSource() }
                 Text(
@@ -4421,7 +4611,7 @@ internal fun MessageBubble(
                             indication = null,
                             onClick = onRetry,
                         ),
-                    color = Color.White.copy(alpha = 0.92f),
+                    color = palette.text,
                     fontFamily = Rubik,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = metrics.sp(21f),
@@ -4450,36 +4640,10 @@ private const val BUBBLE_TAIL_SHIFT = 79.73f
 private const val BUBBLE_TAIL_DROP = 80.27f
 private const val BUBBLE_TAIL_ROTATION = 141.4f
 
-private class BubblePalette(
-    val border: Color,
-    val fill: Array<Pair<Float, Color>>,
-    val tail: PocketAsset,
-)
-
-private val IncomingBubble = BubblePalette(
-    border = Color(0xFFC2B04B),
-    fill = arrayOf(
-        0f to Color(0xFFEDD85E),
-        0.16477f to Color(0xFFEDD85E),
-        1f to Color(0xFFFF9900),
-    ),
-    tail = Assets.MessageTailIncoming,
-)
-
-private val OutgoingBubble = BubblePalette(
-    border = Color(0xFF4B5FC2),
-    fill = arrayOf(
-        0f to Color(0xFF5EA3ED),
-        0.16477f to Color(0xFF5EA3ED),
-        1f to Color(0xFF0073FF),
-    ),
-    tail = Assets.MessageTailOutgoing,
-)
-
 @Composable
 private fun BoxScope.MessageBubbleTail(
     metrics: DesignMetrics,
-    resource: PocketAsset,
+    palette: BubblePalette,
     outgoing: Boolean,
 ) {
     Box(modifier = Modifier.matchParentSize()) {
@@ -4507,16 +4671,9 @@ private fun BoxScope.MessageBubbleTail(
                         }
                     },
             ) {
-                FigmaAsset(
-                    resource = resource,
-                    modifier = Modifier.designBounds(
-                        metrics,
-                        6.674f,
-                        -4.164f,
-                        67.656f,
-                        77.134f,
-                    ),
-                )
+                val tailModifier = Modifier.designBounds(metrics, 6.674f, -4.164f, 67.656f, 77.134f)
+                if (palette.tail != null) FigmaAsset(resource = palette.tail, modifier = tailModifier)
+                else ColouredBubbleTail(palette, tailModifier)
             }
         }
     }
@@ -4529,7 +4686,10 @@ private fun MessageAttachmentCard(
     palette: BubblePalette,
     shape: RoundedCornerShape,
     caption: String?,
+    onLongPress: (() -> Unit)? = null,
 ) {
+    var expanded by remember(attachment) { mutableStateOf(false) }
+    if (expanded) MessageImageViewer(attachment) { expanded = false }
     Column(
         modifier = Modifier
             .requiredWidth(metrics.dp(560f))
@@ -4544,12 +4704,13 @@ private fun MessageAttachmentCard(
     ) {
         AsyncImage(
             model = attachment.localPath?.toPath() ?: attachment.remotePath,
-            contentDescription = null,
+            contentDescription = if (attachment.mimeType == "image/gif") "GIF attachment" else "Image attachment",
             modifier = Modifier
                 .requiredSize(metrics.dp(492f), metrics.dp(340f))
                 .clip(RoundedCornerShape(metrics.dp(44f)))
                 .background(Color.White.copy(alpha = 0.22f))
-                .testTag("message_attachment"),
+                .testTag("message_attachment")
+                .combinedClickable(onClickLabel = "Open full screen", onClick = { expanded = true }, onLongClick = onLongPress),
             contentScale = ContentScale.Fit,
         )
         if (!caption.isNullOrBlank()) {
@@ -4561,7 +4722,7 @@ private fun MessageAttachmentCard(
                     top = metrics.dp(20f),
                     bottom = metrics.dp(6f),
                 ),
-                color = Color.White,
+                color = palette.text,
                 fontFamily = Rubik,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = metrics.sp(52f),
@@ -4911,11 +5072,10 @@ private fun SettingsBottom(
         val nearbyY = stack.place(SETTINGS_ROW_HEIGHT)
         val stepsY = if (state.stepRewards.supported) stack.place(SETTINGS_ROW_HEIGHT) else null
         val soundY = stack.place(SOUND_PANEL_HEIGHT)
-        val notificationsY = stack.place(SETTINGS_ROW_HEIGHT)
-        val themeY = stack.place(THEME_PANEL_HEIGHT)
+        val appSettingsY = stack.place(SETTINGS_ROW_HEIGHT)
         val socialY = stack.place(SETTINGS_ROW_HEIGHT)
-        val accessibilityY = stack.place(SETTINGS_ROW_HEIGHT)
         val versionY = stack.place(SETTINGS_ROW_HEIGHT)
+        val accountY = stack.place(SETTINGS_ROW_HEIGHT)
         val logoutY = stack.place(SETTINGS_ROW_HEIGHT)
         val deleteY = stack.place(SETTINGS_TALL_HEIGHT)
         val contributorsY = stack.place(SETTINGS_ROW_HEIGHT)
@@ -4924,11 +5084,10 @@ private fun SettingsBottom(
             nearbyY to SETTINGS_ROW_HEIGHT,
             stepsY?.let { it to SETTINGS_ROW_HEIGHT },
             soundY to SOUND_PANEL_HEIGHT,
-            notificationsY to SETTINGS_ROW_HEIGHT,
-            themeY to THEME_PANEL_HEIGHT,
+            appSettingsY to SETTINGS_ROW_HEIGHT,
             socialY to SETTINGS_ROW_HEIGHT,
-            accessibilityY to SETTINGS_ROW_HEIGHT,
             versionY to SETTINGS_ROW_HEIGHT,
+            accountY to SETTINGS_ROW_HEIGHT,
             logoutY to SETTINGS_ROW_HEIGHT,
             deleteY to SETTINGS_TALL_HEIGHT,
             contributorsY to SETTINGS_ROW_HEIGHT,
@@ -4992,20 +5151,9 @@ private fun SettingsBottom(
                             onSfxLevelChange = { dispatch(PocketPassEvent.SetSfxLevel(it)) },
                         )
                     }
-                    row(notificationsY, SETTINGS_ROW_HEIGHT) {
-                        NotificationsPanel(metrics, notificationsY) {
-                            dispatch(PocketPassEvent.OpenNotificationSettings)
-                        }
-                    }
-                    row(themeY, THEME_PANEL_HEIGHT) {
-                        ThemePanel(
-                            metrics = metrics,
-                            y = themeY,
-                            selected = state.themeMode,
-                            expanded = state.themePickerExpanded,
-                            onExpand = { dispatch(PocketPassEvent.OpenThemePicker) },
-                        ) {
-                            dispatch(PocketPassEvent.SetThemeMode(it))
+                    row(appSettingsY, SETTINGS_ROW_HEIGHT) {
+                        AppSettingsPanel(metrics, appSettingsY) {
+                            dispatch(PocketPassEvent.OpenAppSettings)
                         }
                     }
                     row(socialY, SETTINGS_ROW_HEIGHT) {
@@ -5013,14 +5161,14 @@ private fun SettingsBottom(
                             dispatch(PocketPassEvent.OpenSocial)
                         }
                     }
-                    row(accessibilityY, SETTINGS_ROW_HEIGHT) {
-                        AccessibilityPanel(metrics, accessibilityY) {
-                            dispatch(PocketPassEvent.OpenAccessibility)
-                        }
-                    }
                     row(versionY, SETTINGS_ROW_HEIGHT) {
                         VersionPanel(metrics, versionY, state.appUpdate) {
                             dispatch(PocketPassEvent.OpenAppUpdate)
+                        }
+                    }
+                    row(accountY, SETTINGS_ROW_HEIGHT) {
+                        AccountPanel(metrics, accountY) {
+                            dispatch(PocketPassEvent.OpenAccountSecurity)
                         }
                     }
                     row(logoutY, SETTINGS_ROW_HEIGHT) {
@@ -5044,7 +5192,7 @@ private fun SettingsBottom(
     }
 }
 
-private const val SETTINGS_PANEL_GAP = 50f
+internal const val SETTINGS_PANEL_GAP = 50f
 internal const val SETTINGS_ROW_HEIGHT = 220f
 internal const val SETTINGS_TALL_HEIGHT = 446.65f
 internal const val THEME_PANEL_HEIGHT = 447f
@@ -5102,9 +5250,9 @@ internal fun NearbyPanel(
 internal fun NearbyToggle(
     metrics: DesignMetrics,
     enabled: Boolean,
+    x: Float = metrics.anchoredX(910f, DesignAnchor.End),
+    y: Float = 57.3f,
 ) {
-    val x = metrics.anchoredX(910f, DesignAnchor.End)
-    val y = 57.3f
     val progress = animateFloatAsState(
         targetValue = if (enabled) 1f else 0f,
         animationSpec = spring(
@@ -5528,41 +5676,69 @@ private fun SocialBottom(
             subtitle = "Your name, Piip and connected apps.",
             backTag = "social_back",
         ) { dispatch(PocketPassEvent.Back) }
-        val editNameY = SUBPAGE_FIRST_ROW_Y
-        val editMiiY = if (state.miiEditorEnabled) editNameY + SUBPAGE_ROW_PITCH else null
-        val connectedAppsY = if (state.connectedApps.enabled) {
-            (editMiiY ?: editNameY) + SUBPAGE_ROW_PITCH
-        } else {
-            null
+        val rows = buildList<@Composable (Float) -> Unit> {
+            add { y -> EditNamePanel(metrics, y) { dispatch(PocketPassEvent.OpenNameEditor) } }
+            if (state.miiEditorEnabled) add { y -> EditMiiPanel(metrics, y) { dispatch(PocketPassEvent.OpenMiiSlots) } }
+            if (state.connectedApps.enabled) add { y -> ConnectedAppsPanel(metrics, y) { dispatch(PocketPassEvent.OpenConnectedApps) } }
         }
-        SubpagePanelPop(y = editNameY, height = SETTINGS_ROW_HEIGHT, order = 1) {
-            EditNamePanel(metrics, editNameY) {
-                dispatch(PocketPassEvent.OpenNameEditor)
-            }
-        }
-        if (editMiiY != null) {
-            SubpagePanelPop(y = editMiiY, height = SETTINGS_ROW_HEIGHT, order = 2) {
-                EditMiiPanel(metrics, editMiiY) {
-                    dispatch(PocketPassEvent.OpenMiiSlots)
-                }
-            }
-        }
-        if (connectedAppsY != null) {
-            SubpagePanelPop(
-                y = connectedAppsY,
-                height = SETTINGS_ROW_HEIGHT,
-                order = if (editMiiY != null) 3 else 2,
-            ) {
-                ConnectedAppsPanel(metrics, connectedAppsY) {
-                    dispatch(PocketPassEvent.OpenConnectedApps)
+        val privacyY = SETTINGS_PANEL_GAP + rows.size * SUBPAGE_ROW_PITCH
+        val invitesY = privacyY + MESSAGE_PRIVACY_PANEL_HEIGHT + SETTINGS_PANEL_GAP
+        val boardsY = invitesY + SOCIAL_PRIVACY_PANEL_HEIGHT + SETTINGS_PANEL_GAP
+        val scroll = rememberScrollState()
+        val belowHeader = remember(metrics) { BelowSubpageHeaderShape(metrics) }
+        val focusViewport = rememberBelowSubpageHeaderFocusViewport(metrics)
+        DesignBox(metrics, 0f, 0f, 1240f, 1080f, DesignAnchor.Stretch, DesignAnchor.Stretch,
+            modifier = Modifier.clip(belowHeader).controllerFocusViewport(focusViewport)
+                .verticalScroll(scroll).testTag("social_settings_scroll")) {
+            CompositionLocalProvider(LocalControllerFocusViewport provides focusViewport) {
+                Box(Modifier.padding(top = metrics.dp(SUBPAGE_CONTENT_TOP))
+                    .requiredWidth(metrics.dp(1240f + 2f * metrics.overscanX))
+                    .requiredHeight(metrics.dp(boardsY + SOCIAL_PRIVACY_PANEL_HEIGHT + SETTINGS_PANEL_GAP))) {
+                    rows.forEachIndexed { index, row -> row(SETTINGS_PANEL_GAP + index * SUBPAGE_ROW_PITCH) }
+                    MessagePrivacyPanel(metrics, privacyY, state, dispatch)
+                    InvitesPrivacyPanel(metrics, invitesY, state, dispatch)
+                    BoardsVisibilityPanel(metrics, boardsY, state, dispatch)
                 }
             }
         }
     }
 }
 
-private const val SUBPAGE_FIRST_ROW_Y = 297f
-private const val SUBPAGE_ROW_PITCH = SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP
+internal const val SUBPAGE_FIRST_ROW_Y = 297f
+internal const val SUBPAGE_ROW_PITCH = SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP
+
+@Composable
+internal fun AppSettingsPanel(
+    metrics: DesignMetrics,
+    y: Float,
+    onClick: () -> Unit,
+) {
+    PocketPanel(
+        metrics = metrics,
+        x = 50f,
+        y = y,
+        width = 1140f,
+        height = SETTINGS_ROW_HEIGHT,
+        borderColor = pocketPalette.borderGrey,
+        borderWidth = 20.152f,
+        radius = 110f,
+        fillBrush = greyPanelBrush(),
+        tag = "settings_app",
+        onClick = onClick,
+    ) {
+        SettingsHeading(
+            metrics = metrics,
+            icon = Assets.SettingsApp,
+            title = "App Settings",
+            subtitle = "Notifications, theme and more",
+        )
+        FigmaAsset(
+            resource = Assets.SettingsArrow,
+            colorFilter = chevronTint(),
+            modifier = Modifier.anchoredBounds(metrics, 1028f, 75.637f, 40.372f, 68.725f, DesignAnchor.End),
+        )
+    }
+}
 
 @Composable
 internal fun AccessibilityPanel(
@@ -5594,6 +5770,113 @@ internal fun AccessibilityPanel(
             colorFilter = chevronTint(),
             modifier = Modifier.anchoredBounds(metrics, 1028f, 75.637f, 40.372f, 68.725f, DesignAnchor.End),
         )
+    }
+}
+
+@Composable
+private fun AppSettingsBottom(
+    state: PocketPassUiState,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
+    BottomPage(entrance = EntranceMotion.None) { metrics ->
+        SubpageHeader(
+            metrics = metrics,
+            title = "App Settings",
+            subtitle = "Notifications, theme and more.",
+            backTag = "app_settings_back",
+        ) { dispatch(PocketPassEvent.Back) }
+        val scroll = rememberScrollState()
+        val belowHeader = remember(metrics) { BelowSubpageHeaderShape(metrics) }
+        val focusViewport = rememberBelowSubpageHeaderFocusViewport(metrics)
+        val notificationsY = SETTINGS_PANEL_GAP
+        val themeY = notificationsY + SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP
+        val accessibilityY = themeY + THEME_PANEL_HEIGHT + SETTINGS_PANEL_GAP
+        val widgetsY = accessibilityY + SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP
+        val chatColoursY = widgetsY + SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP
+        val totalHeight = chatColoursY + SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP
+        DesignBox(
+            metrics,
+            0f,
+            0f,
+            1240f,
+            1080f,
+            DesignAnchor.Stretch,
+            DesignAnchor.Stretch,
+            modifier = Modifier
+                .clip(belowHeader)
+                .controllerFocusViewport(focusViewport)
+                .verticalScroll(scroll)
+                .testTag("app_settings_scroll"),
+        ) {
+            CompositionLocalProvider(LocalControllerFocusViewport provides focusViewport) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = metrics.dp(SUBPAGE_CONTENT_TOP))
+                        .requiredWidth(metrics.dp(1240f + 2f * metrics.overscanX))
+                        .requiredHeight(metrics.dp(totalHeight)),
+                ) {
+                    SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + notificationsY, height = SETTINGS_ROW_HEIGHT, order = 1) {
+                        NotificationsPanel(metrics, notificationsY) {
+                            dispatch(PocketPassEvent.OpenNotificationSettings)
+                        }
+                    }
+                    SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + themeY, height = THEME_PANEL_HEIGHT, order = 2) {
+                        ThemePanel(
+                            metrics = metrics,
+                            y = themeY,
+                            selected = state.themeMode,
+                            expanded = state.themePickerExpanded,
+                            onExpand = { dispatch(PocketPassEvent.OpenThemePicker) },
+                        ) {
+                            dispatch(PocketPassEvent.SetThemeMode(it))
+                        }
+                    }
+                    SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + accessibilityY, height = SETTINGS_ROW_HEIGHT, order = 3) {
+                        AccessibilityPanel(metrics, accessibilityY) {
+                            dispatch(PocketPassEvent.OpenAccessibility)
+                        }
+                    }
+                    SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + widgetsY, height = SETTINGS_ROW_HEIGHT, order = 4) {
+                        WidgetsPanel(metrics, widgetsY, state.widgetDesigns.size) {
+                            dispatch(PocketPassEvent.OpenWidgetMaker)
+                        }
+                    }
+                    SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + chatColoursY, height = SETTINGS_ROW_HEIGHT, order = 5) {
+                        ChatColoursPanel(metrics, chatColoursY) { dispatch(PocketPassEvent.OpenChatColours) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberBelowSubpageHeaderFocusViewport(metrics: DesignMetrics): ControllerFocusViewport {
+    val density = LocalDensity.current
+    return remember(metrics, density) {
+        ControllerFocusViewport(
+            shape = BelowSubpageHeaderShape(metrics),
+            topInset = with(density) { metrics.dp(SUBPAGE_CONTENT_TOP).toPx() },
+        )
+    }
+}
+
+@Composable
+private fun ChatColoursBottom(state: PocketPassUiState, dispatch: (PocketPassEvent) -> Unit) {
+    BottomPage(entrance = EntranceMotion.None) { metrics ->
+        SubpageHeader(metrics, title = "Chat Colours", subtitle = "A colour that's yours.", backTag = "chat_colours_back") {
+            dispatch(PocketPassEvent.Back)
+        }
+        val viewport = rememberBelowSubpageHeaderFocusViewport(metrics)
+        val shape = remember(metrics) { BelowSubpageHeaderShape(metrics) }
+        DesignBox(metrics, 0f, 0f, 1240f, 1080f, DesignAnchor.Stretch, DesignAnchor.Stretch,
+            modifier = Modifier.clip(shape).controllerFocusViewport(viewport).verticalScroll(rememberScrollState()).testTag("chat_colours_scroll")) {
+            CompositionLocalProvider(LocalControllerFocusViewport provides viewport) {
+                Box(Modifier.padding(top = metrics.dp(SUBPAGE_CONTENT_TOP + SETTINGS_PANEL_GAP)).fillMaxWidth()) {
+                    ChatColoursContent(metrics, state, dispatch)
+                }
+            }
+        }
     }
 }
 
@@ -5686,104 +5969,68 @@ private fun NotificationSettingsBottom(
             subtitle = "Which events send alerts.",
             backTag = "notification_settings_back",
         ) { dispatch(PocketPassEvent.Back) }
-        SubpagePanelPop(y = 297f, height = 220f, order = 1) {
-            PocketPanel(
-                metrics = metrics,
-                x = 50f,
-                y = 297f,
-                width = 1140f,
-                height = 220f,
-                borderColor = pocketPalette.borderGrey,
-                borderWidth = 20.152f,
-                radius = 110f,
-                fillBrush = greyPanelBrush(),
-                tag = "encounter_alerts_toggle",
-                onClick = {
-                    dispatch(
-                        PocketPassEvent.SetEncounterAlertsEnabled(
-                            !state.encounterAlertsEnabled,
-                        ),
-                    )
-                },
-            ) {
-                SettingsHeading(
-                    metrics = metrics,
-                    icon = Assets.SettingsEncounterAlerts,
-                    title = "Encounter Alerts",
-                    subtitle = "Notify when you pass someone",
-                )
-                NearbyToggle(
-                    metrics = metrics,
-                    enabled = state.encounterAlertsEnabled,
-                )
-            }
+        val rows = buildList {
+            if (state.messagePushSupported) add(NotificationSettingsRow(
+                Assets.NavMessages, "Message Alerts", "New direct and group messages",
+                "message_alerts_toggle", state.messageAlertsEnabled,
+                PocketPassEvent.SetMessageAlertsEnabled(!state.messageAlertsEnabled),
+            ))
+            add(NotificationSettingsRow(
+                Assets.SettingsEncounterAlerts, "Encounter Alerts", "Notify when you pass someone",
+                "encounter_alerts_toggle", state.encounterAlertsEnabled,
+                PocketPassEvent.SetEncounterAlertsEnabled(!state.encounterAlertsEnabled),
+            ))
+            add(NotificationSettingsRow(
+                Assets.SettingsRepairAlerts, "Repair Alerts", "Warn if Nearby stops working",
+                "repair_alerts_toggle", state.nearbyRepairAlertsEnabled,
+                PocketPassEvent.SetNearbyRepairAlertsEnabled(!state.nearbyRepairAlertsEnabled),
+            ))
+            add(NotificationSettingsRow(
+                Assets.SettingsVersion, "Update Alerts", "Tell me about new versions",
+                "update_alerts_toggle", state.updateAlertsEnabled,
+                PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled),
+            ))
         }
-        SubpagePanelPop(y = 567f, height = 220f, order = 2) {
-            PocketPanel(
-                metrics = metrics,
-                x = 50f,
-                y = 567f,
-                width = 1140f,
-                height = 220f,
-                borderColor = pocketPalette.borderGrey,
-                borderWidth = 20.152f,
-                radius = 110f,
-                fillBrush = greyPanelBrush(),
-                tag = "repair_alerts_toggle",
-                onClick = {
-                    dispatch(
-                        PocketPassEvent.SetNearbyRepairAlertsEnabled(
-                            !state.nearbyRepairAlertsEnabled,
-                        ),
-                    )
-                },
-            ) {
-                SettingsHeading(
-                    metrics = metrics,
-                    icon = Assets.SettingsRepairAlerts,
-                    title = "Repair Alerts",
-                    subtitle = "Warn if Nearby stops working",
-                )
-                NearbyToggle(
-                    metrics = metrics,
-                    enabled = state.nearbyRepairAlertsEnabled,
-                )
-            }
-        }
-        SubpagePanelPop(y = 837f, height = 220f, order = 3) {
-            PocketPanel(
-                metrics = metrics,
-                x = 50f,
-                y = 837f,
-                width = 1140f,
-                height = 220f,
-                borderColor = pocketPalette.borderGrey,
-                borderWidth = 20.152f,
-                radius = 110f,
-                fillBrush = greyPanelBrush(),
-                tag = "update_alerts_toggle",
-                onClick = {
-                    dispatch(
-                        PocketPassEvent.SetUpdateAlertsEnabled(
-                            !state.updateAlertsEnabled,
-                        ),
-                    )
-                },
-            ) {
-                SettingsHeading(
-                    metrics = metrics,
-                    icon = Assets.SettingsVersion,
-                    title = "Update Alerts",
-                    subtitle = "Tell me about new versions",
-                )
-                NearbyToggle(
-                    metrics = metrics,
-                    enabled = state.updateAlertsEnabled,
-                )
+        val scroll = rememberScrollState()
+        val belowHeader = remember(metrics) { BelowSubpageHeaderShape(metrics) }
+        val focusViewport = rememberBelowSubpageHeaderFocusViewport(metrics)
+        DesignBox(
+            metrics, 0f, 0f, 1240f, 1080f, DesignAnchor.Stretch, DesignAnchor.Stretch,
+            modifier = Modifier.clip(belowHeader).controllerFocusViewport(focusViewport)
+                .verticalScroll(scroll).testTag("notification_settings_scroll"),
+        ) {
+            CompositionLocalProvider(LocalControllerFocusViewport provides focusViewport) {
+                Box(Modifier.padding(top = metrics.dp(SUBPAGE_CONTENT_TOP))
+                    .requiredWidth(metrics.dp(1240f + 2f * metrics.overscanX))
+                    .requiredHeight(metrics.dp(SETTINGS_PANEL_GAP + rows.size * (SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP)))) {
+                    rows.forEachIndexed { index, row ->
+                        val y = SETTINGS_PANEL_GAP + index * (SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP)
+                        SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + y, height = SETTINGS_ROW_HEIGHT, order = index + 1) {
+                            PocketPanel(
+                                metrics = metrics, x = 50f, y = y, width = 1140f, height = SETTINGS_ROW_HEIGHT,
+                                borderColor = pocketPalette.borderGrey, borderWidth = 20.152f,
+                                radius = 110f, fillBrush = greyPanelBrush(), tag = row.tag,
+                                onClick = { dispatch(row.event) },
+                            ) {
+                                SettingsHeading(metrics = metrics, icon = row.icon, title = row.title, subtitle = row.subtitle)
+                                NearbyToggle(metrics = metrics, enabled = row.enabled)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+private data class NotificationSettingsRow(
+    val icon: PocketAsset,
+    val title: String,
+    val subtitle: String,
+    val tag: String,
+    val enabled: Boolean,
+    val event: PocketPassEvent,
+)
 
 @Composable
 private fun AppUpdateBottom(
@@ -5827,7 +6074,7 @@ private fun AppUpdateBottom(
                 ) {
                     Text(
                         text = "What's New",
-                        modifier = Modifier.designBounds(metrics, 70f, 36f, 1000f, 56f),
+                        modifier = Modifier.anchoredBounds(metrics, 70f, 36f, 1000f, 56f, DesignAnchor.Stretch),
                         color = pocketPalette.textPrimary,
                         fontFamily = Rubik,
                         fontWeight = FontWeight.Bold,
@@ -5842,7 +6089,7 @@ private fun AppUpdateBottom(
                     }
                     Box(
                         modifier = Modifier
-                            .designBounds(metrics, 70f, 104f, 1000f, 131f)
+                            .anchoredBounds(metrics, 70f, 104f, 1000f, 131f, DesignAnchor.Stretch)
                             .clip(notesShape)
                             .controllerFocusViewport(notesViewport)
                             .verticalScroll(notesScroll),
@@ -5957,7 +6204,7 @@ fun AppUpdateStatusPanel(
             val trackShape = RoundedCornerShape(metrics.dp(118f))
             Box(
                 modifier = Modifier
-                    .designBounds(metrics, 52f, 228.65f, 1036f, 166f)
+                    .anchoredBounds(metrics, 52f, 228.65f, 1036f, 166f, DesignAnchor.Stretch)
                     .clip(trackShape)
                     .pocketFrame(
                         pocketPalette.surfaceLow,
@@ -6054,7 +6301,7 @@ fun AppUpdateStatusPanel(
         val interaction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
-                .designBounds(metrics, 52f, 228.65f, 1036f, 166f)
+                .anchoredBounds(metrics, 52f, 228.65f, 1036f, 166f, DesignAnchor.Stretch)
                 .clip(buttonShape)
                 .pocketFrame(brush, metrics.dp(20.152f), borderColor, buttonShape)
                 .testTag("app_update_action")
@@ -6594,158 +6841,22 @@ internal fun MiiDeleteConfirmDialog(
     }
 }
 
-// Above content surfaces (10) and below modal dialogs (20).
-private const val PROFILE_OVERLAY_FOCUS_LAYER = 15
-
 @Composable
 fun FriendProfileBottomOverlay(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
-    val viewer = state.profileViewer
-    val profile = viewer.profile ?: return
-    val busy = viewer.actionInProgress
-    val request = viewer.friendRequestState
-    val isFriend = viewer.source == ProfileViewerSource.Friend ||
-        request == ProfileFriendRequestState.Friends
-    val requestButtonVisible = request == ProfileFriendRequestState.Available ||
-        request == ProfileFriendRequestState.Sending ||
-        request == ProfileFriendRequestState.Pending ||
-        request == ProfileFriendRequestState.Failed
-    val entrance = remember { Animatable(48f) }
-    LaunchedEffect(viewer.selectedUserId) {
-        entrance.snapTo(48f)
-        entrance.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(280, easing = FastOutSlowInEasing),
-        )
-    }
-    val focus = LocalControllerFocus.current
-    val primaryFocusId = when {
-        isFriend -> "profile_message"
-        requestButtonVisible -> "profile_add_friend"
-        else -> null
-    }
-    LaunchedEffect(viewer.selectedUserId, primaryFocusId) {
-        primaryFocusId?.let { focus?.focus(it, reveal = false) }
-    }
-
     Box(
         Modifier
-            .designBounds(metrics, 0f, 247.5f, 1240f, 833f)
-            .background(
-                Brush.verticalGradient(
-                    colorStops = arrayOf(
-                        0.11693f to Color.Transparent,
-                        0.72774f to pocketPalette.tint(Color(0xFF7CE7B0)),
-                        1f to pocketPalette.tint(Color(0xFF7CE7B0)),
-                    ),
-                ),
-            )
-            .testTag("friend_profile_overlay")
+            .designBounds(metrics, 0f, 0f, 1240f, 1080f)
+            .testTag("profile_bottom_dismiss")
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = !busy,
+                enabled = !state.profileViewer.actionInProgress,
             ) { dispatch(PocketPassEvent.CloseUserProfile) },
     )
-
-    Box(
-        Modifier
-            .designBounds(metrics, 85f, 670f, 1070f, 144f)
-            .graphicsLayer { translationY = entrance.value },
-    ) {
-        FriendStat(
-            metrics = metrics,
-            modifier = Modifier.align(Alignment.CenterStart),
-            icon = Assets.FriendTrophy,
-            iconWidth = 108.878f,
-            iconHeight = 97.797f,
-            value = viewer.stats?.trophyCount,
-            pending = viewer.statsPending,
-        )
-        FriendStat(
-            metrics = metrics,
-            modifier = Modifier.align(Alignment.CenterEnd),
-            icon = Assets.FriendWave,
-            iconWidth = 97.795f,
-            iconHeight = 97.795f,
-            value = viewer.stats?.encounterCount,
-            pending = viewer.statsPending,
-        )
-    }
-
-    Box(
-        Modifier
-            .designBounds(metrics, 0f, 866f, 1240f, 165f)
-            .graphicsLayer { translationY = entrance.value },
-    ) {
-        when {
-            isFriend -> {
-                FriendActionButton(
-                    metrics = metrics,
-                    x = 50f,
-                    label = "Remove Friend",
-                    textColor = Color.White,
-                    fill = redButtonBrush(),
-                    borderColor = Color(0xFFC24B4B),
-                    enabled = !busy,
-                    tag = "profile_remove_friend",
-                    focusLayer = PROFILE_OVERLAY_FOCUS_LAYER,
-                    onClick = { dispatch(PocketPassEvent.OpenRemoveFriend) },
-                )
-                FriendActionButton(
-                    metrics = metrics,
-                    x = 645f,
-                    label = "Message",
-                    textColor = Color.White,
-                    fill = greenButtonBrush(),
-                    borderColor = Color(0xFF3CBC29),
-                    enabled = !busy,
-                    tag = "profile_message",
-                    focusLayer = PROFILE_OVERLAY_FOCUS_LAYER,
-                    onClick = { dispatch(PocketPassEvent.MessageProfileFriend) },
-                )
-            }
-
-            requestButtonVisible -> {
-                val sendable = request == ProfileFriendRequestState.Available ||
-                    request == ProfileFriendRequestState.Failed
-                FriendActionButton(
-                    metrics = metrics,
-                    x = 347.5f,
-                    label = when (request) {
-                        ProfileFriendRequestState.Sending -> "Sending…"
-                        ProfileFriendRequestState.Pending -> "Request Sent"
-                        ProfileFriendRequestState.Failed -> "Try Again"
-                        else -> "Add Friend"
-                    },
-                    textColor = Color.White,
-                    fill = greenButtonBrush(),
-                    borderColor = Color(0xFF3CBC29),
-                    enabled = !busy && sendable,
-                    tag = "profile_add_friend",
-                    focusLayer = PROFILE_OVERLAY_FOCUS_LAYER,
-                    onClick = { dispatch(PocketPassEvent.SendProfileFriendRequest) },
-                )
-            }
-        }
-    }
-
-    (viewer.actionError ?: viewer.friendRequestError)?.let { error ->
-        Text(
-            text = error,
-            modifier = Modifier.designBounds(metrics, 50f, 1036f, 1140f, 40f),
-            color = pocketPalette.ink(Color(0xFFB31E3A)),
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(30f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
     if (state.removeFriendPromptVisible) {
         RemoveFriendConfirmDialog(metrics, state, dispatch)
     }
@@ -7127,8 +7238,8 @@ private const val THEME_CHOICE_WIDTH = 315.33f
 private const val THEME_CHOICE_HEIGHT = 105f
 private const val THEME_CHOICE_RADIUS = 52.5f
 private const val THEME_CHOICE_BORDER = 9f
-private val ThemeChoiceGrey = Color(0xFFB2B2B2)
-private val ThemeChoiceGreen = Color(0xFF8EF29A)
+internal val ThemeChoiceGrey = Color(0xFFB2B2B2)
+internal val ThemeChoiceGreen = Color(0xFF8EF29A)
 
 private fun themeChoiceTag(mode: ThemeMode) = "theme_${mode.name.lowercase()}"
 
@@ -7138,10 +7249,19 @@ private fun themeChoiceX(mode: ThemeMode): Float = when (mode) {
     ThemeMode.Dark -> 774.66f
 }
 
+@Composable
 private fun Modifier.themeChoiceBounds(metrics: DesignMetrics, mode: ThemeMode): Modifier =
-    designBounds(metrics, themeChoiceX(mode), THEME_CHOICE_Y, THEME_CHOICE_WIDTH, THEME_CHOICE_HEIGHT)
+    anchoredBounds(
+        metrics,
+        themeChoiceX(mode),
+        THEME_CHOICE_Y,
+        THEME_CHOICE_WIDTH,
+        THEME_CHOICE_HEIGHT,
+        DesignAnchor.Center,
+        DesignAnchor.Center,
+    )
 
-private fun Modifier.themeChoiceBorder(metrics: DesignMetrics, color: Color): Modifier = drawWithCache {
+internal fun Modifier.themeChoiceBorder(metrics: DesignMetrics, color: Color): Modifier = drawWithCache {
     val borderWidth = metrics.dp(THEME_CHOICE_BORDER).toPx()
     val radius = metrics.dp(THEME_CHOICE_RADIUS).toPx()
     onDrawBehind {
@@ -7193,7 +7313,7 @@ internal fun ThemePanel(
         )
         Box(
             Modifier
-                .designBounds(metrics, 52f, 228.65f, 1036f, 9f)
+                .anchoredBounds(metrics, 52f, 228.65f, 1036f, 9f, DesignAnchor.Stretch, DesignAnchor.Center)
                 .clip(RoundedCornerShape(metrics.dp(4.5f)))
                 .background(pocketPalette.borderSoft),
         )
@@ -7260,10 +7380,11 @@ private fun BoxScope.ThemeSelection(metrics: DesignMetrics, selected: ThemeMode)
         )
     }
     val shape = RoundedCornerShape(metrics.dp(THEME_CHOICE_RADIUS))
+    val originX = LocalDesignOrigin.current.x
     Box(
         Modifier
             .graphicsLayer {
-                translationX = x.value
+                translationX = x.value - originX
                 translationY = THEME_CHOICE_Y
             }
             .requiredSize(metrics.dp(THEME_CHOICE_WIDTH), metrics.dp(THEME_CHOICE_HEIGHT))
@@ -7382,7 +7503,7 @@ internal val CreditsRoster: List<Credit> = listOf(
     Credit("BrocoDev", "UI Redesign", Assets.SettingsCreditsAvatarBrocoDev),
     Credit("ariankordi", "Piip Creator", Assets.SettingsCreditsAvatarAriankordi),
     Credit("k0o1", "Official Soundtrack", Assets.SettingsCreditsAvatarK0o1),
-    Credit("saby", "Official Soundtrack", Assets.SettingsCreditsAvatarSaby),
+    Credit("saby", "Official soundtrack, SFX", Assets.SettingsCreditsAvatarSaby),
 )
 
 @Composable
@@ -7457,7 +7578,7 @@ private fun ContributorsBottom(dispatch: (PocketPassEvent) -> Unit) {
     }
 }
 
-private class BelowSubpageHeaderShape(private val metrics: DesignMetrics) : Shape {
+internal class BelowSubpageHeaderShape(private val metrics: DesignMetrics) : Shape {
     override fun createOutline(
         size: Size,
         layoutDirection: LayoutDirection,
@@ -7467,7 +7588,7 @@ private class BelowSubpageHeaderShape(private val metrics: DesignMetrics) : Shap
     }
 }
 
-private const val SUBPAGE_CONTENT_TOP = 247f
+internal const val SUBPAGE_CONTENT_TOP = 247f
 
 @Composable
 internal fun CreditsPanel(metrics: DesignMetrics, y: Float) {
@@ -7510,7 +7631,7 @@ internal fun CreditsPanel(metrics: DesignMetrics, y: Float) {
             )
             Text(
                 text = role,
-                modifier = Modifier.designBounds(metrics, 210f, rowY + 70f, 820f, 55f),
+                modifier = Modifier.anchoredBounds(metrics, 210f, rowY + 70f, 820f, 55f, DesignAnchor.Stretch),
                 color = pocketPalette.textSecondary,
                 fontFamily = Rubik,
                 fontWeight = FontWeight.SemiBold,
@@ -7520,7 +7641,7 @@ internal fun CreditsPanel(metrics: DesignMetrics, y: Float) {
             if (index < CreditsRoster.lastIndex) {
                 Box(
                     Modifier
-                        .designBounds(metrics, 52f, rowY + 147.65f, 1036f, 9f)
+                        .anchoredBounds(metrics, 52f, rowY + 147.65f, 1036f, 9f, DesignAnchor.Stretch)
                         .clip(RoundedCornerShape(metrics.dp(4.5f)))
                         .background(pocketPalette.borderSoft),
                 )
@@ -7556,7 +7677,7 @@ internal fun DeletePanel(
         val shape = RoundedCornerShape(metrics.dp(118f))
         Box(
             modifier = Modifier
-                .designBounds(metrics, 52f, 228.65f, 1036f, 166f)
+                .anchoredBounds(metrics, 52f, 228.65f, 1036f, 166f, DesignAnchor.Stretch)
                 .clip(shape)
                 .pocketFrame(redButtonBrush(), metrics.dp(20.152f), Color(0xFFC24B4B), shape)
                 .testTag("delete_account")
@@ -7681,6 +7802,7 @@ internal fun BoxScope.SettingsHeading(
     subtitle: String,
     subtitleColor: Color? = null,
     subtitleSize: Float = 45f,
+    centerTitle: Boolean = false,
 ) {
     FigmaAsset(
         resource = icon,
@@ -7688,7 +7810,7 @@ internal fun BoxScope.SettingsHeading(
     )
     Text(
         text = title,
-        modifier = Modifier.designBounds(metrics, 210f, 42f, 767f, 76f),
+        modifier = Modifier.anchoredBounds(metrics, 210f, if (centerTitle) (SETTINGS_ROW_HEIGHT - 76f) / 2f else 42f, 767f, 76f, DesignAnchor.Stretch),
         color = pocketPalette.textPrimary,
         fontFamily = Rubik,
         fontWeight = FontWeight.Bold,
@@ -7697,7 +7819,7 @@ internal fun BoxScope.SettingsHeading(
     )
     Text(
         text = subtitle,
-        modifier = Modifier.designBounds(metrics, 210f, 117f, 820f, 55f),
+        modifier = Modifier.anchoredBounds(metrics, 210f, 117f, 820f, 55f, DesignAnchor.Stretch),
         color = subtitleColor ?: pocketPalette.textSecondary,
         fontFamily = Rubik,
         fontWeight = FontWeight.SemiBold,

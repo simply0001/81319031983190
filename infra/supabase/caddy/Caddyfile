@@ -1,0 +1,347 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}
+
+(kong_upstream) {
+	reverse_proxy kong:8000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-PocketPass-Client-IP {remote_host}
+		flush_interval -1
+	}
+}
+
+pocketpass.xyz {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		Cache-Control "no-cache"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		X-Frame-Options "DENY"
+	}
+
+	root * /srv/website
+
+	redir /index.html / permanent
+	redir /privacy.html /privacy permanent
+	redir /delete-account.html /delete-account permanent
+
+	handle /updates/latest.json {
+		root * /srv/updates
+		rewrite * /latest.json
+		header Content-Type "application/json"
+		header Cache-Control "public, max-age=300"
+		file_server
+	}
+
+	@static path /assets/* /fonts/*
+	handle @static {
+		header Cache-Control "public, max-age=604800"
+		file_server
+	}
+
+	handle /privacy {
+		rewrite * /privacy.html
+		file_server
+	}
+
+	handle /delete-account {
+		rewrite * /delete-account.html
+		file_server
+	}
+
+	handle {
+		file_server
+	}
+
+	handle_errors 404 {
+		import security_headers
+		root * /srv/website
+		rewrite * /404.html
+		file_server {
+			status {err.status_code}
+		}
+	}
+}
+
+api.pocketpass.xyz {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	respond /healthz "ok" 200
+
+	@board_media path /boards/media /v1/boards.artwork_upload
+	handle @board_media {
+		request_body {
+			max_size 14MB
+		}
+		reverse_proxy board-media:8080
+	}
+
+	@supabase_api {
+		path /auth/v1/* /rest/v1/* /realtime/v1/* /storage/v1/* /graphql/v1 /graphql/v1/* /.well-known/oauth-authorization-server
+	}
+
+	handle @supabase_api {
+		import kong_upstream
+	}
+
+	@api_v1 {
+		method POST OPTIONS
+		path_regexp v1 "^/v1/([a-z]+)[.]([a-z_]+)$"
+	}
+
+	handle @api_v1 {
+		rewrite * /pp-api/rpc/api_v1_{re.v1.1}_{re.v1.2}?
+		reverse_proxy kong:8000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-PocketPass-Client-IP {remote_host}
+			header_up apikey {$SUPABASE_PUBLISHABLE_KEY}
+			header_up Accept application/json
+			flush_interval -1
+		}
+	}
+
+	@kofi_webhook {
+		method POST
+		path /webhooks/kofi
+	}
+
+	handle @kofi_webhook {
+		request_body {
+			max_size 64KB
+		}
+		rewrite * /pp-hooks/kofi?
+		reverse_proxy kong:8000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-PocketPass-Client-IP {remote_host}
+			header_up apikey {$SUPABASE_PUBLISHABLE_KEY}
+			header_up Accept application/json
+			flush_interval -1
+		}
+	}
+
+	handle /v1/* {
+		header Content-Type application/json
+		respond `{"code":"PT404","message":"Unknown endpoint","hint":"UNKNOWN_ENDPOINT"}` 404
+	}
+
+	respond "Not Found" 404
+}
+
+links.pocketpass.xyz {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		Cache-Control "no-store"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data: https:; connect-src 'self' https://api.pocketpass.xyz; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		X-Frame-Options "DENY"
+	}
+
+	handle /.well-known/assetlinks.json {
+		root * /srv/links
+		header Content-Type application/json
+		file_server
+	}
+
+	handle /auth/callback {
+		root * /srv/links
+		rewrite * /auth-callback.html
+		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		file_server
+	}
+
+	handle /auth-email/otp.html {
+		root * /srv/templates
+		header Content-Type text/html
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		file_server
+	}
+
+	handle /auth-email/assets/* {
+		root * /srv/templates
+		header Cache-Control "public, max-age=604800, immutable"
+		file_server
+	}
+
+	handle /updates/latest.json {
+		root * /srv/updates
+		rewrite * /latest.json
+		header Content-Type "application/json"
+		header Cache-Control "public, max-age=300"
+		file_server
+	}
+
+	handle /oauth/consent {
+		root * /srv/links
+		rewrite * /oauth/consent.html
+		file_server
+	}
+
+	handle /oauth/apps {
+		root * /srv/links
+		rewrite * /oauth/apps.html
+		file_server
+	}
+
+	handle /oauth/config.js {
+		header Content-Type "text/javascript; charset=utf-8"
+		respond "window.POCKETPASS_OAUTH_API_URL='https://api.pocketpass.xyz';window.POCKETPASS_OAUTH_KEY='{$SUPABASE_PUBLISHABLE_KEY}';" 200
+	}
+
+	handle /oauth/* {
+		root * /srv/links
+		file_server
+	}
+
+	handle / {
+		redir * https://pocketpass.xyz 302
+	}
+
+	respond "Not Found" 404
+}
+
+admin.pocketpass.xyz {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		Cache-Control "no-store"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://api.pocketpass.xyz; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		X-Frame-Options "DENY"
+		X-Robots-Tag "noindex, nofollow"
+	}
+
+	handle /config.js {
+		header Content-Type "text/javascript; charset=utf-8"
+		respond "window.POCKETPASS_ADMIN_API_URL='https://api.pocketpass.xyz';window.POCKETPASS_ADMIN_KEY='{$SUPABASE_PUBLISHABLE_KEY}';window.POCKETPASS_ADMIN_STUDIO_URL='https://studio.pocketpass.xyz';" 200
+	}
+
+	handle {
+		root * /srv/admin
+		file_server
+	}
+}
+
+developer.pocketpass.xyz {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		Cache-Control "no-store"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://api.pocketpass.xyz; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+		X-Frame-Options "DENY"
+	}
+
+	handle /config.js {
+		header Content-Type "text/javascript; charset=utf-8"
+		respond "window.POCKETPASS_DEVELOPER_API_URL='https://api.pocketpass.xyz';window.POCKETPASS_DEVELOPER_KEY='{$SUPABASE_PUBLISHABLE_KEY}';" 200
+	}
+
+	handle /docs {
+		root * /srv/developer
+		rewrite * /docs.html
+		file_server
+	}
+
+	handle {
+		root * /srv/developer
+		file_server
+	}
+}
+
+studio.pocketpass.xyz {
+	import security_headers
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		X-Frame-Options "DENY"
+		X-Robots-Tag "noindex, nofollow"
+	}
+
+	@mcp path /api/mcp /api/mcp/*
+	handle @mcp {
+		respond "Forbidden" 403
+	}
+
+	handle /_pocketpass/login {
+		root * /srv/studio
+		rewrite * /login.html
+		header Cache-Control "no-store"
+		file_server
+	}
+
+	@assets path /_next/static/*
+	handle @assets {
+		reverse_proxy studio:3000
+	}
+
+	handle {
+		forward_auth rest:3000 {
+			uri /rpc/studio_gate?
+			header_up Accept "application/json"
+			header_up -Authorization
+			@denied status 401
+			handle_response @denied {
+				redir * /_pocketpass/login 302
+			}
+		}
+		reverse_proxy studio:3000 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}

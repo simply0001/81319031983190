@@ -3,11 +3,21 @@ package com.pocketpass.app.widget
 import com.pocketpass.app.data.LocalSettings
 import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.model.EncounterId
+import com.pocketpass.app.domain.model.Friend
+import com.pocketpass.app.domain.model.FriendCode
+import com.pocketpass.app.domain.model.LeaderboardEntry
+import com.pocketpass.app.domain.model.LeaderboardScope
 import com.pocketpass.app.domain.model.NearbyEncounter
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.state.LoadState
+import com.pocketpass.app.feature.AchievementsFeatureState
+import com.pocketpass.app.feature.BingoFeatureState
 import com.pocketpass.app.feature.FriendsFeatureState
+import com.pocketpass.app.feature.LeaderboardFeatureState
+import com.pocketpass.app.feature.ShopFeatureState
+import com.pocketpass.app.feature.WorldTourFeatureState
+import com.pocketpass.app.steps.StepRewardsState
 import com.pocketpass.app.feature.HomeProfileFeatureState
 import com.pocketpass.app.feature.NotificationFeatureState
 import com.pocketpass.app.mii.MiiEditorUiState
@@ -92,6 +102,60 @@ class WidgetSnapshotPublisherTest {
     }
 
     @Test
+    fun widgetMakerFieldsComeFromTheActivityAndPeopleStates() {
+        val friend = UserId("90000000-0000-4000-8000-000000000002")
+        val stranger = UserId("90000000-0000-4000-8000-000000000003")
+        val publisher = publisher(
+            homeProfile = MutableStateFlow(
+                HomeProfileFeatureState(
+                    profile = LoadState.Data(profile()),
+                    recentInteractions = LoadState.Data(
+                        listOf(
+                            encounter("old", now - 3_000, friend),
+                            encounter("new", now - 1_000, friend),
+                            encounter("other", now - 2_000, stranger),
+                        ),
+                    ),
+                ),
+            ),
+            friends = MutableStateFlow(
+                FriendsFeatureState(
+                    friends = LoadState.Data(
+                        listOf(
+                            Friend(ownerId = account, profile = profile(friend, "Zed"), lastInteractionAt = null, isOnline = true),
+                            Friend(ownerId = account, profile = profile(stranger, "Amy"), lastInteractionAt = null, isOnline = false),
+                        ),
+                    ),
+                    myFriendCode = LoadState.Data(FriendCode("12345678")),
+                ),
+            ),
+            shop = MutableStateFlow(ShopFeatureState(tokenBalance = 420)),
+            stepRewards = MutableStateFlow(StepRewardsState(stepsToday = 8_000)),
+            leaderboard = MutableStateFlow(
+                LeaderboardFeatureState(
+                    scope = LeaderboardScope.Global,
+                    entries = listOf(
+                        LeaderboardEntry(friend, "Zed", null, trophyCount = 5, encounterCount = 9),
+                        LeaderboardEntry(account, "Petah", null, trophyCount = 3, encounterCount = 4),
+                    ),
+                ),
+            ),
+        )
+
+        val content = publisher.current().content
+
+        assertEquals(420, content.tokenBalance)
+        assertEquals(8_000, content.stepsToday)
+        assertEquals("12345678", content.friendCode)
+        assertEquals(2, content.leaderboardRank)
+        assertEquals("Global", content.leaderboardScope)
+        assertEquals(listOf(friend.value, stranger.value), content.recentPeople.map { it.userId })
+        assertEquals(now - 1_000, content.recentPeople.first().occurredAtEpochMillis)
+        assertEquals(listOf("Zed"), content.onlineFriends.map { it.displayName })
+        assertEquals(content, WidgetSnapshot.decode(content.encode()))
+    }
+
+    @Test
     fun publishesOnceForABurstAndStampsTheTime() = runTest {
         val sink = FakeSink()
         val notifications = MutableStateFlow(NotificationFeatureState())
@@ -131,34 +195,49 @@ class WidgetSnapshotPublisherTest {
         nearby: MutableStateFlow<NearbyFeatureState> = MutableStateFlow(NearbyFeatureState()),
         miiEditor: MutableStateFlow<MiiEditorUiState> = MutableStateFlow(MiiEditorUiState()),
         settings: MutableStateFlow<LocalSettings> = MutableStateFlow(LocalSettings()),
+        friends: MutableStateFlow<FriendsFeatureState> = MutableStateFlow(FriendsFeatureState()),
+        shop: MutableStateFlow<ShopFeatureState> = MutableStateFlow(ShopFeatureState()),
+        stepRewards: MutableStateFlow<StepRewardsState> = MutableStateFlow(StepRewardsState()),
+        achievements: MutableStateFlow<AchievementsFeatureState> = MutableStateFlow(AchievementsFeatureState()),
+        bingo: MutableStateFlow<BingoFeatureState> = MutableStateFlow(BingoFeatureState()),
+        worldTour: MutableStateFlow<WorldTourFeatureState> = MutableStateFlow(WorldTourFeatureState()),
+        leaderboard: MutableStateFlow<LeaderboardFeatureState> = MutableStateFlow(LeaderboardFeatureState()),
         debounceMillis: Long = 500,
     ) = WidgetSnapshotPublisher(
         scope = scope,
         activeAccountId = MutableStateFlow(account),
         homeProfile = homeProfile,
         notifications = notifications,
-        friends = MutableStateFlow(FriendsFeatureState()),
+        friends = friends,
         nearby = nearby,
         miiEditor = miiEditor,
         settings = settings,
+        shop = shop,
+        stepRewards = stepRewards,
+        achievements = achievements,
+        bingo = bingo,
+        worldTour = worldTour,
+        leaderboard = leaderboard,
         sink = sink,
         nowEpochMillis = { now },
         startOfLocalDay = { dayStart },
         debounceMillis = debounceMillis,
     )
 
-    private fun profile(bio: String = "Hi there") = UserProfile(
-        userId = account,
-        displayName = "Petah",
+    private fun profile(bio: String = "Hi there") = profile(account, "Petah", bio)
+
+    private fun profile(userId: UserId, name: String, bio: String = "Hi there") = UserProfile(
+        userId = userId,
+        displayName = name,
         avatar = AvatarReference.Bundled("petah"),
         bio = bio,
         updatedAt = Instant.fromEpochMilliseconds(now),
     )
 
-    private fun encounter(id: String, occurredAt: Long) = NearbyEncounter(
+    private fun encounter(id: String, occurredAt: Long, userId: UserId = account) = NearbyEncounter(
         id = EncounterId("encounter-$id"),
         ownerId = account,
-        profile = profile(),
+        profile = profile(userId, "Person $id"),
         occurredAt = Instant.fromEpochMilliseconds(occurredAt),
         resolvedAt = Instant.fromEpochMilliseconds(occurredAt),
     )

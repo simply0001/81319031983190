@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.IntOffset
@@ -32,17 +33,20 @@ internal class HighlightMask(
     val height: Int,
     val radius: Int,
     val scale: Float,
+    val badgeBounds: Rect?,
 )
 
 internal class HighlightMaskCache {
     private var current: HighlightMask? = null
 
-    fun forRing(width: Float, height: Float, innerRadius: Float, scale: Float): HighlightMask {
+    fun forRing(width: Float, height: Float, innerRadius: Float, scale: Float, badgeBounds: Rect?): HighlightMask {
         val w = width.roundToInt()
         val h = height.roundToInt()
         val r = innerRadius.roundToInt()
-        current?.let { if (it.width == w && it.height == h && it.radius == r && it.scale == scale) return it }
-        return buildHighlightMask(w.toFloat(), h.toFloat(), r.toFloat(), scale).also { current = it }
+        current?.let {
+            if (it.width == w && it.height == h && it.radius == r && it.scale == scale && it.badgeBounds == badgeBounds) return it
+        }
+        return buildHighlightMask(w.toFloat(), h.toFloat(), r.toFloat(), scale, badgeBounds).also { current = it }
     }
 }
 
@@ -51,8 +55,9 @@ internal fun DrawScope.drawHighlightGlow(
     bounds: Rect,
     innerRadius: Float,
     scale: Float,
+    badgeBounds: Rect?,
 ) {
-    val mask = masks.forRing(bounds.width, bounds.height, innerRadius, scale)
+    val mask = masks.forRing(bounds.width, bounds.height, innerRadius, scale, badgeBounds)
     drawMask(mask.glow, mask.pad, bounds, ColorFilter.tint(Color(HIGHLIGHT_GLOW_COLOR)), BlendMode.SrcOver)
 }
 
@@ -61,8 +66,9 @@ internal fun DrawScope.drawHighlightGloss(
     bounds: Rect,
     innerRadius: Float,
     scale: Float,
+    badgeBounds: Rect?,
 ) {
-    val mask = masks.forRing(bounds.width, bounds.height, innerRadius, scale)
+    val mask = masks.forRing(bounds.width, bounds.height, innerRadius, scale, badgeBounds)
     drawMask(mask.gloss, mask.pad, bounds, ColorFilter.tint(Color.White), BlendMode.Overlay)
 }
 
@@ -90,11 +96,36 @@ private fun DrawScope.drawMask(
     )
 }
 
-private fun buildHighlightMask(width: Float, height: Float, innerRadius: Float, scale: Float): HighlightMask {
+internal fun Rect.inHighlight(bounds: Rect, scale: Float): Rect = Rect(
+    bounds.left + left * scale,
+    bounds.top + top * scale,
+    bounds.left + right * scale,
+    bounds.top + bottom * scale,
+)
+
+internal fun highlightOutline(bounds: Rect, radius: Float, expansion: Float, badge: Rect?): Path {
+    val button = Path().apply {
+        addRoundRect(RoundRect(bounds.inflate(expansion), CornerRadius(radius + expansion)))
+    }
+    if (badge == null) return button
+    val count = Path().apply { addOval(badge.inflate(expansion)) }
+    return Path.combine(PathOperation.Union, button, count)
+}
+
+private fun buildHighlightMask(
+    width: Float,
+    height: Float,
+    innerRadius: Float,
+    scale: Float,
+    badgeBounds: Rect?,
+): HighlightMask {
     val stroke = HIGHLIGHT_STROKE * scale
     val glowBlur = HIGHLIGHT_GLOW_BLUR * scale
     val glossBlur = HIGHLIGHT_GLOSS_BLUR * scale
-    val pad = stroke + maxOf(glowBlur * 2.5f, glossBlur * 3f)
+    val badgeOverflow = badgeBounds?.let {
+        maxOf(0f, -it.left * scale, -it.top * scale, it.right * scale - width, it.bottom * scale - height)
+    } ?: 0f
+    val pad = stroke + maxOf(glowBlur * 2.5f, glossBlur * 3f) + badgeOverflow
     val s = HIGHLIGHT_MASK_SCALE
     val maskWidth = ceil((width + pad * 2f) * s).toInt().coerceAtLeast(1)
     val maskHeight = ceil((height + pad * 2f) * s).toInt().coerceAtLeast(1)
@@ -105,24 +136,15 @@ private fun buildHighlightMask(width: Float, height: Float, innerRadius: Float, 
         base.right + amount * s,
         base.bottom + amount * s,
     )
-    fun roundRectPath(rect: Rect, radius: Float) = Path().apply {
-        addRoundRect(RoundRect(rect, CornerRadius(radius * s)))
-    }
-    val outerPath = roundRectPath(inflated(stroke), innerRadius + stroke)
-    val innerPath = roundRectPath(base, innerRadius)
+    val badge = badgeBounds?.inHighlight(base, scale * s)
+    val outerPath = highlightOutline(base, innerRadius * s, stroke * s, badge)
+    val innerPath = highlightOutline(base, innerRadius * s, 0f, badge)
 
     val glow = ImageBitmap(maskWidth, maskHeight, ImageBitmapConfig.Alpha8)
     Canvas(glow).apply {
         clipPath(outerPath, ClipOp.Difference)
-        val ring = inflated(stroke / 2f)
-        val ringRadius = (innerRadius + stroke / 2f) * s
-        drawRoundRect(
-            ring.left,
-            ring.top,
-            ring.right,
-            ring.bottom,
-            ringRadius,
-            ringRadius,
+        drawPath(
+            highlightOutline(base, innerRadius * s, stroke * s / 2f, badge),
             Paint().apply {
                 isAntiAlias = true
                 style = PaintingStyle.Stroke
@@ -163,5 +185,6 @@ private fun buildHighlightMask(width: Float, height: Float, innerRadius: Float, 
         height = height.roundToInt(),
         radius = innerRadius.roundToInt(),
         scale = scale,
+        badgeBounds = badgeBounds,
     )
 }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 enum class NearbyReceiptVerdict {
     NewEncounter,
     AlreadyCountedToday,
+    Rejected,
     Unknown,
     NotQueued,
 }
@@ -18,11 +19,13 @@ enum class NearbyReceiptVerdict {
 data class NearbyReceiptOutcome(
     val submittedEncounterId: EncounterId,
     val resolvedEncounterId: EncounterId?,
+    val rejected: Boolean = false,
 ) {
     val verdict: NearbyReceiptVerdict
-        get() = when (resolvedEncounterId) {
-            null -> NearbyReceiptVerdict.Unknown
-            submittedEncounterId -> NearbyReceiptVerdict.NewEncounter
+        get() = when {
+            rejected -> NearbyReceiptVerdict.Rejected
+            resolvedEncounterId == null -> NearbyReceiptVerdict.Unknown
+            resolvedEncounterId == submittedEncounterId -> NearbyReceiptVerdict.NewEncounter
             else -> NearbyReceiptVerdict.AlreadyCountedToday
         }
 }

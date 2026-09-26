@@ -132,6 +132,31 @@ class RoomShopRepositoryTest {
         assertEquals(null, none.observeSupporterUntil(ACCOUNT).first())
     }
 
+    @Test
+    fun supporterPurchaseIsConfirmedSeparatelyAndSurvivesExpiry() = runBlocking {
+        seedShop(balance = 100)
+        val subscriber = repository(remoteOwned = emptyList(), supporterUntil = NOW.plus((3_600).seconds))
+        assertTrue(subscriber.refreshSupporterStatus(ACCOUNT) is RepositoryResult.Success)
+        assertTrue(subscriber.purchase(purchaseCommand()) is RepositoryResult.Success)
+        assertEquals(80, subscriber.observeTokenBalance(ACCOUNT).first())
+        assertTrue(subscriber.observeOwnedItems(ACCOUNT).first().single().pending)
+
+        val confirmed = repository(
+            remoteOwned = listOf(OwnedShopItem("item-baseball-cap", NOW, 20, pending = false)),
+            supporterUntil = NOW.minus((1).seconds),
+        )
+        database.shopDao().markOwnedItemSynced(
+            accountId = ACCOUNT.value,
+            itemId = "item-baseball-cap",
+            purchasedAtEpochMillis = NOW.toEpochMilliseconds(),
+        )
+        assertTrue(confirmed.refreshOwnedItems(ACCOUNT) is RepositoryResult.Success)
+        assertTrue(confirmed.refreshSupporterStatus(ACCOUNT) is RepositoryResult.Success)
+        assertEquals(setOf(0), confirmed.observeOwnedHatTypes(ACCOUNT).first())
+        assertEquals("item-baseball-cap", confirmed.observeOwnedItems(ACCOUNT).first().single().itemId)
+        assertTrue(!confirmed.observeOwnedItems(ACCOUNT).first().single().pending)
+    }
+
     private fun repository(
         remoteOwned: List<OwnedShopItem>,
         supporterUntil: Instant? = null,

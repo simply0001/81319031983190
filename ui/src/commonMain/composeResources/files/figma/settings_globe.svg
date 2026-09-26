@@ -1,0 +1,20 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="142.65" height="142.65" viewBox="0 0 142.65 142.65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
+<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#ringTeal)" stroke-width="9"/>
+<circle cx="71.325" cy="71.325" r="32" stroke="url(#paint0_linear_globe)" stroke-width="6"/>
+<ellipse cx="71.325" cy="71.325" rx="14" ry="32" stroke="url(#paint0_linear_globe)" stroke-width="5"/>
+<path d="M39.325,71.325 h64" stroke="url(#paint0_linear_globe)" stroke-width="5"/>
+<path d="M45,54 h52.65 M45,88.65 h52.65" stroke="url(#paint0_linear_globe)" stroke-width="4"/>
+</g>
+<defs>
+<linearGradient id="ringTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5E9AAC"/>
+<stop offset="1" stop-color="#21677B"/>
+</linearGradient>
+<linearGradient id="paint0_linear_globe" x1="71.325" y1="35" x2="71.325" y2="107.65" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B7D90"/>
+<stop offset="1" stop-color="#1B5363"/>
+</linearGradient>
+</defs>
+</svg>

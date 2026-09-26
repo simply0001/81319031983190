@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import com.pocketpass.app.ui.DesignMetrics
+import com.pocketpass.app.ui.controller.LocalControllerFocus
 
 private const val OVERLAY_EXIT_MILLIS = 220
 private const val OVERLAY_EXIT_DROP = 42f
@@ -26,6 +28,7 @@ fun <T> ExitingOverlay(
     metrics: DesignMetrics,
     visible: Boolean,
     snapshot: T,
+    releaseFocusOnExit: Boolean = false,
     content: @Composable (T) -> Unit,
 ) {
     var retained by remember { mutableStateOf(snapshot) }
@@ -55,6 +58,7 @@ fun <T> ExitingOverlay(
     }
     if (!visible && !everShown) return
     val shown = if (visible) snapshot else retained
+    val focus = LocalControllerFocus.current
     Box(
         Modifier
             .fillMaxSize()
@@ -65,6 +69,10 @@ fun <T> ExitingOverlay(
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             },
     ) {
-        content(shown)
+        CompositionLocalProvider(
+            LocalControllerFocus provides focus.takeIf { visible || !releaseFocusOnExit },
+        ) {
+            content(shown)
+        }
     }
 }

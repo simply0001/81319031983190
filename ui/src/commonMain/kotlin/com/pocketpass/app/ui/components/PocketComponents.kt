@@ -69,6 +69,7 @@ import com.pocketpass.app.ui.DesignAnchor
 import com.pocketpass.app.ui.DesignBackdrop
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.LocalDesignOrigin
+import com.pocketpass.app.domain.model.ActivitySnapshot
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.anchorOrigin
 import com.pocketpass.app.ui.anchoredBounds
@@ -167,9 +168,8 @@ private val assetByteCache = mutableMapOf<String, ByteArray>()
 @Composable
 fun rememberPocketAssetBytes(resource: PocketAsset): ByteArray? {
     val bytes by produceState(assetByteCache[resource.path], resource) {
-        if (value == null) {
-            value = Res.readBytes(resource.path).also { assetByteCache[resource.path] = it }
-        }
+        value = assetByteCache[resource.path]
+            ?: Res.readBytes(resource.path).also { assetByteCache[resource.path] = it }
     }
     return bytes
 }
@@ -201,9 +201,8 @@ fun PatternBackground(
     holdFraction: Float,
     designWidth: Float,
     designHeight: Float,
-    alpha: () -> Float = { 1f },
 ) {
-    DesignBackdrop(metrics, alpha, key = listOf(pattern, topColor, bottomColor, holdFraction)) {
+    DesignBackdrop(metrics) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -243,15 +242,21 @@ fun FullBleedArtwork(
     modifier: Modifier = Modifier,
 ) {
     if (metrics.hasOverscan) {
-        DesignBackdrop(metrics, key = resource) {
-            FigmaAsset(
-                resource = resource,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(metrics.dp(24f)),
-                contentScale = ContentScale.Crop,
-            )
-        }
+        FigmaAsset(
+            resource = resource,
+            modifier = Modifier
+                .anchoredBounds(
+                    metrics,
+                    0f,
+                    0f,
+                    metrics.designWidth,
+                    metrics.designHeight,
+                    DesignAnchor.Stretch,
+                    DesignAnchor.Stretch,
+                )
+                .blur(metrics.dp(24f)),
+            contentScale = ContentScale.Crop,
+        )
     }
     FigmaAsset(
         resource = resource,
@@ -629,23 +634,24 @@ fun BatteryStatusIcon(
 }
 
 @Composable
-private fun StatusPill(
+internal fun StatusPill(
     metrics: DesignMetrics,
     x: Float,
     width: Float,
     horizontal: DesignAnchor,
+    y: Float = 50f,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(metrics.dp(66f))
     val palette = pocketPalette
     Box(
         Modifier
-            .anchoredBounds(metrics, x, 64f, width, 132f, horizontal, DesignAnchor.Start)
+            .anchoredBounds(metrics, x, y + 14f, width, 132f, horizontal, DesignAnchor.Start)
             .pocketShadow(metrics, 66f),
     )
     Box(
         Modifier
-            .anchoredBounds(metrics, x, 50f, width, 132f, horizontal, DesignAnchor.Start)
+            .anchoredBounds(metrics, x, y, width, 132f, horizontal, DesignAnchor.Start)
             .clip(shape)
             .pocketFrame(
                 Brush.verticalGradient(
@@ -860,6 +866,7 @@ fun PocketPanel(
     onControllerActivate: (() -> Unit)? = null,
     horizontal: DesignAnchor? = null,
     vertical: DesignAnchor = DesignAnchor.Center,
+    modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(metrics.dp(radius))
@@ -885,6 +892,7 @@ fun PocketPanel(
     )
     val base = Modifier
         .anchoredBounds(metrics, x, y, width, height, anchor, vertical)
+        .then(modifier)
         .clip(shape)
         .pocketFrame(
             fillBrush ?: SolidColor(fill ?: palette.surface),
@@ -937,3 +945,28 @@ fun pocketTextStyle(
     fontSize = metrics.sp(size),
     color = color,
 )
+
+@Composable
+fun PassingStreakPill(
+    metrics: DesignMetrics,
+    snapshot: ActivitySnapshot?,
+) {
+    val line = passingStatsLine(snapshot?.streakDays ?: 0, snapshot?.weekPasses ?: 0) ?: return
+    StatusPill(
+        metrics = metrics,
+        x = 560f,
+        width = 800f,
+        horizontal = DesignAnchor.Center,
+    ) {
+        Text(
+            text = line,
+            modifier = Modifier.testTag("passing_streak"),
+            color = pocketPalette.teal,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.Medium,
+            fontSize = metrics.sp(42f),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
+    }
+}

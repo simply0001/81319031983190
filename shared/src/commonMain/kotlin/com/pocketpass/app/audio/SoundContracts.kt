@@ -13,11 +13,15 @@ enum class SoundEffect {
     Confirm,
     ;
 
-    // Gain on top of the user's sfx volume; the tab flicks are mixed
-    // noticeably quieter than the rest of the set.
+    // Gain on top of the user's sfx volume. The clips are mixed quiet, the
+    // tab flicks and the back flick more so, and the notification chime
+    // has to carry from a pocket; the player clamps the result at full
+    // volume.
     fun gain(): Float = when (this) {
-        TabLeft, TabRight -> 1.3f
-        else -> 1f
+        Notification -> 2f
+        TabLeft, TabRight -> 1.87f
+        Cancel -> 1.6f
+        else -> 1.2f
     }
 }
 

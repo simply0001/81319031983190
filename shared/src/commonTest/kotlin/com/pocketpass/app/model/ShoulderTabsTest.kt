@@ -18,6 +18,7 @@ class ShoulderTabsTest {
     fun theActivitiesOverlaysLetTheShoulderButtonsSwitchTabs() {
         assertFalse(settings.copy(shop = ShopUiState(visible = true)).blocksShoulderTabs())
         assertFalse(settings.copy(games = GamesUiState(visible = true, activeGame = GameTarget.Bingo)).blocksShoulderTabs())
+        assertFalse(settings.copy(games = GamesUiState(visible = true, activeGame = GameTarget.PuzzleSwap)).blocksShoulderTabs())
         assertFalse(settings.copy(leaderboard = LeaderboardUiState(visible = true)).blocksShoulderTabs())
     }
 
@@ -26,6 +27,8 @@ class ShoulderTabsTest {
         assertTrue(settings.copy(shop = ShopUiState(visible = true, buyPromptItemId = "hat")).blocksShoulderTabs())
         assertTrue(settings.copy(games = GamesUiState(visible = true, activeGame = GameTarget.Bingo, bingoGoalIndex = 3)).blocksShoulderTabs())
         assertTrue(settings.copy(games = GamesUiState(visible = true, activeGame = GameTarget.WorldTour, worldTourRegionsVisible = true)).blocksShoulderTabs())
+        assertTrue(settings.copy(games = GamesUiState(visible = true, activeGame = GameTarget.PuzzleSwap, puzzleBuyPromptVisible = true)).blocksShoulderTabs())
+        assertTrue(settings.copy(games = GamesUiState(visible = true, activeGame = GameTarget.PuzzleSwap, puzzleInfoVisible = true)).blocksShoulderTabs())
         assertTrue(settings.copy(leaderboard = LeaderboardUiState(visible = true, settingsVisible = true)).blocksShoulderTabs())
     }
 

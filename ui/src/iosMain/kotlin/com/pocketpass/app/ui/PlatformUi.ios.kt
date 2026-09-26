@@ -22,6 +22,8 @@ actual fun supportsAnimatedPatterns(): Boolean = true
 
 actual fun requiresLegacyLocationPermission(): Boolean = false
 
+actual fun asksToRunInBackground(): Boolean = false
+
 actual fun formatInstant(instant: Instant, pattern: String): String {
     val formatter = NSDateFormatter().apply {
         dateFormat = pattern

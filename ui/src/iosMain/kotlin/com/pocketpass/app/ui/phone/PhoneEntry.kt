@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.unit.dp
 import com.pocketpass.app.audio.LocalSoundEffects
+import com.pocketpass.app.media.IosImageAttachmentPicker
 import com.pocketpass.app.mii.renderer.IosMiiEditorRenderSurface
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.audio.backgroundMusicTrack
@@ -31,6 +32,10 @@ import com.pocketpass.app.ui.LocalAppVersionName
 import com.pocketpass.app.ui.PocketPassTheme
 import platform.Foundation.NSBundle
 import platform.UIKit.UIViewController
+import kotlinx.coroutines.launch
+import okio.Path.Companion.toPath
+import com.pocketpass.app.boards.BoardBrandingPicker
+import com.pocketpass.app.media.ImageAttachmentPreparation
 
 private val container by lazy { IosAppContainer() }
 private val store by lazy {
@@ -42,6 +47,34 @@ private val store by lazy {
 }
 
 private val backgroundRefresh by lazy { IosBackgroundRefresh(container) }
+
+private var rootViewController: UIViewController? = null
+private var boardImageRequest: BoardBrandingPicker.Request? = null
+private val boardImagePicker by lazy {
+    IosImageAttachmentPicker(onPicked = { source ->
+        val request = boardImageRequest; boardImageRequest = null
+        container.applicationScope.launch {
+            try {
+                when(val result = container.imageAttachmentPreparer.prepare(source)) {
+                    is ImageAttachmentPreparation.Ready -> {
+                        try { request?.complete(okio.FileSystem.SYSTEM.read(result.attachment.path.toPath()) { readByteArray() }) }
+                        finally { container.imageAttachmentPreparer.discard(result.attachment.path) }
+                    }
+                    is ImageAttachmentPreparation.Failed -> request?.fail(result.message)
+                }
+            } catch(_: Exception) { request?.fail("This image could not be opened") }
+            finally { container.imageAttachmentPreparer.discard(source) }
+        }
+    }, onFailed = { boardImageRequest?.fail("This image could not be opened"); boardImageRequest = null },
+        onCancelled = { boardImageRequest?.complete(null); boardImageRequest = null })
+}
+
+private val imageAttachmentPicker by lazy {
+    IosImageAttachmentPicker(
+        onPicked = container::sendPickedImage,
+        onFailed = container::reportImagePickFailure,
+    )
+}
 
 private fun bundleVersionName(): String =
     NSBundle.mainBundle.infoDictionary
@@ -58,7 +91,7 @@ fun PhoneAppDidLaunch() {
 // The iOS application's root, called from the Swift AppDelegate.
 fun PhoneAppViewController(): UIViewController = ComposeUIViewController {
     IosPhoneApp()
-}
+}.also { rootViewController = it }
 
 // Called from the Swift AppDelegate when the app is opened through its URL
 // scheme. Only the sign-in callback carries anything to act on; widget taps
@@ -74,17 +107,41 @@ fun PhoneAppSetWidgetReloader(reloader: () -> Unit) {
     IosWidgetReload.handler = reloader
 }
 
+// Install before PhoneAppDidLaunch so the container can expose the Messages setting.
+fun PhoneAppSetMessagePushHandler(handler: (String) -> Unit) {
+    com.pocketpass.app.push.IosMessagePushBridge.handler = handler
+}
+
+fun PhoneAppMessagePushState(token: String, allowed: Boolean) {
+    com.pocketpass.app.push.IosMessagePushBridge.update(token, allowed)
+}
+
+fun PhoneAppMessageNotificationTapped(data: Map<String, String>) {
+    container.handleMessageNotification(data)
+}
+
 private const val AUTH_CALLBACK_PREFIX = "pocketpass://auth/callback"
 
 @Composable
 private fun IosPhoneApp() {
     val state by store.state.collectAsState()
     LaunchedEffect(Unit) {
+        BoardBrandingPicker.requests.collect { request ->
+            boardImageRequest = request
+            rootViewController?.let(boardImagePicker::present) ?: request.complete(null)
+        }
+    }
+    LaunchedEffect(Unit) {
         snapshotFlow {
             val current = store.state.value
             backgroundMusicTrack(current) to current.soundLevel
         }.collect { (track, level) ->
             container.backgroundMusic.update(track, level)
+        }
+    }
+    LaunchedEffect(Unit) {
+        container.messages.imageAttachmentRequested.collect {
+            rootViewController?.let(imageAttachmentPicker::present)
         }
     }
     CompositionLocalProvider(

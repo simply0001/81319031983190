@@ -57,6 +57,7 @@ import com.pocketpass.app.domain.model.MAX_GROUP_MEMBERS
 import com.pocketpass.app.domain.model.Message
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.model.GroupComposerState
+import com.pocketpass.app.model.GroupMemberFriendState
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
@@ -156,6 +157,7 @@ internal fun NewGroupBottom(
 ) {
     BottomPage(entrance = EntranceMotion.None) { metrics ->
         val composer = state.groupComposer ?: GroupComposerState()
+        MessagePrivacyBlockedDialog(composer.error)
         val focus = LocalControllerFocus.current
         val candidates = remember(state.friends) { state.friends.toPickerMembers() }
         var keyboardVisible by remember { mutableStateOf(true) }
@@ -701,7 +703,6 @@ fun TopGroupComposer(
             holdFraction = 0f,
             designWidth = TOP_DESIGN_WIDTH,
             designHeight = TOP_DESIGN_HEIGHT,
-            alpha = settled,
         )
         val cardShape = RoundedCornerShape(metrics.dp(104f))
         Box(
@@ -891,6 +892,7 @@ internal fun GroupInfoBottomOverlay(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val conversation = state.selectedConversation?.takeIf { it.isGroup } ?: return
+    MessagePrivacyBlockedDialog(state.groupOperationError)
     val palette = pocketPalette
     val selfId = state.profile?.userId
     val focus = LocalControllerFocus.current
@@ -1041,6 +1043,9 @@ internal fun GroupInfoBottomOverlay(
             selfId = selfId,
             canRemove = isOwner && !busy,
             onRemove = { prompt = GroupPrompt.Remove(it) },
+            friendStates = state.groupMemberFriendStates,
+            busy = busy,
+            onAddFriend = { dispatch(PocketPassEvent.AddGroupMemberFriend(it.userId.value)) },
         )
         GroupActionButton(
             metrics = metrics,
@@ -1168,6 +1173,9 @@ private fun GroupMemberList(
     selfId: UserId?,
     canRemove: Boolean,
     onRemove: (ConversationMember) -> Unit,
+    friendStates: Map<UserId, GroupMemberFriendState>,
+    busy: Boolean,
+    onAddFriend: (ConversationMember) -> Unit,
 ) {
     val palette = pocketPalette
     val shape = RoundedCornerShape(metrics.dp(48f))
@@ -1194,6 +1202,8 @@ private fun GroupMemberList(
                 CompositionLocalProvider(LocalControllerFocusViewport provides viewport) {
                     members.forEachIndexed { index, member ->
                         val isSelf = member.userId == selfId
+                        val friendState = friendStates[member.userId] ?: GroupMemberFriendState.Unavailable
+                        val friendActionX = width - 32f - if (canRemove) 430f else 240f
                         val rowTag = "group_info_member_${member.userId.value}"
                         val rowY = 12f + index * INFO_ROW_PITCH
                         Box(
@@ -1228,7 +1238,7 @@ private fun GroupMemberList(
                             }
                             Text(
                                 text = member.displayName,
-                                modifier = Modifier.designBounds(metrics, 136f, 18f, 560f, 60f),
+                                modifier = Modifier.designBounds(metrics, 136f, 18f, if (isSelf) 560f else friendActionX - 152f, 60f),
                                 color = palette.textPrimary,
                                 fontFamily = Rubik,
                                 fontWeight = FontWeight.Bold,
@@ -1244,6 +1254,23 @@ private fun GroupMemberList(
                             }
                             if (chip != null) {
                                 GroupChip(metrics, x = 136f, y = 80f, label = chip)
+                            }
+                            if (!isSelf) {
+                                GroupActionButton(
+                                    metrics = metrics,
+                                    x = friendActionX,
+                                    y = 26f,
+                                    width = 224f,
+                                    height = 72f,
+                                    label = friendState.label,
+                                    textColor = palette.teal,
+                                    fill = greyPanelBrush(),
+                                    borderColor = palette.tealBorder,
+                                    enabled = !busy && friendState.canSend,
+                                    tag = "group_add_friend_${member.userId.value}",
+                                    layer = GROUP_INFO_FOCUS_LAYER,
+                                    fontSize = 30f,
+                                ) { onAddFriend(member) }
                             }
                             if (canRemove && !isSelf) {
                                 GroupActionButton(

@@ -17,19 +17,22 @@ surface.
 `provenance.json` is the machine-readable source of truth for the pinned
 commit, PocketPass source hashes, upstream runtime-asset hashes, build command,
 and FFL resource provenance. `pocketPassRuntimeAssets` lists packaged runtime files that PocketPass
-derives from a pinned upstream asset (the hat bundle with `hat_10.glb` appended):
+derives from a pinned upstream asset (the hat bundle with `hat_10.glb` and
+`hat_11.glb` appended; `hat_11.glb` is the upstream standalone `hat_8.glb` Hijab):
 the script verifies the upstream base inside the checkout and the packaged
 file's own hash, and `-UpdateBundle` never overwrites them.
 
 ## What is vendored
 
 - `src/`: the small PocketPass renderer entrypoint and adapters.
-- `patches/pocketpass-renderer.patch`: the two narrowly scoped upstream source
+- `patches/pocketpass-renderer.patch`: the three narrowly scoped upstream source
   changes needed to detach the renderer from the upstream editor/audio/global
   settings, keep PocketPass's fixed full-body camera from being reset to the
   upstream head view, preserve PocketPass's virtual full-screen viewport
-  through renderer rebuilds, and enable deterministic profile portraits using
-  the upstream dedicated `ViewType.Face` icon renderer.
+  through renderer rebuilds, enable deterministic profile portraits using
+  the upstream dedicated `ViewType.Face` icon renderer, and register the
+  PocketPass hats in the upstream hat table (the Halo keeps the hair; the
+  Hijab renders the hairless face-only head).
 - `build.ps1`: a clean-checkout build and checksum verifier.
 
 The complete upstream source tree is deliberately not copied into PocketPass.

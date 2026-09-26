@@ -1,0 +1,6 @@
+[Unit]
+Description=PocketPass failure alert for %i
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'printf "%%s %%s failed\n" "$(date -u +%%Y-%%m-%%dT%%H:%%M:%%SZ)" "%i" >> /var/log/pocketpass-alerts.log; logger -t pocketpass-alert -p user.err "%i failed"'

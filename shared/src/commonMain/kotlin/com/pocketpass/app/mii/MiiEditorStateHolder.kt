@@ -55,6 +55,8 @@ class MiiEditorStateHolder(
     private var activeSlot: Int = MII_FIRST_SLOT
     private var editingSlot: Int = MII_FIRST_SLOT
     private var pendingSave: PendingSave? = null
+    private var quickWear = false
+    private var quickWearPreviousProfile: MiiStoredProfile? = null
     private var nextSaveRequestId: Long = 1L
 
     init {
@@ -69,6 +71,7 @@ class MiiEditorStateHolder(
     private fun stripLockedHat(
         allowedHatTypes: Set<Int> = mutableState.value.ownedHatTypes,
     ) {
+        if (quickWear) return
         var updated: MiiEditorUiState? = null
         mutableState.update { current ->
             val stripped = current.draft.withoutLockedHat(allowedHatTypes)
@@ -112,6 +115,9 @@ class MiiEditorStateHolder(
         pretendoLookupJob?.cancel()
         pretendoLookupJob = null
         pendingSave = null
+        quickWear = false
+        quickWearPreviousProfile = null
+        presentJob?.cancel()
         savedProfiles.clear()
         activeSlot = MII_FIRST_SLOT
         editingSlot = MII_FIRST_SLOT
@@ -174,9 +180,11 @@ class MiiEditorStateHolder(
     override fun beginEdit(slot: Int, wearHat: Int?) {
         val current = mutableState.value
         if (!current.isInitialized || savedProfiles.isEmpty()) return
+        quickWear = false
+        quickWearPreviousProfile = null
         editingSlot = slot.coerceToMiiSlot()
         val target = savedProfiles[editingSlot]
-        val preset = wearHat?.takeIf { it in 0..9 && it in current.ownedHatTypes }
+        val preset = wearHat?.takeIf { it in 0..10 && it in current.ownedHatTypes }
         val category = if (preset != null) MiiCategory.Hair else MiiCategory.Face
         val descriptor = MiiEditorCatalog.descriptor(category)
         val base = (target?.appearance ?: MiiAppearance())
@@ -201,6 +209,8 @@ class MiiEditorStateHolder(
                 },
                 rendererStatus = MiiRendererStatus.Loading,
                 saveState = MiiSaveState.Idle,
+                wearHatError = null,
+                wearHatInProgress = false,
                 activeAdjustment = null,
                 discardPromptVisible = false,
                 presented = false,
@@ -213,7 +223,96 @@ class MiiEditorStateHolder(
         }
     }
 
+    override fun wearHat(hatType: Int) {
+        val current = mutableState.value
+        val profile = activeProfile ?: return
+        // The shop verifies entitlement before calling this. Its owned-hat flow can
+        // arrive just after the purchase becomes wearable in the shop state.
+        if (
+            !current.isInitialized || current.mode != MiiEditorMode.Inactive ||
+            pendingSave != null || hatType !in 0..10
+        ) return
+        val appearance = profile.appearance.normalized()
+        if (appearance.extHatType == hatType) {
+            mutableState.update { it.copy(wearHatError = null) }
+            return
+        }
+        editingSlot = activeSlot
+        quickWear = true
+        quickWearPreviousProfile = profile
+        presentJob?.cancel()
+        presentJob = null
+        mutableState.update {
+            it.copy(
+                mode = MiiEditorMode.EditExisting,
+                editingSlot = editingSlot,
+                saved = appearance,
+                savedPortraitFilePath = profile.portraitFilePath,
+                savedCanonicalBase64 = profile.encodedMiiBase64,
+                draft = appearance.withTrait(MiiTraitField.HatType, hatType),
+                renderRevision = it.renderRevision + 1L,
+                rendererStatus = MiiRendererStatus.Loading,
+                saveState = MiiSaveState.Idle,
+                wearHatError = null,
+                wearHatInProgress = true,
+                presented = false,
+            )
+        }
+    }
+
+    private fun failQuickWear(message: String) {
+        quickWear = false
+        quickWearPreviousProfile = null
+        presentJob?.cancel()
+        presentJob = null
+        mutableState.update {
+            it.copy(
+                mode = MiiEditorMode.Inactive,
+                draft = it.saved ?: MiiAppearance(),
+                rendererStatus = MiiRendererStatus.Detached,
+                saveState = MiiSaveState.Idle,
+                wearHatError = message,
+                wearHatInProgress = false,
+                presented = true,
+            )
+        }
+    }
+
+    private suspend fun rollbackQuickWear(
+        pending: PendingSave,
+        newPortraitFilePath: String?,
+    ): Boolean {
+        val previous = quickWearPreviousProfile ?: return false
+        val restored = runCatching {
+            persistence.save(
+                pending.accountKey,
+                persistedSession(
+                    state = mutableState.value,
+                    profile = previous,
+                    draft = null,
+                ),
+            )
+        }.isSuccess
+        if (!restored) return false
+        savedProfile = previous
+        mutableState.update {
+            it.copy(
+                saved = previous.appearance,
+                savedPortraitFilePath = previous.portraitFilePath,
+                savedCanonicalBase64 = previous.encodedMiiBase64,
+                activePortraitFilePath = activeProfile?.portraitFilePath,
+                slots = slotSummaries(),
+                renderRevision = previous.revision,
+            )
+        }
+        if (newPortraitFilePath != null && newPortraitFilePath != previous.portraitFilePath) {
+            runCatching { deletePortraitFile(newPortraitFilePath) }
+        }
+        return true
+    }
+
     private fun presentEditor() {
+        if (quickWear) return
         presentJob?.cancel()
         presentJob = null
         if (!mutableState.value.presented) {
@@ -300,7 +399,9 @@ class MiiEditorStateHolder(
             is MiiEditorEvent.SelectPretendoImportSlot -> selectPretendoImportSlot(event.slot)
             MiiEditorEvent.ConfirmPretendoImport -> confirmPretendoImport()
             is MiiEditorEvent.RendererReady -> rendererReady(event.rendererVersion)
-            MiiEditorEvent.RendererAppearanceLoaded -> presentEditor()
+            MiiEditorEvent.RendererAppearanceLoaded -> {
+                if (quickWear) save() else presentEditor()
+            }
             is MiiEditorEvent.RendererError -> rendererError(event.message)
             is MiiEditorEvent.RendererSaveReady -> rendererSaveReady(
                 event.requestId,
@@ -757,7 +858,7 @@ class MiiEditorStateHolder(
             readyState.draft == readyState.saved
         if (bootMatchesDraft) {
             emitCameraCommand(readyState.selectedCategory)
-            presentEditor()
+            if (quickWear) save() else presentEditor()
             return
         }
         mutableRendererCommands.tryEmit(
@@ -784,6 +885,11 @@ class MiiEditorStateHolder(
     }
 
     private fun rendererError(message: String) {
+        if (quickWear) {
+            pendingSave = null
+            failQuickWear(message.ifBlank { "The hat could not be applied." })
+            return
+        }
         presentEditor()
         val pending = pendingSave
         pendingSave = null
@@ -839,6 +945,10 @@ class MiiEditorStateHolder(
             if (!isCurrent(pending, generation)) return@launch
             if (localResult.isFailure) {
                 pendingSave = null
+                if (quickWear) {
+                    failQuickWear("Your hat could not be saved on this device.")
+                    return@launch
+                }
                 mutableState.update {
                     it.copy(
                         saveState = MiiSaveState.Error(
@@ -887,6 +997,14 @@ class MiiEditorStateHolder(
                 MiiEditorSaveResult.Completed -> finishSuccessfulSave(queued = false)
                 MiiEditorSaveResult.QueuedForSync -> finishSuccessfulSave(queued = true)
                 is MiiEditorSaveResult.Rejected -> {
+                    if (quickWear) {
+                        val restored = rollbackQuickWear(pending, artifact.portraitFilePath)
+                        failQuickWear(
+                            if (restored) callbackResult.message
+                            else "Your hat could not be synced or restored on this device.",
+                        )
+                        return@launch
+                    }
                     mutableState.update {
                         it.copy(
                             saveState = MiiSaveState.Error(
@@ -906,6 +1024,10 @@ class MiiEditorStateHolder(
     private fun rendererSaveFailed(requestId: Long, message: String) {
         pendingSave?.takeIf { it.requestId == requestId } ?: return
         pendingSave = null
+        if (quickWear) {
+            failQuickWear(message.ifBlank { "Your hat could not be saved." })
+            return
+        }
         mutableState.update {
             it.copy(
                 saveState = MiiSaveState.Error(
@@ -917,6 +1039,8 @@ class MiiEditorStateHolder(
     }
 
     private fun finishSuccessfulSave(queued: Boolean) {
+        quickWear = false
+        quickWearPreviousProfile = null
         draftPersistenceJob?.cancel()
         mutableState.update {
             it.copy(
@@ -924,6 +1048,9 @@ class MiiEditorStateHolder(
                 activeAdjustment = null,
                 rendererStatus = MiiRendererStatus.Detached,
                 saveState = MiiSaveState.Saved(queuedForSync = queued),
+                wearHatError = null,
+                wearHatInProgress = false,
+                presented = true,
             )
         }
     }

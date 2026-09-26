@@ -4,6 +4,7 @@ import com.pocketpass.app.domain.model.AchievementState
 import com.pocketpass.app.domain.model.BingoCell
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.WorldTourRegion
+import com.pocketpass.app.domain.model.PassingStats
 import com.pocketpass.app.domain.model.ConversationSummary
 import com.pocketpass.app.domain.model.Friend
 import com.pocketpass.app.domain.model.FriendCode
@@ -44,8 +45,28 @@ import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import kotlin.time.Instant
+import com.pocketpass.app.domain.model.BuyPuzzlePieceCommand
+import com.pocketpass.app.domain.model.PuzzleCollection
+import com.pocketpass.app.domain.model.PuzzlePiecePurchaseOutcome
 
 interface ProfileRemoteDataSource {
+    suspend fun setInvitesPrivacy(command: com.pocketpass.app.domain.model.SetInvitesPrivacyCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(RepositoryFailure(RepositoryFailureKind.NotFound, "Invitation privacy is unavailable", retryable = false))
+    suspend fun setMessagePrivacy(command: com.pocketpass.app.domain.model.SetMessagePrivacyCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(RepositoryFailure(RepositoryFailureKind.NotFound, "Message privacy is unavailable", retryable = false))
+
+    suspend fun fetchAuthorProfiles(userIds: Set<UserId>): RepositoryResult<List<UserProfile>> {
+        val profiles = mutableListOf<UserProfile>()
+        for (id in userIds) when (val result = fetchProfile(id)) {
+            is RepositoryResult.Failure -> return result
+            is RepositoryResult.Success -> result.value?.let(profiles::add)
+        }
+        return RepositoryResult.Success(profiles)
+    }
+
+    suspend fun setChatBubbleColour(command: com.pocketpass.app.domain.model.SetChatBubbleColourCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(RepositoryFailure(RepositoryFailureKind.NotFound, "Chat colours are unavailable", retryable = false))
+
     suspend fun fetchProfile(userId: UserId): RepositoryResult<UserProfile?>
 
     suspend fun updateProfile(
@@ -174,6 +195,10 @@ interface EncounterRemoteDataSource {
         signingPublicKeys: List<String>,
     ): RepositoryResult<List<IssuedNearbyCredential>>
 
+    suspend fun fetchDeviceTagSecret(
+        accountId: UserId,
+    ): RepositoryResult<ByteArray>
+
     suspend fun fetchEncounters(
         accountId: UserId,
     ): RepositoryResult<List<NearbyEncounter>>
@@ -216,10 +241,54 @@ interface WorldTourRemoteDataSource {
     ): RepositoryResult<List<WorldTourRegion>>
 }
 
+interface PassingStatsRemoteDataSource {
+    suspend fun fetchStats(
+        accountId: UserId,
+        utcOffsetMinutes: Int,
+    ): RepositoryResult<PassingStats>
+}
+
 interface BingoRemoteDataSource {
     suspend fun fetchBoard(
         accountId: UserId,
     ): RepositoryResult<List<BingoCell>>
+}
+
+interface PuzzleRemoteDataSource {
+    suspend fun fetchCollection(
+        accountId: UserId,
+    ): RepositoryResult<PuzzleCollection>
+
+    suspend fun buyPiece(
+        command: BuyPuzzlePieceCommand,
+    ): RepositoryResult<PuzzlePiecePurchaseOutcome>
+
+    suspend fun downloadPanel(imagePath: String): RepositoryResult<ByteArray>
+}
+
+object EmptyPuzzleRemoteDataSource : PuzzleRemoteDataSource {
+    override suspend fun fetchCollection(
+        accountId: UserId,
+    ): RepositoryResult<PuzzleCollection> = RepositoryResult.Success(PuzzleCollection.Empty)
+
+    override suspend fun buyPiece(
+        command: BuyPuzzlePieceCommand,
+    ): RepositoryResult<PuzzlePiecePurchaseOutcome> = RepositoryResult.Failure(
+        RepositoryFailure(
+            kind = RepositoryFailureKind.Unavailable,
+            message = "Puzzle pieces are unavailable",
+            retryable = false,
+        ),
+    )
+
+    override suspend fun downloadPanel(imagePath: String): RepositoryResult<ByteArray> =
+        RepositoryResult.Failure(
+            RepositoryFailure(
+                kind = RepositoryFailureKind.Unavailable,
+                message = "Puzzle artwork is unavailable",
+                retryable = false,
+            ),
+        )
 }
 
 data class ProductionRemoteDataSources(
@@ -233,6 +302,8 @@ data class ProductionRemoteDataSources(
     val achievements: AchievementsRemoteDataSource = EmptyAchievementsRemoteDataSource,
     val worldTour: WorldTourRemoteDataSource = EmptyWorldTourRemoteDataSource,
     val bingo: BingoRemoteDataSource = EmptyBingoRemoteDataSource,
+    val puzzle: PuzzleRemoteDataSource = EmptyPuzzleRemoteDataSource,
+    val passingStats: PassingStatsRemoteDataSource = EmptyPassingStatsRemoteDataSource,
     val stepRewards: StepRewardsRemoteDataSource = EmptyStepRewardsRemoteDataSource,
 )
 
@@ -280,6 +351,18 @@ object EmptyWorldTourRemoteDataSource : WorldTourRemoteDataSource {
     ): RepositoryResult<List<WorldTourRegion>> = RepositoryResult.Success(emptyList())
 }
 
+object EmptyPassingStatsRemoteDataSource : PassingStatsRemoteDataSource {
+    override suspend fun fetchStats(
+        accountId: UserId,
+        utcOffsetMinutes: Int,
+    ): RepositoryResult<PassingStats> = RepositoryResult.Failure(
+        RepositoryFailure(
+            kind = RepositoryFailureKind.Unavailable,
+            message = "Passing stats are unavailable",
+        ),
+    )
+}
+
 object EmptyBingoRemoteDataSource : BingoRemoteDataSource {
     override suspend fun fetchBoard(
         accountId: UserId,
@@ -294,6 +377,15 @@ object EmptyEncounterRemoteDataSource : EncounterRemoteDataSource {
         com.pocketpass.app.domain.state.RepositoryFailure(
             kind = com.pocketpass.app.domain.state.RepositoryFailureKind.Unavailable,
             message = "Nearby credential service is unavailable",
+        ),
+    )
+
+    override suspend fun fetchDeviceTagSecret(
+        accountId: UserId,
+    ): RepositoryResult<ByteArray> = RepositoryResult.Failure(
+        com.pocketpass.app.domain.state.RepositoryFailure(
+            kind = com.pocketpass.app.domain.state.RepositoryFailureKind.Unavailable,
+            message = "Nearby device tag service is unavailable",
         ),
     )
 

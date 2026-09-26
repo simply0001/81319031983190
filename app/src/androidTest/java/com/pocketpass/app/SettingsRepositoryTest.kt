@@ -17,19 +17,30 @@ class SettingsRepositoryTest {
             ApplicationProvider.getApplicationContext(),
         )
 
+        repository.setGlobalLeaderboardLimit(75)
         repository.setNearby(false)
         repository.setSoundLevel(0.8f)
         repository.setThemeMode(ThemeMode.Dark)
+        repository.setMessageAlertsEnabled(false)
+        repository.setBoardsVisible(false)
         val saved = repository.settings.first()
 
+        assertEquals(75, saved.globalLeaderboardLimit)
+        assertEquals(75, DataStoreSettingsRepository(ApplicationProvider.getApplicationContext()).settings.first().globalLeaderboardLimit)
         assertFalse(saved.nearbyEnabled)
         assertEquals(0.8f, saved.soundLevel)
         assertEquals(ThemeMode.Dark, saved.themeMode)
+        assertFalse(saved.messageAlertsEnabled)
+        assertFalse(saved.boardsVisible)
+        assertFalse(DataStoreSettingsRepository(ApplicationProvider.getApplicationContext()).settings.first().boardsVisible)
 
         repository.resetSettings()
         val reset = repository.settings.first()
+        assertEquals(20, reset.globalLeaderboardLimit)
         assertTrue(reset.nearbyEnabled)
         assertEquals(0.45f, reset.soundLevel)
         assertEquals(ThemeMode.System, reset.themeMode)
+        assertTrue(reset.messageAlertsEnabled)
+        assertTrue(reset.boardsVisible)
     }
 }

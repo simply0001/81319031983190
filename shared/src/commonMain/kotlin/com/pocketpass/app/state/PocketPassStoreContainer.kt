@@ -7,6 +7,7 @@ import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
+import com.pocketpass.app.feature.AccountSecurityStateHolder
 import com.pocketpass.app.feature.AccountSetupStateHolder
 import com.pocketpass.app.feature.AchievementsStateHolder
 import com.pocketpass.app.feature.ActivitiesStateHolder
@@ -30,12 +31,14 @@ import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.StatusInfo
 import com.pocketpass.app.nearby.NearbyFeatureState
 import com.pocketpass.app.update.AppUpdateUiState
+import com.pocketpass.app.widget.WidgetDesignsStateHolder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import com.pocketpass.app.feature.PuzzleStateHolder
 
 /**
  * Everything the PocketPass state loop needs from its host. Android's AppContainer
@@ -48,10 +51,12 @@ interface PocketPassStoreContainer {
     val miiEditorEnabled: Boolean
     val pretendoImportEnabled: Boolean
     val encounterLedSupported: Boolean
+    val messagePushSupported: Boolean get() = false
     val activeAccountId: StateFlow<UserId?>
     val repositories: PocketPassRepositoryGraph
     val auth: AuthStateHolder
     val accountSetup: AccountSetupStateHolder
+    val accountSecurity: AccountSecurityStateHolder
     val homeProfile: HomeProfileStateHolder
     val profileViewer: ProfileViewerStateHolder
     val friends: FriendsStateHolder
@@ -65,15 +70,23 @@ interface PocketPassStoreContainer {
     val achievements: AchievementsStateHolder
     val worldTour: WorldTourStateHolder
     val bingo: BingoStateHolder
+    val puzzle: PuzzleStateHolder
     val settings: SettingsStateHolder
     val nearby: NearbyActions
     val stepRewards: StepRewardsActions
     val appUpdate: AppUpdateActions
+    val widgetDesigns: WidgetDesignsStateHolder
+    val widgetPlatform: WidgetPlatformActions
     val requestedAppUpdate: StateFlow<Boolean>
     val requestedConversation: StateFlow<ConversationId?>
+    val requestedBoard: StateFlow<com.pocketpass.app.boards.BoardDestination?> get() = NoRequestedBoard
+    fun consumeRequestedBoard() {}
+
+    val requestedWidgetAssignment: StateFlow<Int?>
 
     fun consumeRequestedAppUpdate()
     fun consumeRequestedConversation()
+    fun consumeRequestedWidgetAssignment()
 
     suspend fun deleteMiiSlot(slot: Int): RepositoryResult<Unit>
     suspend fun deleteAccount(): RepositoryResult<Unit>
@@ -81,7 +94,10 @@ interface PocketPassStoreContainer {
     suspend fun handleAuthCallback(callbackUri: String): RepositoryResult<SessionState>
     suspend fun resetSettings()
     suspend fun setUpdateAlertsEnabled(enabled: Boolean)
+    suspend fun setMessageAlertsEnabled(enabled: Boolean)
 }
+
+private val NoRequestedBoard = MutableStateFlow<com.pocketpass.app.boards.BoardDestination?>(null)
 
 interface NearbyActions {
     val state: StateFlow<NearbyFeatureState>
@@ -123,6 +139,7 @@ object InactiveMiiEditorController : MiiEditorController {
     override val rendererCommands: SharedFlow<MiiRendererCommand> = MutableSharedFlow()
     override fun activateAccount(accountKey: String?) = Unit
     override fun beginEdit(slot: Int, wearHat: Int?) = Unit
+    override fun wearHat(hatType: Int) = Unit
     override fun setActiveSlot(slot: Int) = Unit
     override fun deleteSlot(slot: Int) = Unit
     override fun dispatch(event: MiiEditorEvent) = Unit

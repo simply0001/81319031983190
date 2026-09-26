@@ -1,0 +1,18 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="142.65" height="142.65" viewBox="0 0 142.65 142.65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
+<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#ringTeal)" stroke-width="9"/>
+<rect x="31.325" y="44.325" width="80" height="58" rx="10" fill="url(#glyphTeal)"/>
+<path d="M35.325 49.325L71.325 76.325L107.325 49.325" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<linearGradient id="ringTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5E9AAC"/>
+<stop offset="1" stop-color="#21677B"/>
+</linearGradient>
+<linearGradient id="glyphTeal" x1="71.325" y1="35.325" x2="71.325" y2="109.325" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B7D90"/>
+<stop offset="1" stop-color="#1B5363"/>
+</linearGradient>
+</defs>
+</svg>

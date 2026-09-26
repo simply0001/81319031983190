@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.os.Build
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.pocketpass.app.data.LocalSettings
 import com.pocketpass.app.data.SettingsRepository
@@ -11,6 +12,7 @@ import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.SessionState
 import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "PocketPassNearby"
 
@@ -36,8 +39,8 @@ class NearbyLifecycleController(
     private val runtime = MutableStateFlow(NearbyRuntimeState())
     private val permissionUi = MutableStateFlow(NearbyPermissionUiState())
     private val permissionRequestEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    private var latestSettings = settings.value
-    private var latestSession = sessionState.value
+    @Volatile private var latestSettings = settings.value
+    @Volatile private var latestSession = sessionState.value
     private var appOpenRepairCheck: Job? = null
     private val serviceHandshake = Any()
     private var startInFlight = false
@@ -55,7 +58,7 @@ class NearbyLifecycleController(
     )
 
     init {
-        scope.launch {
+        scope.launch(Dispatchers.Main.immediate) {
             combine(
                 settings,
                 sessionState,
@@ -76,14 +79,14 @@ class NearbyLifecycleController(
             return
         }
         appOpenRepairCheck?.cancel()
-        appOpenRepairCheck = scope.launch {
+        appOpenRepairCheck = scope.launch(Dispatchers.Main.immediate) {
             restorePersistedState()
             evaluate()
             surfaceOperationalRepairIfNeeded()
         }
     }
 
-    suspend fun restoreAfterSystemEvent() {
+    suspend fun restoreAfterSystemEvent() = withContext(Dispatchers.Main.immediate) {
         restorePersistedState()
         evaluate()
     }
@@ -98,7 +101,7 @@ class NearbyLifecycleController(
         val notificationMissing =
             NearbyPermissionPolicy.isNotificationPermissionMissing(context)
         if (missing.isEmpty()) {
-            scope.launch {
+            scope.launch(Dispatchers.Main.immediate) {
                 settingsRepository.setNearbyOnboardingCompleted(true)
                 settingsRepository.setNearby(true)
                 permissionUi.value = if (notificationMissing) {
@@ -138,7 +141,7 @@ class NearbyLifecycleController(
     }
 
     fun skipOnboarding() {
-        scope.launch {
+        scope.launch(Dispatchers.Main.immediate) {
             settingsRepository.setNearby(false)
             settingsRepository.setNearbyOnboardingCompleted(true)
             permissionUi.value = NearbyPermissionUiState()
@@ -148,7 +151,7 @@ class NearbyLifecycleController(
     }
 
     fun onNearbyPreferenceChanged(enabled: Boolean) {
-        scope.launch {
+        scope.launch(Dispatchers.Main.immediate) {
             if (!enabled) {
                 settingsRepository.setNearby(false)
                 stopService()
@@ -202,6 +205,12 @@ class NearbyLifecycleController(
             NearbyPermissionPolicy.isLegacyLocationEnabled(context)
 
     private fun evaluate() {
+        // Service callbacks run on Main. Keep foreground requests and stops on
+        // that same queue so a stop cannot overtake an unacknowledged start.
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            scope.launch(Dispatchers.Main.immediate) { evaluate() }
+            return
+        }
         val accountId = activeAccountId()
         when {
             accountId == null || !latestSettings.nearbyEnabled -> {
@@ -250,6 +259,12 @@ class NearbyLifecycleController(
     }
 
     private fun startService() {
+        synchronized(serviceHandshake) {
+            if (startInFlight) {
+                stopDeferred = false
+                return
+            }
+        }
         if (runtime.value.status == NearbyRuntimeStatus.Running ||
             runtime.value.status == NearbyRuntimeStatus.Starting
         ) {

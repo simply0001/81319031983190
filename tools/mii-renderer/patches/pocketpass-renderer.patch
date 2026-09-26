@@ -127,3 +127,29 @@ index bc31501..87fe999 100644
  import { renderTargetToDataTexture } from "./rendertarget";
  import FFLShaderMaterial from "../external/ffl.js/FFLShaderMaterial";
  
+diff --git a/src/constants/Extensions.ts b/src/constants/Extensions.ts
+index 3e88c07..390f9a4 100644
+--- a/src/constants/Extensions.ts
++++ b/src/constants/Extensions.ts
+@@ -7,7 +7,9 @@ export const ExtHatNameList = [
+   "Cat Ears",
+   "Straw Hat",
+   "Pot",
+-  "Bike Helmet"
++  "Bike Helmet",
++  "Halo",
++  "Hijab"
+ ];
+ 
+ export const ExtClothesList = [
+@@ -65,7 +67,9 @@ export const HatTypeList = [
+   HatType.HEAD, // Cat Ears
+   HatType.HAT, // Straw Hat
+   HatType.HAT, // Pot
+-  HatType.HAT // Bike Helmet
++  HatType.HAT, // Bike Helmet
++  HatType.HEAD, // Halo
++  HatType.FACE_ONLY // Hijab
+ ];
+ 
+ export const ClothesTypeList = [

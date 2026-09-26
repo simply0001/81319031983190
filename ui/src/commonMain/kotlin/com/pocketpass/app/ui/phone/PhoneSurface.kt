@@ -38,7 +38,10 @@ const val PHONE_STAGE_MAX_WIDTH = 1600f
 const val PHONE_PANE_GAP = 72f
 private const val PHONE_MIN_UNIT_DP = 0.26f
 private const val PHONE_MAX_UNIT_DP = 0.36f
-private const val PHONE_WIDE_MIN_WIDTH = PHONE_RAIL_WIDTH + PHONE_DECK_WIDTH + 880f
+private const val TABLET_MAX_UNIT_DP = 0.48f
+private const val TABLET_SCALE_SHORT_SIDE_DP = 800f
+private const val PHONE_WIDE_MIN_WIDTH = PHONE_RAIL_WIDTH + PHONE_DECK_WIDTH + PHONE_PANE_GAP + 880f
+private const val LANDSCAPE_WIDE_MIN_WIDTH_DP = (PHONE_WIDE_MIN_WIDTH + 1f) * PHONE_MAX_UNIT_DP
 
 @Immutable
 class PhoneInsets(
@@ -54,9 +57,24 @@ val LocalPhoneInsets = staticCompositionLocalOf { PhoneInsets() }
 
 enum class PhoneLayout { Compact, Wide }
 
-fun phoneScale(viewportWidthPx: Float, viewportHeightPx: Float, density: Float): Float {
+fun phoneScale(
+    viewportWidthPx: Float,
+    viewportHeightPx: Float,
+    density: Float,
+    horizontalInsetsPx: Float = 0f,
+): Float {
     val shortSideDp = min(viewportWidthPx, viewportHeightPx) / density
-    val unitDp = (shortSideDp / PHONE_DESIGN_SHORT_SIDE).coerceIn(PHONE_MIN_UNIT_DP, PHONE_MAX_UNIT_DP)
+    val phoneMaxShortSide = PHONE_DESIGN_SHORT_SIDE * PHONE_MAX_UNIT_DP
+    val tabletProgress = ((shortSideDp - phoneMaxShortSide) /
+        (TABLET_SCALE_SHORT_SIDE_DP - phoneMaxShortSide)).coerceIn(0f, 1f)
+    val maxUnitDp = PHONE_MAX_UNIT_DP + (TABLET_MAX_UNIT_DP - PHONE_MAX_UNIT_DP) * tabletProgress
+    var unitDp = (shortSideDp / PHONE_DESIGN_SHORT_SIDE).coerceIn(PHONE_MIN_UNIT_DP, maxUnitDp)
+    val usableWidthDp = (viewportWidthPx - horizontalInsetsPx).coerceAtLeast(0f) / density
+    // Wide handhelds can fit the rail and both panes even when their short side
+    // is below the tablet breakpoint (for example 960 x 540 dp on Odin 3).
+    if (viewportWidthPx > viewportHeightPx && usableWidthDp >= LANDSCAPE_WIDE_MIN_WIDTH_DP) {
+        unitDp = min(unitDp, usableWidthDp / (PHONE_WIDE_MIN_WIDTH + 1f))
+    }
     return unitDp * density
 }
 
@@ -89,13 +107,14 @@ fun PhoneSurface(
         val layoutDirection = LocalLayoutDirection.current
         val viewportWidth = constraints.maxWidth.toFloat()
         val viewportHeight = constraints.maxHeight.toFloat()
-        val scale = phoneScale(viewportWidth, viewportHeight, density.density)
+        val safe = WindowInsets.safeDrawing
+        val horizontalInsets = safe.getLeft(density, layoutDirection) + safe.getRight(density, layoutDirection)
+        val scale = phoneScale(viewportWidth, viewportHeight, density.density, horizontalInsets.toFloat())
         val designWidth = viewportWidth / scale
         val designHeight = viewportHeight / scale
         val metrics = remember(density, designWidth, designHeight, scale) {
             DesignMetrics(density, designWidth, designHeight, scale = scale)
         }
-        val safe = WindowInsets.safeDrawing
         val bars = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         val ime = WindowInsets.ime
         val insets = PhoneInsets(

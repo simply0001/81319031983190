@@ -74,8 +74,7 @@ if (-not $SkipBuild) {
 }
 if (-not (Test-Path $apkSource)) { Fail "Release APK not found at $apkSource" }
 
-$staging = Join-Path $env:TEMP "pocketpass-release-$versionCode"
-if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+$staging = Join-Path $env:TEMP "pocketpass-release-$versionCode-$([Guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $staging | Out-Null
 $stagedApk = Join-Path $staging "PocketPass.apk"
 Copy-Item $apkSource $stagedApk

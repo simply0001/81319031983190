@@ -35,11 +35,14 @@ class AppUpdateStateHolderTest {
         override suspend fun setEncounterAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) = Unit
+        override suspend fun setMessageAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setStepRewardsEnabled(enabled: Boolean) = Unit
 
         override suspend fun setLastNotifiedUpdateVersionCode(versionCode: Int) {
             store.value = store.value.copy(lastNotifiedUpdateVersionCode = versionCode)
         }
+
+        override suspend fun setGlobalLeaderboardLimit(limit: Int) = Unit
 
         override suspend fun setLeaderboardScope(
             scope: com.pocketpass.app.domain.model.LeaderboardScope,
@@ -58,6 +61,8 @@ class AppUpdateStateHolderTest {
         }
 
         override suspend fun setNearbyAlertsSeenThrough(epochMillis: Long) = Unit
+
+        override suspend fun setPendingAccountSetupUserId(userId: String?) = Unit
 
         override suspend fun resetSettings() = Unit
     }

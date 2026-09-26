@@ -106,7 +106,7 @@ data class MiiAppearance(
         moleScale = moleScale.coerceIn(0, 8),
         moleXPosition = moleXPosition.coerceIn(0, 16),
         moleYPosition = moleYPosition.coerceIn(0, 30),
-        extHatType = extHatType.coerceIn(-1, 9),
+        extHatType = extHatType.coerceIn(-1, 10),
         extHatColor = extHatColor.coerceIn(-1, 11),
         extFacePaintColor = extFacePaintColor.coerceIn(-1, 11),
         extGlassesColor = extGlassesColor.coerceIn(-1, 99),

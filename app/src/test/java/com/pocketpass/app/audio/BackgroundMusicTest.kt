@@ -6,6 +6,9 @@ import com.pocketpass.app.feature.AccountSetupUiState
 import com.pocketpass.app.mii.MiiEditorMode
 import com.pocketpass.app.mii.MiiEditorUiState
 import com.pocketpass.app.model.PocketPassUiState
+import com.pocketpass.app.model.PocketPassRoute
+import com.pocketpass.app.model.PocketPassDestination
+import com.pocketpass.app.boards.BoardsScreen
 import com.pocketpass.app.nearby.NearbyPermissionUiState
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -15,6 +18,18 @@ class BackgroundMusicTest {
         sessionState = SessionState.Authenticated(FixtureData.CurrentUserId),
         accountSetup = AccountSetupUiState(resolved = true),
     )
+
+    @Test
+    fun boardsMusicContinuesAcrossCommunitiesAndPrivateMessages() {
+        val boards = signedIn.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Messages)))
+        for (screen in BoardsScreen.entries) {
+            assertEquals(BackgroundMusicTrack.Boards, backgroundMusicTrack(boards.copy(boards = boards.boards.copy(screen = screen))))
+        }
+        assertEquals(BackgroundMusicTrack.Boards, backgroundMusicTrack(boards.copy(routes = boards.routes + PocketPassRoute.MessageDetail("conversation"))))
+        assertEquals(BackgroundMusicTrack.Home, backgroundMusicTrack(boards.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home)))))
+        assertEquals(BackgroundMusicTrack.MiiMaker, backgroundMusicTrack(boards.copy(miiEditor = MiiEditorUiState(mode = MiiEditorMode.EditExisting))))
+        assertEquals(null, backgroundMusicTrack(boards.copy(nearbyPermissionUi = NearbyPermissionUiState(visible = true))))
+    }
 
     @Test
     fun playsOnlyDuringSignedInNavigation() {

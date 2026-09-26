@@ -12,12 +12,58 @@ class StepDayLedgerTest {
         StepDayLedger.advance(null, counter, at, boot, day)
 
     @Test
-    fun firstReadingStartsAtZero() {
+    fun firstReadingAfterAnEarlierBootStartsAtZero() {
         val state = first()
 
         assertEquals(0, state.stepsToday)
         assertEquals(5_000L, state.lastCounter)
         assertEquals(day, state.dayStartEpochMillis)
+    }
+
+    @Test
+    fun firstReadingAfterBootingTodayCountsEverythingSinceBoot() {
+        val bootedAt = day + hour
+
+        val state = StepDayLedger.advance(null, 1_200, day + 3 * hour, bootedAt, day)
+
+        assertEquals(1_200, state.stepsToday)
+        assertEquals(1_200L, state.lastCounter)
+    }
+
+    @Test
+    fun bootBaselineCarriesTodaysCountAndRestartsTheCounterAtZero() {
+        val previous = StepDayLedger.advance(first(), 5_300, day + 2 * hour, boot, day)
+        val rebootedAt = day + 3 * hour
+
+        val baseline = StepDayLedger.bootBaseline(previous, rebootedAt + 60_000L, rebootedAt, day)
+        val state = StepDayLedger.advance(baseline, 250, day + 4 * hour, rebootedAt, day)
+
+        assertEquals(300, baseline.stepsToday)
+        assertEquals(0L, baseline.lastCounter)
+        assertEquals(300 + 250, state.stepsToday)
+    }
+
+    @Test
+    fun bootBaselineOnANewDayStartsAtZero() {
+        val previous = StepDayLedger.advance(first(), 5_300, day + 22 * hour, boot, day)
+        val nextDay = day + 24 * hour
+        val rebootedAt = day + 23 * hour
+
+        val baseline = StepDayLedger.bootBaseline(previous, nextDay + 60_000L, rebootedAt, nextDay)
+        val state = StepDayLedger.advance(baseline, 4_000, nextDay + 9 * hour, rebootedAt, nextDay)
+
+        assertEquals(0, baseline.stepsToday)
+        assertEquals(4_000, state.stepsToday)
+    }
+
+    @Test
+    fun bootBaselineKeepsAReadingAlreadyTakenSinceThatBoot() {
+        val rebootedAt = day + 3 * hour
+        val previous = StepDayLedger.advance(first(), 250, day + 4 * hour, rebootedAt, day)
+
+        val baseline = StepDayLedger.bootBaseline(previous, day + 4 * hour + 60_000L, rebootedAt, day)
+
+        assertEquals(previous, baseline)
     }
 
     @Test

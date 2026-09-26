@@ -12,7 +12,7 @@ import kotlinx.coroutines.withContext
  * without touching the app container.
  */
 object WidgetSnapshotStore {
-    private fun directory(context: Context): File = File(context.filesDir, "widgets")
+    internal fun directory(context: Context): File = File(context.filesDir, "widgets")
 
     fun snapshotFile(context: Context): File = File(directory(context), WidgetSnapshot.SNAPSHOT_FILE_NAME)
 

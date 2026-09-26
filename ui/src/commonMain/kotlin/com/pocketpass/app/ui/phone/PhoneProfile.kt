@@ -28,6 +28,9 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.screens.FriendStat
+import com.pocketpass.app.ui.screens.BoardBackdrop
+import com.pocketpass.app.ui.screens.BoardHeader
+import com.pocketpass.app.ui.screens.BoardProfileFriendRequestPanel
 import com.pocketpass.app.ui.screens.ProfileViewerPalette
 import com.pocketpass.app.ui.screens.countryLabel
 import com.pocketpass.app.ui.screens.greyPanelBrush
@@ -47,6 +50,7 @@ fun PhoneProfilePage(
     val insets = LocalPhoneInsets.current
     val busy = viewer.actionInProgress
     Box(Modifier.fillMaxSize()) {
+        if (viewer.source == ProfileViewerSource.Board) BoardBackdrop(metrics)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -87,17 +91,20 @@ private fun ProfileBody(
 ) {
     val viewer = state.profileViewer
     val profile = viewer.profile
+    val isFriend = viewer.source == ProfileViewerSource.Friend ||
+        viewer.friendRequestState == ProfileFriendRequestState.Friends
     if (!inline) {
-        PhonePageHeader(
-            metrics = metrics,
-            title = when (viewer.source) {
-                ProfileViewerSource.Friend -> "Friend"
-                else -> "Recent Interaction"
-            },
-            subtitle = null,
-            backTag = "profile_viewer_close",
-            onBack = { dispatch(PocketPassEvent.CloseUserProfile) },
-        )
+        if (viewer.source == ProfileViewerSource.Board) {
+            BoardHeader(metrics, "Board member", back = { dispatch(PocketPassEvent.CloseUserProfile) })
+        } else {
+            PhonePageHeader(
+                metrics = metrics,
+                title = if (viewer.source == ProfileViewerSource.Friend) "Friend" else "Recent Interaction",
+                subtitle = null,
+                backTag = "profile_viewer_close",
+                onBack = { dispatch(PocketPassEvent.CloseUserProfile) },
+            )
+        }
         Spacer(Modifier.height(metrics.dp(40f)))
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -118,7 +125,7 @@ private fun ProfileBody(
         val country = profile.locationLabel?.ifBlank { null } ?: profile.countryCode?.let(::countryLabel)
         PhoneProfileHero(
             metrics = metrics,
-            name = profile.displayName.trim().ifBlank { "PocketPass User" },
+            name = profile.displayName.trim().ifBlank { "User" },
             bio = profile.bio.trim(),
             age = profile.age,
             country = country,
@@ -161,53 +168,25 @@ private fun ProfileBody(
             )
         }
         Spacer(Modifier.height(metrics.dp(if (inline) 36f else 52f)))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN)),
-            horizontalArrangement = Arrangement.spacedBy(metrics.dp(30f)),
-        ) {
-            val request = viewer.friendRequestState
-            val isFriend = viewer.source == ProfileViewerSource.Friend || request == ProfileFriendRequestState.Friends
-            when {
-                request == ProfileFriendRequestState.Available ||
-                    request == ProfileFriendRequestState.Sending ||
-                    request == ProfileFriendRequestState.Pending ||
-                    request == ProfileFriendRequestState.Failed -> {
-                    PhoneButton(
-                        metrics = metrics,
-                        label = when (request) {
-                            ProfileFriendRequestState.Sending -> "Sending…"
-                            ProfileFriendRequestState.Pending -> "Request Sent"
-                            ProfileFriendRequestState.Failed -> "Try Again"
-                            else -> "Add Friend"
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = !busy && request != ProfileFriendRequestState.Sending && request != ProfileFriendRequestState.Pending,
-                        height = 165f,
-                        fontSize = 42f,
-                        tag = "profile_friend_request",
-                        onClick = { dispatch(PocketPassEvent.SendProfileFriendRequest) },
-                    )
-                }
-                isFriend -> {
-                    PhoneButton(
-                        metrics = metrics,
-                        label = "Remove Friend",
-                        modifier = Modifier.weight(1f),
-                        fill = com.pocketpass.app.ui.screens.redButtonBrush(),
-                        borderColor = PhoneRedBorder,
-                        enabled = !busy,
-                        height = 165f,
-                        fontSize = 42f,
-                        tag = "profile_remove_friend",
-                        onClick = { dispatch(PocketPassEvent.OpenRemoveFriend) },
-                    )
-                }
-                else -> Unit
-            }
-            // Direct messages are friend-only, so strangers see no dead button.
-            if (isFriend) {
+        if (isFriend) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN)),
+                horizontalArrangement = Arrangement.spacedBy(metrics.dp(30f)),
+            ) {
+                PhoneButton(
+                    metrics = metrics,
+                    label = "Remove Friend",
+                    modifier = Modifier.weight(1f),
+                    fill = com.pocketpass.app.ui.screens.redButtonBrush(),
+                    borderColor = PhoneRedBorder,
+                    enabled = !busy,
+                    height = 165f,
+                    fontSize = 42f,
+                    tag = "profile_remove_friend",
+                    onClick = { dispatch(PocketPassEvent.OpenRemoveFriend) },
+                )
                 PhoneButton(
                     metrics = metrics,
                     label = "Message",
@@ -219,8 +198,15 @@ private fun ProfileBody(
                     onClick = { dispatch(PocketPassEvent.MessageProfileFriend) },
                 )
             }
+        } else {
+            BoardProfileFriendRequestPanel(
+                metrics = metrics,
+                state = viewer,
+                modifier = Modifier.padding(horizontal = metrics.dp(PHONE_CONTENT_MARGIN)),
+                onSend = { dispatch(PocketPassEvent.SendProfileFriendRequest) },
+            )
         }
-        val error = viewer.actionError ?: viewer.friendRequestError
+        val error = viewer.actionError
         if (error != null) {
             Spacer(Modifier.height(metrics.dp(24f)))
             Text(

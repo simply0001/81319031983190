@@ -21,11 +21,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,6 +40,7 @@ import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
+import com.pocketpass.app.model.ProfileViewerSource
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.IntegrityBlockScreen
 import com.pocketpass.app.ui.components.EntranceMotion
@@ -44,10 +48,14 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.requiresAccountSetup
 import com.pocketpass.app.ui.requiresForcedUpdate
 import com.pocketpass.app.ui.requiresMiiGate
+import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.domain.state.showsPocketPassApp
 import com.pocketpass.app.ui.theme.BackgroundPair
 import com.pocketpass.app.ui.theme.PocketPalette
 import com.pocketpass.app.ui.theme.pocketPalette
+import com.pocketpass.app.ui.screens.BoardNavigationRail
+import com.pocketpass.app.ui.screens.BoardBackdrop
+import com.pocketpass.app.ui.screens.LocalBoardNavigationRail
 
 @Composable
 fun PhoneRoot(
@@ -57,20 +65,29 @@ fun PhoneRoot(
     miiEditorController: MiiEditorController?,
     extensions: PocketPassExtensions,
 ) {
-    when {
-        state.integrityCompromised -> IntegrityBlockScreen()
-        state.requiresForcedUpdate() -> PhoneForceUpdateScreen(metrics, state, dispatch)
-        state.requiresAccountSetup() -> PhoneAccountSetupScreen(metrics, state.accountSetup) {
-            dispatch(PocketPassEvent.AccountSetup(it))
+    val savedCanonical by rememberUpdatedState(state.miiEditor.savedCanonicalBase64)
+    val renderSurface = LocalMiiRenderSurface.current
+    Box(Modifier.fillMaxSize()) {
+        if (state.miiEditor.isEditorPreparing && miiEditorController != null) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0f }) {
+                renderSurface?.invoke(miiEditorController, savedCanonical, Modifier.fillMaxSize())
+            }
         }
-        state.requiresMiiGate() -> PhoneMiiGate(metrics, state, miiEditorController, dispatch)
-        !state.sessionState.showsPocketPassApp() -> PhoneAuthScreen(metrics, state.sessionState, state.auth) {
-            dispatch(PocketPassEvent.Auth(it))
+        when {
+            state.integrityCompromised -> IntegrityBlockScreen()
+            state.requiresForcedUpdate() -> PhoneForceUpdateScreen(metrics, state, dispatch)
+            state.requiresAccountSetup() -> PhoneAccountSetupScreen(metrics, state.accountSetup) {
+                dispatch(PocketPassEvent.AccountSetup(it))
+            }
+            state.requiresMiiGate() -> PhoneMiiGate(metrics, state, miiEditorController, dispatch)
+            !state.sessionState.showsPocketPassApp() -> PhoneAuthScreen(metrics, state.sessionState, state.auth) {
+                dispatch(PocketPassEvent.Auth(it))
+            }
+            state.nearbyPermissionUi.visible -> PhoneNearbyPermissionScreen(metrics, state.nearbyPermissionUi) {
+                dispatch(PocketPassEvent.RequestNearbyPermissions)
+            }
+            else -> PhoneShell(metrics, state, dispatch, extensions)
         }
-        state.nearbyPermissionUi.visible -> PhoneNearbyPermissionScreen(metrics, state.nearbyPermissionUi) {
-            dispatch(PocketPassEvent.RequestNearbyPermissions)
-        }
-        else -> PhoneShell(metrics, state, dispatch, extensions)
     }
 }
 
@@ -81,10 +98,12 @@ private fun PhoneShell(
     dispatch: (PocketPassEvent) -> Unit,
     extensions: PocketPassExtensions,
 ) {
-    val layout = phoneLayout(metrics.designWidth, metrics.designHeight)
+    val insets = LocalPhoneInsets.current
+    val layout = phoneLayout(metrics.designWidth - insets.start - insets.end, metrics.designHeight)
     val backdrop = phoneBackdrop(state, pocketPalette)
     Box(Modifier.fillMaxSize()) {
-        PhoneBackdrop(metrics, backdrop.top, backdrop.bottom)
+        if(state.rootDestination == PocketPassDestination.Messages) BoardBackdrop(metrics)
+        else PhoneBackdrop(metrics, backdrop.top, backdrop.bottom)
         when (layout) {
             PhoneLayout.Compact -> PhoneCompactShell(metrics, state, dispatch, extensions)
             PhoneLayout.Wide -> PhoneWideShell(metrics, state, dispatch, extensions)
@@ -142,21 +161,23 @@ private fun PhoneCompactShell(
                     }
                 }
             }
-            PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
+            if(destination != PocketPassDestination.Messages) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
         }
-        PhoneTabBar(metrics, destination, onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) })
+        if(destination != PocketPassDestination.Messages) {
+            PhoneTabBar(metrics, destination, onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) })
+        }
     }
     PhonePageLayer(metrics, backdrop, visible = state.routes.lastOrNull().let { it != null && it !is PocketPassRoute.Root }, fromEnd = true) {
         PhoneRoutePage(metrics, state, dispatch, extensions)
     }
-    PhonePageLayer(metrics, backdrop, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
+    PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
         PhoneGamePage(metrics, state, dispatch)
     }
-    PhonePageLayer(metrics, backdrop, visible = state.profileViewer.visible, fromEnd = false) {
-        PhoneProfilePage(metrics, state, dispatch)
+    PhonePageLayer(metrics, backdrop.takeUnless { state.profileViewer.source == ProfileViewerSource.Board }, visible = state.profileViewer.visible, fromEnd = false) {
+        PhoneDeck(metrics) { PhoneProfilePage(metrics, state, dispatch) }
     }
     PhonePageLayer(metrics, backdrop, visible = destination == PocketPassDestination.Home && state.friendsOverlay == FriendsOverlay.Notifications, fromEnd = true) {
-        PhoneNotificationsPage(metrics, state, dispatch)
+        PhoneDeck(metrics) { PhoneNotificationsPage(metrics, state, dispatch) }
     }
 }
 
@@ -172,7 +193,12 @@ private fun PhoneWideShell(
     val backdrop = phoneBackdrop(state, pocketPalette)
     val panes = widePanes(metrics.designWidth, insets.start, insets.end)
     Row(Modifier.fillMaxSize()) {
-        PhoneNavRail(metrics, destination, onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) })
+        if(destination == PocketPassDestination.Messages && state.boardsVisible) {
+            BoardNavigationRail(metrics, state, dispatch, Modifier.width(metrics.dp(panes.rail))
+                .padding(start = metrics.dp(insets.start), top = metrics.dp(insets.top), bottom = metrics.dp(insets.bottom)))
+        } else {
+            PhoneNavRail(metrics, destination, onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) })
+        }
         Box(
             Modifier
                 .weight(1f)
@@ -189,12 +215,14 @@ private fun PhoneWideShell(
                         entrance = destination.entrance(),
                         delayMillis = 55,
                     ) {
-                        PhoneTab(metrics, panes, state, dispatch, extensions)
+                        CompositionLocalProvider(LocalBoardNavigationRail provides (destination == PocketPassDestination.Messages && state.boardsVisible)) {
+                            PhoneTab(metrics, panes, state, dispatch, extensions)
+                        }
                     }
                 }
             }
-            PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
-            PhonePageLayer(metrics, backdrop, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
+            if(destination != PocketPassDestination.Messages) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
+            PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
                 PhoneGamePage(metrics, state, dispatch)
             }
             val messagesPage = state.routes.lastOrNull()
@@ -236,7 +264,8 @@ private fun PhoneTab(
 
 private fun PocketPassDestination.entrance(): EntranceMotion = when (this) {
     PocketPassDestination.Home, PocketPassDestination.Friends -> EntranceMotion.PanelRise
-    PocketPassDestination.Messages -> EntranceMotion.MessagePop
+    // Boards owns its page entrance; don't bounce the entire shell as well.
+    PocketPassDestination.Messages -> EntranceMotion.None
     PocketPassDestination.Activities, PocketPassDestination.Settings -> EntranceMotion.None
 }
 
@@ -276,4 +305,3 @@ internal fun PhonePageLayer(
         }
     }
 }
-

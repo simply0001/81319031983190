@@ -37,6 +37,10 @@ model credits:
 - Ribbon & Bow: The Models Resource, *Nintendogs + Cats*
 - Cat Ears, Straw Hat, Hijab, and Bike Helmet: Timimimi
 
+The pinned bundle holds the Cat Hat in slot 8, so the Hijab only exists upstream
+as the standalone `public/assets/models/hat_8.glb`. PocketPass ships that exact
+file as `hat_11.glb` inside its hat bundle.
+
 No unified asset-license file is present in the pinned repository. Retain the
 project owner's permission records and the upstream creator/model credits.
 

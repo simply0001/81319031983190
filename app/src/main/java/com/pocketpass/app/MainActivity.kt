@@ -1,12 +1,15 @@
 package com.pocketpass.app
 
 import com.pocketpass.app.steps.StepRewardsPermissionPolicy
+import com.pocketpass.app.steps.AndroidStepPermissionRequest
+import com.pocketpass.app.steps.HealthConnectStepReader
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.ActivityOptions
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
+import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
@@ -31,6 +34,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.health.connect.client.PermissionController
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -45,27 +49,28 @@ import com.pocketpass.app.display.DisplayRoles
 import com.pocketpass.app.display.preferSixtyHertz
 import com.pocketpass.app.input.MiiEditorJoystickHandler
 import com.pocketpass.app.input.MiiEditorRightStickHandler
+import com.pocketpass.app.input.BoardCanvasJoystickHandler
 import com.pocketpass.app.input.handleActivitiesGamepadKeyEvent
 import com.pocketpass.app.input.handleBackGamepadKeyEvent
 import com.pocketpass.app.input.handleMiiEditorGamepadKeyEvent
 import com.pocketpass.app.input.handleNavigationGamepadKeyEvent
+import com.pocketpass.app.media.AndroidImageAttachmentPreparer
+import com.pocketpass.app.media.ImageAttachmentPreparation
 import com.pocketpass.app.mii.renderer.MiiRenderController
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.nearby.NearbyNotifications
 import com.pocketpass.app.nearby.NearbyPermissionPolicy
+import com.pocketpass.app.power.BatteryOptimizationExemption
 import com.pocketpass.app.state.PocketPassViewModel
 import com.pocketpass.app.ui.BottomDisplayApp
 import com.pocketpass.app.ui.phone.PhoneApp
 import com.pocketpass.app.ui.TopDisplayApp
 import com.pocketpass.app.update.UpdateNotifications
-import java.io.File
-import java.util.UUID
-import kotlinx.coroutines.Dispatchers
+import com.pocketpass.app.widget.CustomWidget
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private val viewModel: PocketPassViewModel by viewModels {
@@ -83,6 +88,9 @@ class MainActivity : ComponentActivity() {
             state = { viewModel.state.value },
             sendKey = ::forwardKeyEvent,
         )
+    }
+    private val boardCanvasJoystickHandler by lazy {
+        BoardCanvasJoystickHandler({ viewModel.state.value }, viewModel.controllerFocus)
     }
     private var nearbyPermissionStage = NearbyPermissionStage.Idle
     private val nearbyPermissionLauncher = registerForActivityResult(
@@ -111,12 +119,34 @@ class MainActivity : ComponentActivity() {
     ) { uri ->
         uri?.let(::sendPickedImage)
     }
+    private val imageAttachmentPreparer by lazy {
+        AndroidImageAttachmentPreparer(applicationContext)
+    }
+    private var boardImageRequest: com.pocketpass.app.boards.BoardBrandingPicker.Request? = null
+    private val boardImageLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val request = boardImageRequest
+        boardImageRequest = null
+        if(request != null) lifecycleScope.launch {
+            if(uri == null) request.complete(null)
+            else try {
+                when(val prepared = imageAttachmentPreparer.prepare(uri)) {
+                    is ImageAttachmentPreparation.Ready -> {
+                        val file = java.io.File(prepared.attachment.path)
+                        try { request.complete(kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { file.readBytes() }) }
+                        finally { file.delete() }
+                    }
+                    is ImageAttachmentPreparation.Failed -> request.fail(prepared.message)
+                }
+            } catch(_: Exception) { request.fail("This image could not be opened") }
+        }
+    }
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) {}
+    ) { com.pocketpass.app.push.MessagePushRegistrationWorker.enqueue(applicationContext) }
     private val stepPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
+        (application as PocketPassApplication).container.stepSource.onSensorPermissionResult()
         val permission = StepRewardsPermissionPolicy.requiredPermission()
         if (!granted && permission != null && !shouldShowRequestPermissionRationale(permission)) {
             // Denied for good: only the app's settings page can grant it now.
@@ -130,11 +160,21 @@ class MainActivity : ComponentActivity() {
         }
         viewModel.onStepRewardsPermissionResult()
     }
+    private val healthStepsPermissionLauncher = registerForActivityResult(
+        PermissionController.createRequestPermissionResultContract(),
+    ) { granted ->
+        (application as PocketPassApplication).container.stepSource
+            .onHealthPermissionResult(HealthConnectStepReader.READ_STEPS in granted)
+        viewModel.onStepRewardsPermissionResult()
+    }
     private val stepSettingsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
         viewModel.onStepRewardsPermissionResult()
     }
+    private val batteryExemptionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -147,6 +187,7 @@ class MainActivity : ComponentActivity() {
         )
         displayCoordinator = CompanionDisplayCoordinator(this, viewModel)
         configureWindow(window, immersive = displayCoordinator.companionAttached)
+        if (savedInstanceState == null && !isFinishing) offerBatteryExemptionOnce()
 
         setContent {
             val companionAttached = displayCoordinator.companionAttached
@@ -191,7 +232,7 @@ class MainActivity : ComponentActivity() {
                     .container
                     .stepSource
                     .permissionRequests
-                    .collect { beginStepPermissionRequest() }
+                    .collect { request -> beginStepPermissionRequest(request) }
             }
         }
         lifecycleScope.launch {
@@ -242,6 +283,14 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                com.pocketpass.app.boards.BoardBrandingPicker.requests.collect { request ->
+                    boardImageRequest = request
+                    boardImageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
                 (application as PocketPassApplication)
                     .container
                     .connectedApps
@@ -287,23 +336,16 @@ class MainActivity : ComponentActivity() {
 
     private fun sendPickedImage(uri: Uri) {
         lifecycleScope.launch {
-            val copied = withContext(Dispatchers.IO) {
-                runCatching {
-                    val mimeType = contentResolver.getType(uri)
-                        ?.takeIf { it in SUPPORTED_ATTACHMENT_MIME_TYPES }
-                        ?: DEFAULT_ATTACHMENT_MIME_TYPE
-                    val directory = File(filesDir, ATTACHMENT_DIRECTORY).apply { mkdirs() }
-                    val target = File(directory, "${UUID.randomUUID()}")
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        target.outputStream().use(input::copyTo)
-                    } ?: error("Selected image could not be opened")
-                    target.absolutePath to mimeType
-                }.getOrNull()
-            } ?: return@launch
-            (application as PocketPassApplication)
-                .container
-                .messages
-                .sendImageAttachment(localPath = copied.first, mimeType = copied.second)
+            val messages = (application as PocketPassApplication).container.messages
+            when (val outcome = imageAttachmentPreparer.prepare(uri)) {
+                is ImageAttachmentPreparation.Ready -> messages.sendImageAttachment(
+                    localPath = outcome.attachment.path,
+                    mimeType = outcome.attachment.mimeType,
+                )
+
+                is ImageAttachmentPreparation.Failed ->
+                    messages.reportImageAttachmentFailure(outcome.message)
+            }
         }
     }
 
@@ -312,6 +354,17 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         processAuthCallback(intent)
         consumeAppUpdateIntent(intent)
+        consumeWidgetAssignIntent(intent)
+    }
+
+    private fun consumeWidgetAssignIntent(intent: Intent) {
+        val appWidgetId = intent.getIntExtra(
+            CustomWidget.EXTRA_ASSIGN_APPWIDGET_ID,
+            AppWidgetManager.INVALID_APPWIDGET_ID,
+        )
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        intent.removeExtra(CustomWidget.EXTRA_ASSIGN_APPWIDGET_ID)
+        (application as PocketPassApplication).container.requestWidgetAssignment(appWidgetId)
     }
 
     private fun consumeAppUpdateIntent(intent: Intent) {
@@ -330,6 +383,7 @@ class MainActivity : ComponentActivity() {
         )
         intent.removeExtra(NearbyNotifications.EXTRA_OPEN_REPAIR)
         consumeAppUpdateIntent(intent)
+        consumeWidgetAssignIntent(intent)
         if (::displayCoordinator.isInitialized) {
             displayCoordinator.start()
             applyOrientationPolicy()
@@ -368,12 +422,16 @@ class MainActivity : ComponentActivity() {
             displayCoordinator.stop()
         }
         miiEditorRightStickHandler.release()
+        boardCanvasJoystickHandler.release()
         super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus) miiEditorRightStickHandler.release()
+        if (!hasFocus) {
+            miiEditorRightStickHandler.release()
+            boardCanvasJoystickHandler.release()
+        }
     }
 
     @SuppressLint("RestrictedApi")
@@ -426,7 +484,8 @@ class MainActivity : ComponentActivity() {
         val state = viewModel.state.value
         val orbited = miiEditorJoystickHandler.handle(event, state)
         val navigated = miiEditorRightStickHandler.handle(event)
-        if (orbited || navigated) {
+        val panned = boardCanvasJoystickHandler.handle(event)
+        if (orbited || navigated || panned) {
             return true
         }
         return super.dispatchGenericMotionEvent(event)
@@ -474,6 +533,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun processAuthCallback(callbackIntent: Intent) {
+        if (callbackIntent.action == com.pocketpass.app.push.BoardNotifications.ACTION_OPEN) {
+            val account = callbackIntent.getStringExtra(com.pocketpass.app.push.MessageNotifications.EXTRA_ACCOUNT)
+            val board = callbackIntent.getStringExtra(com.pocketpass.app.push.BoardNotifications.EXTRA_BOARD)
+            val thread = callbackIntent.getStringExtra(com.pocketpass.app.push.BoardNotifications.EXTRA_THREAD)
+            callbackIntent.removeExtra(com.pocketpass.app.push.MessageNotifications.EXTRA_ACCOUNT)
+            callbackIntent.removeExtra(com.pocketpass.app.push.BoardNotifications.EXTRA_BOARD)
+            callbackIntent.removeExtra(com.pocketpass.app.push.BoardNotifications.EXTRA_THREAD)
+            if (account != null && board != null) (application as PocketPassApplication).container.requestBoard(account, board, thread)
+        }
+        if (callbackIntent.action == com.pocketpass.app.push.MessageNotifications.ACTION_OPEN) {
+            val account = callbackIntent.getStringExtra(com.pocketpass.app.push.MessageNotifications.EXTRA_ACCOUNT)
+            val conversation = callbackIntent.getStringExtra(com.pocketpass.app.push.MessageNotifications.EXTRA_CONVERSATION)
+            callbackIntent.removeExtra(com.pocketpass.app.push.MessageNotifications.EXTRA_ACCOUNT)
+            callbackIntent.removeExtra(com.pocketpass.app.push.MessageNotifications.EXTRA_CONVERSATION)
+            if (account != null && conversation != null) {
+                (application as PocketPassApplication).container.requestMessageConversation(account, conversation)
+            }
+        }
         if (callbackIntent.getBooleanExtra(NearbyNotifications.EXTRA_OPEN_REPAIR, false)) {
             viewModel.onAppOpened(openNearbyRepair = true)
         }
@@ -503,7 +580,11 @@ class MainActivity : ComponentActivity() {
         runCatching { startActivity(intent) }
     }
 
-    private fun beginStepPermissionRequest() {
+    private fun beginStepPermissionRequest(request: AndroidStepPermissionRequest) {
+        if (request == AndroidStepPermissionRequest.HealthConnect) {
+            healthStepsPermissionLauncher.launch(setOf(HealthConnectStepReader.READ_STEPS))
+            return
+        }
         val permission = StepRewardsPermissionPolicy.requiredPermission()
         if (permission == null || StepRewardsPermissionPolicy.isGranted(this)) {
             viewModel.onStepRewardsPermissionResult()
@@ -563,6 +644,18 @@ class MainActivity : ComponentActivity() {
     private fun finishNearbyPermissionRequest() {
         nearbyPermissionStage = NearbyPermissionStage.Idle
         viewModel.onNearbyPermissionResult()
+        offerBatteryExemptionOnce()
+    }
+
+    private fun offerBatteryExemptionOnce() {
+        if (BatteryOptimizationExemption.wasRequested(this)) return
+        val nearbyGranted = NearbyPermissionPolicy.foregroundPermissions().all { permission ->
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        }
+        if (!nearbyGranted) return
+        BatteryOptimizationExemption.markRequested(this)
+        if (BatteryOptimizationExemption.isGranted(this)) return
+        runCatching { batteryExemptionLauncher.launch(BatteryOptimizationExemption.requestIntent(this)) }
     }
 
     private fun configureWindow(targetWindow: android.view.Window, immersive: Boolean) {
@@ -581,14 +674,6 @@ class MainActivity : ComponentActivity() {
                     WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         }
-    }
-
-    private companion object {
-        const val ATTACHMENT_DIRECTORY = "message-attachments"
-        const val DEFAULT_ATTACHMENT_MIME_TYPE = "image/jpeg"
-
-        val SUPPORTED_ATTACHMENT_MIME_TYPES =
-            setOf("image/jpeg", "image/png", "image/webp")
     }
 
     private enum class NearbyPermissionStage {

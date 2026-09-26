@@ -13,7 +13,7 @@ import com.pocketpass.app.ui.theme.pocketPalette
 
 /**
  * The Step Rewards settings row, shared by the phone list and the dual-screen
- * settings stack. Only shown on devices with a step counter.
+ * settings stack. Shown when Health Connect or a step sensor is available.
  */
 @Composable
 internal fun StepRewardsPanel(
@@ -27,7 +27,7 @@ internal fun StepRewardsPanel(
     val subtitle = when {
         !state.stepRewardsEnabled -> "$STEPS_PER_TOKEN steps per token · $MAX_STEP_TOKENS_PER_DAY/day"
 
-        steps.status == StepRewardsStatus.NeedsPermission -> "Allow activity access"
+        steps.status == StepRewardsStatus.NeedsPermission -> "Allow step access"
 
         steps.claimError != null -> "${formatStepCount(steps.stepsToday)} steps · retrying report"
 

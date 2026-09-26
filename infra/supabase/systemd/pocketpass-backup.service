@@ -1,0 +1,13 @@
+[Unit]
+Description=PocketPass encrypted off-host backup
+Wants=docker.service
+After=docker.service
+OnFailure=pocketpass-onfailure@%n.service
+
+[Service]
+Type=oneshot
+Environment=ENV_FILE=/opt/pocketpass/app/infra/supabase/.env.production
+ExecStart=/opt/pocketpass/app/infra/supabase/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

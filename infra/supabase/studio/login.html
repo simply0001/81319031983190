@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>PocketPass Studio</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { display: grid; min-height: 100vh; margin: 0; place-items: center; }
+      main { max-width: 32rem; padding: 2rem; text-align: center; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PocketPass Studio</h1>
+      <p id="message">Opening Studio…</p>
+    </main>
+    <script>
+      (function () {
+        var token = location.hash.slice(1);
+        if (!/^[0-9a-f]{64}$/.test(token)) {
+          document.getElementById("message").innerHTML =
+            'Open Studio from the <a href="https://admin.pocketpass.xyz/">admin console</a>.';
+          return;
+        }
+        window.opener = null;
+        history.replaceState(null, "", location.pathname);
+        document.cookie = "pocketpass_studio=" + token + "; Path=/; Secure; SameSite=Strict; Max-Age=43200";
+        location.replace("/project/default");
+      })();
+    </script>
+  </body>
+</html>

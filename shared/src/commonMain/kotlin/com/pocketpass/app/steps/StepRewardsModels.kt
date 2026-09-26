@@ -16,7 +16,7 @@ enum class StepRewardsStatus {
     /** The setting is off or nobody is signed in. */
     Disabled,
 
-    /** This device has no step counter; the setting stays hidden. */
+    /** This device has neither a supported health source nor a step counter. */
     Unsupported,
 
     /** The setting is on but the app may not read the counter yet. */
@@ -69,4 +69,6 @@ data class DailyStepReward(
     val tokensAwarded: Int,
     val tokensCredited: Int,
     val balance: Int,
+    val piecesAwarded: Int = 0,
+    val piecesCredited: Int = 0,
 )

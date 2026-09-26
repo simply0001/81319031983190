@@ -1,0 +1,21 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="142.65" height="142.65" viewBox="0 0 142.65 142.65" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon">
+<rect x="9" y="9" width="124.65" height="124.65" rx="62.325" fill="white"/>
+<rect x="4.5" y="4.5" width="133.65" height="133.65" rx="66.825" stroke="url(#ringTeal)" stroke-width="9"/>
+<path d="M47,36 h48.65 v20 c0,14 -11,24 -24.325,24 c-13.325,0 -24.325,-10 -24.325,-24 z" fill="url(#paint0_linear_trophy)"/>
+<path d="M47,43 h-8 a10,10 0 0 0 0,20 h8" stroke="url(#paint0_linear_trophy)" stroke-width="5" stroke-linecap="round"/>
+<path d="M95.65,43 h8 a10,10 0 0 1 0,20 h-8" stroke="url(#paint0_linear_trophy)" stroke-width="5" stroke-linecap="round"/>
+<rect x="66" y="80" width="10.65" height="12" fill="url(#paint0_linear_trophy)"/>
+<rect x="52" y="92" width="38.65" height="9" rx="3" fill="url(#paint0_linear_trophy)"/>
+</g>
+<defs>
+<linearGradient id="ringTeal" x1="71.325" y1="4.5" x2="71.325" y2="138.15" gradientUnits="userSpaceOnUse">
+<stop stop-color="#5E9AAC"/>
+<stop offset="1" stop-color="#21677B"/>
+</linearGradient>
+<linearGradient id="paint0_linear_trophy" x1="71.325" y1="35" x2="71.325" y2="107.65" gradientUnits="userSpaceOnUse">
+<stop stop-color="#3B7D90"/>
+<stop offset="1" stop-color="#1B5363"/>
+</linearGradient>
+</defs>
+</svg>

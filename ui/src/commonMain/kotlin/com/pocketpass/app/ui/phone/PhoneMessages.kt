@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -65,20 +67,20 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.AvatarCollage
 import com.pocketpass.app.ui.components.FigmaAsset
-import com.pocketpass.app.ui.components.IdleMotion
+import com.pocketpass.app.ui.components.EntranceMotion
 import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.screens.DynamicAvatar
 import com.pocketpass.app.ui.screens.MessageArrivalTracker
 import com.pocketpass.app.ui.screens.MessageBubble
+import com.pocketpass.app.ui.screens.messageColour
 import com.pocketpass.app.ui.screens.isEditable
 import com.pocketpass.app.ui.screens.MessageRow
-import com.pocketpass.app.ui.screens.MessageRowPalette
-import com.pocketpass.app.ui.screens.TypingIndicatorBubble
+import com.pocketpass.app.ui.screens.messageListRowPalette
+import com.pocketpass.app.ui.screens.ConversationTypingIndicators
 import com.pocketpass.app.ui.screens.groupSubtitle
 import com.pocketpass.app.ui.screens.relativeTime
 import com.pocketpass.app.ui.screens.senderLabelFor
-import com.pocketpass.app.ui.screens.typingNames
 import com.pocketpass.app.ui.theme.pocketPalette
 import kotlinx.coroutines.delay
 
@@ -94,18 +96,27 @@ fun PhoneMessagesTab(
     dispatch: (PocketPassEvent) -> Unit,
     extensions: PocketPassExtensions,
 ) {
+    val boardInsets = LocalPhoneInsets.current
+    val boardBottomInset = maxOf(boardInsets.ime, boardInsets.bottom)
+    if (!state.boardsVisible) {
+        if (panes == null) PhoneConversationList(metrics, state, dispatch)
+        else PhonePanes(metrics = metrics, panes = panes,
+            stage = { com.pocketpass.app.ui.screens.BoardConversationPreview(metrics, state) },
+            deck = { PhoneConversationList(metrics, state, dispatch) })
+        return
+    }
     if (panes == null) {
-        PhoneConversationList(metrics, state, dispatch)
+        com.pocketpass.app.ui.screens.BoardsContent(metrics, state, dispatch,
+            Modifier.padding(top = metrics.dp(boardInsets.top), bottom = metrics.dp(boardBottomInset)))
     } else {
-        PhonePanes(
-            metrics = metrics,
-            panes = panes,
-            stage = { PhoneStageScroll(metrics) { PhoneMessagesBadge(metrics, state.messageBadgeText) } },
-            deck = { PhoneConversationList(metrics, state, dispatch) },
-        )
+        PhonePanes(metrics = metrics, panes = panes,
+            stage = {
+                com.pocketpass.app.ui.screens.BoardTopPreview(metrics, state)
+            },
+            deck = { com.pocketpass.app.ui.screens.BoardsContent(metrics, state, dispatch,
+                Modifier.padding(top = metrics.dp(boardInsets.top), bottom = metrics.dp(boardBottomInset))) })
     }
 }
-
 @Composable
 private fun PhoneConversationList(
     metrics: DesignMetrics,
@@ -176,23 +187,7 @@ private fun PhoneConversationList(
                     metrics = metrics,
                     y = MESSAGE_ROW_INSET + index * MESSAGE_ROW_HEIGHT,
                     conversation = conversation,
-                    palette = if (index % 2 == 0) {
-                        MessageRowPalette(
-                            name = palette.ink(Color(0xFFC99E1B)),
-                            preview = palette.ink(Color(0xFFE5AA00)),
-                            count = Color(0xFFF4B900),
-                            tintBottom = palette.tint(Color(0xFFFFF0B9)),
-                            avatarBorder = palette.tint(Color(0xFFFFF0BD)),
-                        )
-                    } else {
-                        MessageRowPalette(
-                            name = palette.ink(Color(0xFF2365D3)),
-                            preview = palette.ink(Color(0xFF5B83E5)),
-                            count = Color(0xFF1371F5),
-                            tintBottom = palette.tint(Color(0xFFDDE7FC)),
-                            avatarBorder = palette.tint(Color(0xFFE2E4F0)),
-                        )
-                    },
+                    palette = messageListRowPalette(),
                     onClick = { dispatch(PocketPassEvent.OpenMessage(conversation.id.value)) },
                     selfId = state.profile?.userId,
                 )
@@ -250,7 +245,7 @@ internal fun PhoneMessagesBadge(metrics: DesignMetrics, count: String) {
             stepSize = metrics.sp(1f),
         )
     }
-    MotionLayer(idle = IdleMotion.MessageFloat) {
+    MotionLayer(entrance = EntranceMotion.BoardOpen) {
         Box(Modifier.requiredSize(metrics.dp(632.327f), metrics.dp(597.997f))) {
             Box(
                 Modifier
@@ -348,6 +343,7 @@ fun PhoneThread(
                 val arrivalPop = remember(message.id.value) { arrivalTracker.markSeen(message.id.value) }
                 val mine = message.senderId == currentUserId
                 MessageBubble(
+                    colour = state.messageColour(message.senderId),
                     metrics = metrics,
                     message = message,
                     outgoing = mine,
@@ -364,9 +360,10 @@ fun PhoneThread(
             }
             if (partnerTyping) {
                 item(key = "typing_indicator") {
-                    TypingIndicatorBubble(
+                    ConversationTypingIndicators(
                         metrics = metrics,
-                        label = conversation.takeIf { it.isGroup }?.let { typingNames(it, state.typingUserIds) },
+                        state = state,
+                        conversation = conversation,
                     )
                 }
             }
@@ -534,12 +531,15 @@ private fun PhoneComposer(
     dispatch: (PocketPassEvent) -> Unit,
     extensions: PocketPassExtensions,
 ) {
-    val canSend = state.messageDraft.trim().isNotEmpty() &&
-        state.messageDraft.length <= 4_000 &&
+    val editor = remember(conversationId, state.editingMessageId) { MessageDraftEditor(state.messageDraft) }
+    editor.synchronize(state.messageDraft)
+    val canSend = editor.value.text.trim().isNotEmpty() &&
+        editor.value.text.length <= 4_000 &&
         !state.messageSendInProgress
     var stripOpen by remember(conversationId) { mutableStateOf(false) }
     val send = {
         if (canSend) {
+            dispatch(PocketPassEvent.UpdateMessageDraft(editor.value.text))
             dispatch(PocketPassEvent.SendMessage)
             stripOpen = false
         }
@@ -565,15 +565,19 @@ private fun PhoneComposer(
         }
         if (stripOpen) {
             PhoneEmojiStrip(metrics) { glyph ->
-                dispatch(PocketPassEvent.UpdateMessageDraft((state.messageDraft + glyph).take(4_000)))
+                val text = (editor.value.text + glyph).take(4_000)
+                editor.edit(TextFieldValue(text, TextRange(text.length)))
+                    ?.let { dispatch(PocketPassEvent.UpdateMessageDraft(it)) }
             }
             Spacer(Modifier.height(metrics.dp(16f)))
         }
         Row(verticalAlignment = Alignment.Bottom) {
             PhoneTextField(
                 metrics = metrics,
-                value = state.messageDraft,
-                onValueChange = { dispatch(PocketPassEvent.UpdateMessageDraft(it.take(4_000))) },
+                value = editor.value,
+                onValueChange = { next ->
+                    editor.edit(next)?.let { dispatch(PocketPassEvent.UpdateMessageDraft(it)) }
+                },
                 modifier = Modifier.weight(1f),
                 placeholder = if (editing) "Edit message" else "Message",
                 fontSize = 50f,

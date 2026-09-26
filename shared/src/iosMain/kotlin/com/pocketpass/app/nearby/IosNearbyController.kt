@@ -45,6 +45,7 @@ class IosNearbyController(
     settings: StateFlow<LocalSettings>,
     private val activeAccountId: StateFlow<UserId?>,
     private val credentialPool: NearbyCredentialPool,
+    private val deviceTags: NearbyDeviceTagStore? = null,
     private val submitProof: suspend (UserId, NearbyEncounterProof) -> NearbyReceiptVerdict,
     private val onEncounter: () -> Unit,
 ) : NearbyActions {
@@ -162,6 +163,7 @@ class IosNearbyController(
                             credentialPool = credentialPool,
                             accountId = accountId,
                             scope = scope,
+                            deviceTagSecret = deviceTags?.secret(accountId),
                             onProof = { proof -> submit(accountId, proof) },
                             onState = ::reportRuntime,
                         ).also(IosNearbyBleEngine::start)
@@ -179,7 +181,9 @@ class IosNearbyController(
                     "The encrypted encounter receipt could not be saved.",
                 )
 
-                NearbyReceiptVerdict.AlreadyCountedToday -> Unit
+                NearbyReceiptVerdict.AlreadyCountedToday,
+                NearbyReceiptVerdict.Rejected,
+                -> Unit
 
                 NearbyReceiptVerdict.NewEncounter,
                 NearbyReceiptVerdict.Unknown,

@@ -1,6 +1,7 @@
 package com.pocketpass.app.ui.phone
 
 import com.pocketpass.app.ui.screens.StepRewardsPanel
+import com.pocketpass.app.ui.screens.WidgetsPanel
 import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -36,6 +37,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.pocketpass.app.model.PocketPassEvent
@@ -51,7 +55,10 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.PocketPanel
 import com.pocketpass.app.ui.components.rememberGearRotation
 import com.pocketpass.app.ui.screens.AccessibilityPanel
+import com.pocketpass.app.ui.screens.AccountPanel
 import com.pocketpass.app.ui.screens.AppUpdateStatusPanel
+import com.pocketpass.app.ui.screens.accountSecuritySubtitle
+import com.pocketpass.app.ui.screens.accountSecurityTitle
 import com.pocketpass.app.ui.screens.CREDITS_PANEL_HEIGHT
 import com.pocketpass.app.ui.screens.ContributorsPanel
 import com.pocketpass.app.ui.screens.CreditsPanel
@@ -67,6 +74,7 @@ import com.pocketpass.app.ui.screens.OVERLAY_POP_BASE_DELAY_MILLIS
 import com.pocketpass.app.ui.screens.OVERLAY_POP_STAGGER_MILLIS
 import com.pocketpass.app.ui.screens.SETTINGS_ROW_HEIGHT
 import com.pocketpass.app.ui.screens.SETTINGS_TALL_HEIGHT
+import com.pocketpass.app.ui.screens.AppSettingsPanel
 import com.pocketpass.app.ui.screens.SettingsHeading
 import com.pocketpass.app.ui.screens.SocialPanel
 import com.pocketpass.app.ui.screens.SOUND_PANEL_HEIGHT
@@ -165,25 +173,16 @@ private fun PhoneSettingsList(
             )
         }
         slot(SETTINGS_ROW_HEIGHT) {
-            NotificationsPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenNotificationSettings) }
-        }
-        slot(THEME_PANEL_HEIGHT) {
-            ThemePanel(
-                metrics = metrics,
-                y = 0f,
-                selected = state.themeMode,
-                expanded = state.themePickerExpanded,
-                onExpand = { dispatch(PocketPassEvent.OpenThemePicker) },
-            ) { dispatch(PocketPassEvent.SetThemeMode(it)) }
+            AppSettingsPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenAppSettings) }
         }
         slot(SETTINGS_ROW_HEIGHT) {
             SocialPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenSocial) }
         }
         slot(SETTINGS_ROW_HEIGHT) {
-            AccessibilityPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenAccessibility) }
+            VersionPanel(metrics, 0f, state.appUpdate) { dispatch(PocketPassEvent.OpenAppUpdate) }
         }
         slot(SETTINGS_ROW_HEIGHT) {
-            VersionPanel(metrics, 0f, state.appUpdate) { dispatch(PocketPassEvent.OpenAppUpdate) }
+            AccountPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenAccountSecurity) }
         }
         slot(SETTINGS_ROW_HEIGHT) {
             LogoutPanel(metrics, 0f) { dispatch(PocketPassEvent.SignOut) }
@@ -256,7 +255,7 @@ fun PhoneRoutePage(
         is PocketPassRoute.MessageDetail -> Box(Modifier.fillMaxSize()) { PhoneThread(metrics, state, dispatch, extensions) }
         is PocketPassRoute.NewGroup -> Box(Modifier.fillMaxSize()) { PhoneNewGroupPage(metrics, state, dispatch) }
         null, is PocketPassRoute.Root -> Unit
-        else -> PhoneSettingsSubpage(metrics, route, state, dispatch)
+        else -> PhoneDeck(metrics) { PhoneSettingsSubpage(metrics, route, state, dispatch) }
     }
 }
 
@@ -268,6 +267,10 @@ private fun PhoneSettingsSubpage(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     when (route) {
+        PocketPassRoute.ChatColours -> PhoneSubpage(metrics, "Chat Colours", "A colour that's yours.", "chat_colours_back",
+            onBack = { dispatch(PocketPassEvent.Back) }) {
+            com.pocketpass.app.ui.screens.ChatColoursContent(metrics, state, dispatch)
+        }
         PocketPassRoute.Accessibility -> PhoneSubpage(
             metrics = metrics,
             title = "Accessibility",
@@ -317,6 +320,33 @@ private fun PhoneSettingsSubpage(
                     ConnectedAppsPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenConnectedApps) }
                 }
             }
+            Box(Modifier.fillMaxWidth().height(metrics.dp(com.pocketpass.app.ui.screens.MESSAGE_PRIVACY_PANEL_HEIGHT))) {
+                com.pocketpass.app.ui.screens.MessagePrivacyPanel(metrics, 0f, state, dispatch)
+            }
+            PhoneToggleRow(metrics, Assets.SettingsMessagePrivacy, "Block Invites",
+                if (state.invitesPrivacySaving) "Saving…" else "Invites and friend requests",
+                state.profile?.blockInvites == true, "block_invites_toggle", order = 3) {
+                if (state.profile != null && !state.invitesPrivacySaving)
+                    dispatch(PocketPassEvent.SetInvitesPrivacy(state.profile?.blockInvites != true))
+            }
+            state.invitesPrivacyError?.let { error ->
+                Text(error, color = pocketPalette.textSecondary, fontFamily = Rubik,
+                    modifier = Modifier.padding(horizontal = metrics.dp(50f)))
+            }
+            PhoneToggleRow(metrics, Assets.SettingsSocial, "Show Boards", "Show Boards in Messages",
+                state.boardsVisible, "boards_visibility_toggle", order = 4) {
+                dispatch(PocketPassEvent.SetBoardsVisible(!state.boardsVisible))
+            }
+        }
+
+        PocketPassRoute.AccountSecurity -> PhoneSubpage(
+            metrics = metrics,
+            title = accountSecurityTitle(state.accountSecurity.step),
+            subtitle = accountSecuritySubtitle(state.accountSecurity),
+            backTag = "account_back",
+            onBack = { dispatch(PocketPassEvent.Back) },
+        ) {
+            PhoneAccountSecurity(metrics, state.accountSecurity, dispatch)
         }
 
         PocketPassRoute.NotificationSettings -> PhoneSubpage(
@@ -326,6 +356,17 @@ private fun PhoneSettingsSubpage(
             backTag = "notification_settings_back",
             onBack = { dispatch(PocketPassEvent.Back) },
         ) {
+            if (state.messagePushSupported) {
+                PhoneToggleRow(
+                    metrics = metrics,
+                    icon = Assets.NavMessages,
+                    title = "Message Alerts",
+                    subtitle = "New direct and group messages",
+                    enabled = state.messageAlertsEnabled,
+                    tag = "message_alerts_toggle",
+                    order = 0,
+                ) { dispatch(PocketPassEvent.SetMessageAlertsEnabled(!state.messageAlertsEnabled)) }
+            }
             PhoneToggleRow(
                 metrics = metrics,
                 icon = Assets.SettingsEncounterAlerts,
@@ -353,6 +394,36 @@ private fun PhoneSettingsSubpage(
                 tag = "update_alerts_toggle",
                 order = 2,
             ) { dispatch(PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled)) }
+        }
+
+        PocketPassRoute.AppSettings -> PhoneSubpage(
+            metrics = metrics,
+            title = "App Settings",
+            subtitle = "Notifications, theme and more.",
+            backTag = "app_settings_back",
+            onBack = { dispatch(PocketPassEvent.Back) },
+        ) {
+            PhoneSubpageRow(metrics, order = 0) {
+                NotificationsPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenNotificationSettings) }
+            }
+            PhoneSubpageRow(metrics, order = 1, height = THEME_PANEL_HEIGHT) {
+                ThemePanel(
+                    metrics = metrics,
+                    y = 0f,
+                    selected = state.themeMode,
+                    expanded = state.themePickerExpanded,
+                    onExpand = { dispatch(PocketPassEvent.OpenThemePicker) },
+                ) { dispatch(PocketPassEvent.SetThemeMode(it)) }
+            }
+            PhoneSubpageRow(metrics, order = 2) {
+                AccessibilityPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenAccessibility) }
+            }
+            PhoneSubpageRow(metrics, order = 3) {
+                WidgetsPanel(metrics, 0f, state.widgetDesigns.size) { dispatch(PocketPassEvent.OpenWidgetMaker) }
+            }
+            PhoneSubpageRow(metrics, order = 4) {
+                com.pocketpass.app.ui.screens.ChatColoursPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenChatColours) }
+            }
         }
 
         PocketPassRoute.Contributors -> PhoneSubpage(
@@ -431,6 +502,10 @@ private fun PhoneSettingsSubpage(
             }
         }
 
+        PocketPassRoute.WidgetMaker -> PhoneWidgetsPage(metrics, state, dispatch)
+
+        is PocketPassRoute.WidgetEditor -> PhoneWidgetEditorPage(metrics, state, dispatch, route.designId)
+
         else -> Unit
     }
 }
@@ -458,7 +533,7 @@ internal fun PhoneSubpage(
 }
 
 @Composable
-private fun PhoneSubpageRow(
+internal fun PhoneSubpageRow(
     metrics: DesignMetrics,
     order: Int,
     height: Float = SETTINGS_ROW_HEIGHT,
@@ -503,6 +578,7 @@ private fun PhoneToggleRow(
             radius = 110f,
             fillBrush = greyPanelBrush(),
             tag = tag,
+            modifier = Modifier.semantics { toggleableState = ToggleableState(enabled) },
             onClick = onToggle,
         ) {
             SettingsHeading(metrics = metrics, icon = icon, title = title, subtitle = subtitle)

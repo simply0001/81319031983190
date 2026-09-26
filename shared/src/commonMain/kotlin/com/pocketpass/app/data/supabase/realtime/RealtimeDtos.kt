@@ -89,6 +89,7 @@ fun NotificationChangeBroadcastDto.isFor(userId: String): Boolean {
 }
 
 sealed interface ConversationRealtimeEvent {
+    data class ChatColourChanged(val userId: String) : ConversationRealtimeEvent
     data class MessageInvalidated(
         val invalidation: MessageInvalidationDto,
     ) : ConversationRealtimeEvent
@@ -130,6 +131,9 @@ fun MessageChangeBroadcastDto.toConversationRealtimeEvent(
     if (schema != MESSAGE_SCHEMA) return null
     val changedRecord = record ?: oldRecord ?: return null
     return when (table) {
+        "profile_chat_colours" -> changedRecord.userId
+            ?.takeIf { operation == "UPDATE" && changedRecord.conversationId == expectedConversationId }
+            ?.let(ConversationRealtimeEvent::ChatColourChanged)
         MESSAGE_TABLE -> toMessageInvalidation(expectedConversationId)
             ?.let(ConversationRealtimeEvent::MessageInvalidated)
 

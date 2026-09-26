@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -376,6 +377,7 @@ fun OAuthConsentOverlay(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
+    detailsOnTop: Boolean = false,
 ) {
     val consent = state.oauthConsent
     val busy = consent.deciding
@@ -462,7 +464,7 @@ fun OAuthConsentOverlay(
                 ) { dispatch(PocketPassEvent.DismissOAuthConsent) }
             }
 
-            else -> OAuthConsentContent(metrics, request, consent.error, busy, dispatch)
+            else -> OAuthConsentContent(metrics, request, consent.error, busy, dispatch, detailsOnTop)
         }
     }
 }
@@ -474,97 +476,27 @@ private fun OAuthConsentContent(
     error: String?,
     busy: Boolean,
     dispatch: (PocketPassEvent) -> Unit,
+    detailsOnTop: Boolean,
 ) {
-    Text(
-        text = request.appName,
-        modifier = Modifier.designBounds(metrics, 60f, 40f, 960f, 84f),
-        color = pocketPalette.textPrimary,
-        fontFamily = Rubik,
-        fontWeight = FontWeight.Bold,
-        fontSize = metrics.sp(64f),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-    val byline = listOfNotNull(
-        "Third-party app, not made by PocketPass",
-        request.ownerDisplayName?.let { "Made by $it" },
-        request.website?.let(::websiteHost),
-    ).joinToString(" · ")
-    Text(
-        text = byline,
-        modifier = Modifier.designBounds(metrics, 60f, 130f, 960f, 44f),
-        color = pocketPalette.textSecondary,
-        fontFamily = Rubik,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = metrics.sp(28f),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-    val problem = when {
-        request.suspended -> "This app has been suspended."
-        request.infoError != null -> request.infoError
-        request.unknownScopes.isNotEmpty() ->
-            "This app asked for a permission PocketPass does not recognise (${request.unknownScopes.joinToString(", ")}). You cannot allow this request."
-        else -> null
-    }
-    var cursor = 200f
-    if (request.scopes.isNotEmpty()) {
-        Text(
-            text = "${request.appName} will be able to:",
-            modifier = Modifier.designBounds(metrics, 70f, cursor, 940f, 50f),
-            color = pocketPalette.textPrimary,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.Bold,
-            fontSize = metrics.sp(36f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        cursor += 58f
-        request.scopes.forEach { scope ->
-            Text(
-                text = "•  ${scope.description.ifBlank { scope.key }}",
-                modifier = Modifier.designBounds(metrics, 90f, cursor, 920f, 48f),
-                color = pocketPalette.textPrimary,
-                fontFamily = Rubik,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = metrics.sp(31f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            cursor += 52f
+    ConsentScroll(metrics, Modifier.designBounds(metrics, 60f, 30f, 960f, 590f).testTag("oauth_consent_permissions")) {
+        if(detailsOnTop) {
+            BoardLabel(metrics, request.appName, 52f, true)
+            BoardLabel(metrics, "Review permissions on the top screen", 36f, true)
+            BoardLabel(metrics, "Press X to move the highlighter there, then use the D-pad to read the list.", 30f,
+                color = pocketPalette.textSecondary)
+            ConsentWarning(metrics, request)
+            BoardLabel(metrics, "Allow shares all ${request.scopes.size} requested permissions with this app.", 32f)
+        } else {
+            ConsentHeading(metrics, request)
+            ConsentPermissionList(metrics, request, wide = false)
         }
-        cursor += 12f
-    }
-    if (request.extraClaims.isNotEmpty()) {
-        Text(
-            text = "It will also see: ${joinNatural(request.extraClaims)}.",
-            modifier = Modifier.designBounds(metrics, 70f, cursor, 940f, 44f),
-            color = pocketPalette.textSecondary,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(28f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        cursor += 50f
-    }
-    (error ?: problem)?.let { text ->
-        Text(
-            text = text,
-            modifier = Modifier.designBounds(metrics, 70f, cursor, 940f, 80f),
-            color = pocketPalette.ink(Color(0xFFB31E3A)),
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(28f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        (error ?: consentProblem(request))?.let {
+            BoardLabel(metrics, it, 30f, true, color = pocketPalette.ink(Color(0xFFB31E3A)))
+        }
     }
     Text(
-        text = "You will be returned to ${request.returnHost}",
-        modifier = Modifier.designBounds(metrics, 70f, 690f, 940f, 44f),
+        text = "Return to ${request.returnHost}",
+        modifier = Modifier.designBounds(metrics, 70f, 640f, 940f, 44f),
         color = pocketPalette.textSecondary,
         fontFamily = Rubik,
         fontWeight = FontWeight.SemiBold,
@@ -572,30 +504,15 @@ private fun OAuthConsentContent(
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
-    val allowable = request.allowable
-    DialogButton(
-        metrics = metrics,
-        x = 60f,
-        y = 740f,
-        label = if (allowable) "Deny" else "Go back to the app",
-        fill = cancelButtonBrush(),
-        border = Color(0xFF8A8A8A),
-        tag = "oauth_consent_deny",
-        layer = OAUTH_CONSENT_FOCUS_LAYER,
-        enabled = !busy,
-    ) { dispatch(PocketPassEvent.DenyOAuthConsent) }
-    if (allowable) {
-        DialogButton(
-            metrics = metrics,
-            x = 550f,
-            y = 740f,
-            label = if (busy) "Connecting..." else "Allow",
-            fill = greenButtonBrush(),
-            border = Color(0xFF3CBC29),
-            tag = "oauth_consent_allow",
-            layer = OAUTH_CONSENT_FOCUS_LAYER,
-            enabled = !busy,
-        ) { dispatch(PocketPassEvent.ApproveOAuthConsent) }
+    DialogButton(metrics, 60f, 710f, if(request.allowable) "Deny" else "Go back to the app",
+        cancelButtonBrush(), Color(0xFF8A8A8A), "oauth_consent_deny", OAUTH_CONSENT_FOCUS_LAYER, !busy) {
+        dispatch(PocketPassEvent.DenyOAuthConsent)
+    }
+    if(request.allowable) {
+        DialogButton(metrics, 550f, 710f, if(busy) "Connecting..." else "Allow",
+            greenButtonBrush(), Color(0xFF3CBC29), "oauth_consent_allow", OAUTH_CONSENT_FOCUS_LAYER, !busy) {
+            dispatch(PocketPassEvent.ApproveOAuthConsent)
+        }
     }
 }
 

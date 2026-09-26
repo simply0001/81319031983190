@@ -118,6 +118,9 @@ class SupabaseRealtimeGateway(
                     receiveOwnBroadcasts = false
                 }
             }
+            val boardCollector = launch(start = CoroutineStart.UNDISPATCHED) {
+                channel.broadcastFlow<JsonObject>("BOARDS").collect { trySend(NotificationChange.Boards) }
+            }
             val collectors = NOTIFICATION_CHANGE_EVENTS.map { event ->
                 launch(start = CoroutineStart.UNDISPATCHED) {
                     channel
@@ -142,6 +145,7 @@ class SupabaseRealtimeGateway(
                 close(error)
             }
             awaitClose {
+                boardCollector.cancel()
                 collectors.forEach(Job::cancel)
                 launch(NonCancellable) {
                     runCatching { channel.unsubscribe() }
@@ -358,6 +362,7 @@ class SupabaseRealtimeGateway(
         private const val APP_UPDATE_EVENT = "app_update"
         private const val SUPPORTER_STATUS_EVENT = "supporter_status"
         private val CONVERSATION_CHANGE_EVENTS = listOf(
+            "chat_colour",
             INSERT_EVENT,
             UPDATE_EVENT,
             DELETE_EVENT,
@@ -381,6 +386,7 @@ enum class TokenChannelEvent {
 }
 
 enum class NotificationChange {
+    Boards,
     Inserted,
     Changed,
 }

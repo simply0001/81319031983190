@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredHeight
@@ -59,6 +60,7 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.BOTTOM_DESIGN_HEIGHT
 import com.pocketpass.app.ui.BOTTOM_DESIGN_WIDTH
 import com.pocketpass.app.ui.DesignMetrics
+import com.pocketpass.app.ui.DesignAnchor
 import com.pocketpass.app.ui.GochiHand
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.Staatliches
@@ -76,6 +78,7 @@ import com.pocketpass.app.ui.supportsAnimatedPatterns
 import com.pocketpass.app.ui.controller.controllerFocusBarrier
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.designBounds
+import com.pocketpass.app.ui.anchoredBounds
 import com.pocketpass.app.ui.setup.CountryCatalog
 
 private const val GAME_CLOSED_OFFSET = 42f
@@ -140,6 +143,7 @@ private val BingoGoalShortLabels = listOf(
 fun TopActiveGame(
     metrics: DesignMetrics,
     state: PocketPassUiState,
+    showBackground: Boolean = true,
 ) {
     val target = state.games.activeGame
     var retained by remember { mutableStateOf<GameTarget?>(null) }
@@ -179,25 +183,16 @@ fun TopActiveGame(
             .testTag("top_game"),
     ) {
         when (content) {
-            GameTarget.PuzzleSwap -> TopPuzzleSwap(metrics)
-            GameTarget.Bingo -> TopBingo(metrics)
-            GameTarget.WorldTour -> TopWorldTour(metrics)
+            GameTarget.PuzzleSwap -> TopPuzzleSwap(metrics, showBackground)
+            GameTarget.Bingo -> TopBingo(metrics, showBackground)
+            GameTarget.WorldTour -> TopWorldTour(metrics, showBackground)
         }
     }
 }
 
 @Composable
-private fun TopPuzzleSwap(metrics: DesignMetrics) {
-    FullBleedArtwork(metrics, Assets.GameWoodTop)
-    FigmaAsset(
-        resource = Assets.PuzzleSwapTitle,
-        modifier = Modifier.designBounds(metrics, 135.99f, 405.5f, 1648f, 491f),
-    )
-}
-
-@Composable
-private fun TopBingo(metrics: DesignMetrics) {
-    FullBleedArtwork(metrics, Assets.GameWoodTop)
+private fun TopBingo(metrics: DesignMetrics, showBackground: Boolean) {
+    if (showBackground) FullBleedArtwork(metrics, Assets.GameWoodTop)
     FigmaAsset(
         resource = Assets.BingoPaper,
         modifier = Modifier
@@ -211,8 +206,8 @@ private fun TopBingo(metrics: DesignMetrics) {
 }
 
 @Composable
-private fun TopWorldTour(metrics: DesignMetrics) {
-    FullBleedArtwork(metrics, Assets.WorldTourSpace)
+private fun TopWorldTour(metrics: DesignMetrics, showBackground: Boolean) {
+    if (showBackground) FullBleedArtwork(metrics, Assets.WorldTourSpace)
     WorldTourGlobe(
         modifier = Modifier.designBounds(metrics, 537f, 183.5f, 846f, 846f),
     )
@@ -338,36 +333,49 @@ fun GameBottomOverlay(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
+    showBackground: Boolean = true,
+    overlaysOnly: Boolean = false,
 ) {
     val blockInteraction = remember { MutableInteractionSource() }
+    val overlayTag = if (overlaysOnly) "game_dialog_overlay" else "game_bottom_overlay"
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .testTag("game_bottom_overlay")
-            .controllerFocusBarrier("game_bottom_overlay", layer = 20)
+            .testTag(overlayTag)
+            .controllerFocusBarrier(overlayTag, layer = if (overlaysOnly) 30 else 20)
             .clickable(
                 interactionSource = blockInteraction,
                 indication = null,
             ) {},
     ) {
-        when (state.games.activeGame) {
-            GameTarget.PuzzleSwap -> PuzzleSwapBottom(metrics)
-            GameTarget.Bingo -> BingoBottom(metrics, state, dispatch)
-            GameTarget.WorldTour -> WorldTourBottom(metrics, state, dispatch)
+        if (!overlaysOnly) when (state.games.activeGame) {
+            GameTarget.PuzzleSwap -> PuzzleSwapBottom(metrics, state, dispatch, showBackground)
+            GameTarget.Bingo -> BingoBottom(metrics, state, dispatch, showBackground)
+            GameTarget.WorldTour -> WorldTourBottom(metrics, state, dispatch, showBackground)
             null -> Unit
+        }
+        if (overlaysOnly && state.games.activeGame == GameTarget.Bingo) {
+            BingoBottom(metrics, state, dispatch, showBackground = false, overlaysOnly = true)
         }
         if (
             state.games.activeGame == GameTarget.WorldTour &&
             state.games.worldTourRegionsVisible
         ) {
-            WorldTourRegionsBottom(metrics, state)
+            WorldTourRegionsBottom(metrics, state, showBackground)
+        }
+        if (
+            state.games.activeGame == GameTarget.PuzzleSwap &&
+            state.games.puzzleBuyPromptVisible
+        ) {
+            PuzzleBuyPieceConfirmDialog(metrics, state, dispatch, showScrim = showBackground)
+        }
+        if (
+            state.games.activeGame == GameTarget.PuzzleSwap &&
+            state.games.puzzleInfoVisible
+        ) {
+            PuzzleInfoDialog(metrics, dispatch, showScrim = showBackground)
         }
     }
-}
-
-@Composable
-private fun PuzzleSwapBottom(metrics: DesignMetrics) {
-    FullBleedArtwork(metrics, Assets.PuzzleSwapBottom, Modifier.testTag("game_puzzle_swap"))
 }
 
 private const val BINGO_CELL_SIZE = 166f
@@ -380,8 +388,12 @@ private fun BingoBottom(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
+    showBackground: Boolean,
+    overlaysOnly: Boolean = false,
 ) {
-    FullBleedArtwork(metrics, Assets.GameWoodBottom, Modifier.testTag("game_bingo"))
+    Box(Modifier.fillMaxSize().testTag("game_bingo")) {
+        if (showBackground) FullBleedArtwork(metrics, Assets.GameWoodBottom)
+    }
     val board = state.bingo.cells
     val displayCells: List<BingoCell?> =
         if (board.size == 24 && board.none { it.position == 12 }) {
@@ -404,7 +416,7 @@ private fun BingoBottom(
                 }
             }
         }
-    Box(
+    if (!overlaysOnly) Box(
         modifier = Modifier.designBounds(metrics, 172.03f, 118.869f, 895.94f, 895.94f),
         contentAlignment = Alignment.Center,
     ) {
@@ -476,7 +488,7 @@ private fun BingoBottom(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF080808).copy(alpha = 0.8f))
+                .background(if (showBackground) Color(0xFF080808).copy(alpha = 0.8f) else Color.Transparent)
                 .testTag("bingo_goal_scrim")
                 .clickable(
                     interactionSource = scrimInteraction,
@@ -584,8 +596,11 @@ private fun WorldTourBottom(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
+    showBackground: Boolean,
 ) {
-    FullBleedArtwork(metrics, Assets.WorldTourMap, Modifier.testTag("game_world_tour"))
+    Box(Modifier.fillMaxSize().testTag("game_world_tour")) {
+        if (showBackground) FullBleedArtwork(metrics, Assets.WorldTourMap)
+    }
 
     val regions = state.worldTour.regions
     val totalRegions = CountryCatalog.countries.size
@@ -636,9 +651,9 @@ private fun WorldTourBottom(
         }
     }
 
-    Box(
+    if (showBackground) Box(
         modifier = Modifier
-            .designBounds(metrics, 0f, 757.5f, 1240f, 322.5f)
+            .anchoredBounds(metrics, 0f, 757.5f, 1240f, 322.5f, DesignAnchor.Stretch, DesignAnchor.Center)
             .background(
                 Brush.verticalGradient(
                     colorStops = arrayOf(
@@ -650,7 +665,7 @@ private fun WorldTourBottom(
             ),
     )
     Box(
-        modifier = Modifier.designBounds(metrics, 0f, 821.5f, 1240f, 95f),
+        modifier = Modifier.anchoredBounds(metrics, 0f, 821.5f, 1240f, 95f, DesignAnchor.Stretch, DesignAnchor.Center),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -666,7 +681,7 @@ private fun WorldTourBottom(
     val buttonInteraction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .designBounds(metrics, 1080f, 40f, 120f, 120f)
+            .anchoredBounds(metrics, 1080f, 40f, 120f, 120f, DesignAnchor.End, DesignAnchor.Center)
             .testTag("world_tour_regions_button")
             .controllerTarget("world_tour_regions_button", layer = 20) {
                 dispatch(PocketPassEvent.OpenWorldTourRegions)
@@ -703,7 +718,7 @@ private fun WorldTourBottom(
     } else {
         (1154f * regions.size / totalRegions).coerceIn(72f, 1154f)
     }
-    Box(modifier = Modifier.designBounds(metrics, 43f, 944.85f, 1154f, 72f)) {
+    Box(modifier = Modifier.anchoredBounds(metrics, 43f, 944.85f, 1154f, 72f, DesignAnchor.Stretch, DesignAnchor.Center)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -719,7 +734,8 @@ private fun WorldTourBottom(
         if (fillWidth > 0f) {
             Box(
                 modifier = Modifier
-                    .designBounds(metrics, 0f, 0f, fillWidth, 72f)
+                    .fillMaxWidth(fillWidth / 1154f)
+                    .fillMaxHeight()
                     .clip(barShape)
                     .pocketFrame(
                         Brush.verticalGradient(
@@ -746,9 +762,10 @@ private val WorldTourBorderColor = Color(0xFF5E9AAC)
 private fun WorldTourRegionsBottom(
     metrics: DesignMetrics,
     state: PocketPassUiState,
+    showBackground: Boolean,
 ) {
     val blockInteraction = remember { MutableInteractionSource() }
-    PatternBackground(
+    if (showBackground) PatternBackground(
         metrics = metrics,
         pattern = Assets.PatternActivitiesBottom,
         topColor = Color(0xFFE9EFF6),
@@ -759,7 +776,7 @@ private fun WorldTourRegionsBottom(
     )
     Box(
         Modifier
-            .designBounds(metrics, 0f, 0f, 1240f, 1080f)
+            .anchoredBounds(metrics, 0f, 0f, 1240f, 1080f, DesignAnchor.Stretch, DesignAnchor.Stretch)
             .testTag("world_tour_regions_overlay")
             .controllerFocusBarrier("world_tour_regions_overlay", layer = 30)
             .clickable(
@@ -787,7 +804,7 @@ private fun WorldTourRegionsBottom(
             ) {
                 Text(
                     text = "Regions Discovered",
-                    color = WorldTourTextColor,
+                    color = if (showBackground) WorldTourTextColor else Color.White,
                     fontFamily = Rubik,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = metrics.sp(90f),

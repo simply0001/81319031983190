@@ -3,8 +3,11 @@ package com.pocketpass.app.ui.controller
 import com.pocketpass.app.ui.platformAnimationsEnabled
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +16,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -34,7 +38,10 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -45,6 +52,8 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class FocusDirection { Left, Right, Up, Down }
@@ -74,6 +83,8 @@ data class FocusEntry(
     val onAdjust: ((Int) -> Unit)? = null,
     val group: String? = null,
     val neighbors: Map<FocusDirection, String> = emptyMap(),
+    val badgeBounds: Rect? = null,
+    val parentId: String? = null,
 )
 
 private fun FocusEntry.isRevealed(): Boolean {
@@ -148,6 +159,27 @@ internal operator fun Rect.minus(other: Rect): Rect =
 internal fun FocusEntry.ringRadius(): Float =
     cornerRadius?.let { it * scale } ?: (minOf(bounds.width, bounds.height) / 2f)
 
+internal val CollapsedRingBadge = Rect(0.5f, 0.5f, 0.5f, 0.5f)
+
+internal fun FocusEntry.normalizedRingBadge(): Rect {
+    val badge = badgeBounds ?: return CollapsedRingBadge
+    if (bounds.isEmpty) return CollapsedRingBadge
+    return Rect(
+        badge.left * scale / bounds.width,
+        badge.top * scale / bounds.height,
+        badge.right * scale / bounds.width,
+        badge.bottom * scale / bounds.height,
+    )
+}
+
+internal fun Rect.localRingBadge(bounds: Rect, scale: Float): Rect? =
+    if (isEmpty) null else Rect(
+        left * bounds.width / scale,
+        top * bounds.height / scale,
+        right * bounds.width / scale,
+        bottom * bounds.height / scale,
+    )
+
 internal sealed interface RingMotion {
     data object Keep : RingMotion
     data object Snap : RingMotion
@@ -211,7 +243,12 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
     private val lastFocusByDisplay = mutableMapOf<FocusDisplay, String>()
     var keyboardSubmit: (() -> Unit)? = null
     var keyboardBackspace: (() -> Unit)? = null
-    var keyboardLayer: Int? = null
+    /** Set while the keyboard shows a page B should leave before closing anything. */
+    var keyboardEscape: (() -> Unit)? = null
+    var transientBack: (() -> Unit)? = null
+    /** Canvas-only analog movement; x/y are normalized stick travel multiplied by elapsed seconds. */
+    var boardCanvasPan: ((Float, Float) -> Unit)? = null
+    var keyboardLayer: Int? by mutableStateOf(null)
 
     fun register(
         id: String,
@@ -223,6 +260,7 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
         onAdjust: ((Int) -> Unit)? = null,
         group: String? = null,
         neighbors: Map<FocusDirection, String> = emptyMap(),
+        parentId: String? = null,
         onActivate: () -> Unit,
     ) {
         val existing = entries[id]
@@ -239,7 +277,21 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
             onAdjust = onAdjust,
             group = group,
             neighbors = neighbors,
+            badgeBounds = existing?.badgeBounds,
+            parentId = parentId,
         )
+    }
+
+    fun updateBadgeBounds(id: String, bounds: Rect?) {
+        val existing = entries[id] ?: return
+        if (existing.badgeBounds != bounds) {
+            entries[id] = existing.copy(badgeBounds = bounds)
+        }
+    }
+
+    fun updateNeighbors(id: String, neighbors: Map<FocusDirection, String>) {
+        val existing = entries[id] ?: return
+        if (existing.neighbors != neighbors) entries[id] = existing.copy(neighbors = neighbors)
     }
 
     fun updateBounds(id: String, bounds: Rect, scale: Float = 1f) {
@@ -250,8 +302,8 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
     }
 
     fun unregister(id: String) {
-        entries.remove(id)
-        if (focusId == id) focusId = null
+        val removed = entries.remove(id)
+        if (focusId == id) focusId = removed?.parentId?.takeIf { it in entries }
     }
 
     fun focus(id: String, reveal: Boolean = true) {
@@ -273,7 +325,44 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
     private fun activeEntries(): List<FocusEntry> {
         val top = topLayerEntries()
         val shown = if (top.any { it.display == display }) top.filter { it.display == display } else top
-        return shown.filter { it.focusable }
+        val parent = shown.firstOrNull { it.id == focusId }?.parentId
+        return shown.filter { it.focusable && it.parentId == parent }
+    }
+
+    fun enterChildren(id: String): Boolean {
+        val parent = activeEntries().firstOrNull { it.id == id } ?: return false
+        val children = topLayerEntries().filter {
+            it.focusable && it.parentId == id && it.display == parent.display
+        }
+        val next = chooseNextFocus(children, null, FocusDirection.Down) ?: return false
+        focus(next)
+        onMoved?.invoke()
+        return true
+    }
+
+    private fun parentTarget(): FocusEntry? {
+        val child = activeEntries().firstOrNull { it.id == focusId } ?: return null
+        val parentId = child.parentId ?: return null
+        return entries[parentId]?.takeIf {
+            it.focusable && it.layer == child.layer && it.display == child.display
+        }
+    }
+
+    fun canExitToParent(): Boolean = parentTarget() != null
+
+    fun exitToParent(): Boolean {
+        val parent = parentTarget() ?: return false
+        focus(parent.id)
+        onMoved?.invoke()
+        return true
+    }
+
+    fun restoreFocus(target: FocusEntry) {
+        val active = topLayerEntries().filter { it.focusable }
+        val restored = active.firstOrNull { it.id == target.id }
+            ?: active.firstOrNull { it.id == target.parentId }
+            ?: return
+        focus(restored.id, reveal = false)
     }
 
     private fun currentDisplay(): FocusDisplay =
@@ -330,10 +419,12 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
 
     private fun otherDisplayEntries(): List<FocusEntry> {
         val current = currentDisplay()
-        return topLayerEntries().filter { it.focusable && it.display != current }
+        return topLayerEntries().filter { it.focusable && it.parentId == null && it.display != current }
     }
 
     fun canSwapDisplay(): Boolean = otherDisplayEntries().isNotEmpty()
+
+    fun showSwapHint(): Boolean = focusedTarget(null) != null && canSwapDisplay() && !keyboardActive()
 
     fun swapDisplay(): Boolean {
         val candidates = otherDisplayEntries()
@@ -352,6 +443,7 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
         keyboardLayer != null && activeEntries().firstOrNull()?.layer == keyboardLayer
 
     fun keyboardCanBackspace(): Boolean = keyboardActive() && keyboardBackspace != null
+    fun keyboardCanEscape(): Boolean = keyboardActive() && keyboardEscape != null
 }
 
 val LocalControllerFocus = staticCompositionLocalOf<ControllerFocus?> { null }
@@ -376,6 +468,9 @@ fun Modifier.controllerTarget(
     cornerRadius: Float? = null,
     onAdjust: ((Int) -> Unit)? = null,
     neighbors: Map<FocusDirection, String> = emptyMap(),
+    badgeBounds: Rect? = null,
+    parentId: String? = null,
+    revealKey: Any? = null,
     onActivate: () -> Unit,
 ): Modifier = composed {
     val focus = LocalControllerFocus.current ?: return@composed this
@@ -386,7 +481,7 @@ fun Modifier.controllerTarget(
     val latestAdjust = rememberUpdatedState(onAdjust)
     val bringIntoView = remember { BringIntoViewRequester() }
     val geometry = remember { TargetGeometry() }
-    DisposableEffect(focus, id, layer, display, cornerRadius, viewport, onAdjust != null, group, neighbors) {
+    DisposableEffect(focus, id, layer, display, cornerRadius, viewport, onAdjust != null, group, parentId) {
         focus.register(
             id,
             layer,
@@ -396,13 +491,21 @@ fun Modifier.controllerTarget(
             onAdjust = if (onAdjust == null) null else { delta -> latestAdjust.value?.invoke(delta) },
             group = group,
             neighbors = neighbors,
+            parentId = parentId,
         ) {
             latestActivate.value()
         }
         onDispose { focus.unregister(id) }
     }
-    LaunchedEffect(focus.focusId, focus.hidden) {
+    // Navigation links can change when a tab opens a different page. Updating
+    // them must not dispose the still-visible tab and clear its current focus.
+    SideEffect {
+        focus.updateNeighbors(id, neighbors)
+        focus.updateBadgeBounds(id, badgeBounds)
+    }
+    LaunchedEffect(focus.focusId, focus.hidden, revealKey) {
         if (focus.focusId == id && !focus.hidden) {
+            if (revealKey != null) androidx.compose.runtime.withFrameNanos { }
             bringIntoView.bringIntoView(revealRect(geometry.size, viewport))
         }
     }
@@ -454,6 +557,46 @@ private val HighlightTrailSpring = spring<Float>(
     stiffness = FOCUS_SLIDE_STIFFNESS,
     visibilityThreshold = 0.5f,
 )
+private val HighlightBadgeSpring = spring<Rect>(
+    dampingRatio = FOCUS_SLIDE_DAMPING_RATIO,
+    stiffness = FOCUS_SLIDE_STIFFNESS,
+    visibilityThreshold = Rect(0.001f, 0.001f, 0.001f, 0.001f),
+)
+
+internal class RingBadgeMorph {
+    private val bounds = Animatable(CollapsedRingBadge, Rect.VectorConverter)
+    val value: Rect get() = bounds.value
+
+    suspend fun moveTo(target: Rect, animate: Boolean) {
+        if (!animate) {
+            bounds.snapTo(target)
+        } else if (bounds.targetValue != target) {
+            bounds.animateTo(target, HighlightBadgeSpring)
+        }
+    }
+}
+
+internal class RingDisplayTransition {
+    private val visibility = Animatable(0f)
+    var target: FocusEntry? by mutableStateOf(null)
+        private set
+    val alpha: Float get() = visibility.value.coerceIn(0f, 1f)
+    val scale: Float get() = 1f + (1f - alpha) * 0.08f
+
+    suspend fun update(next: FocusEntry?, swapped: Boolean, animate: Boolean) {
+        if (next != null) target = next
+        val destination = if (next == null) 0f else 1f
+        if (swapped && animate) {
+            visibility.animateTo(
+                destination,
+                tween(durationMillis = if (next == null) 140 else 240, easing = FastOutSlowInEasing),
+            )
+        } else if (!animate || visibility.targetValue != destination) {
+            visibility.snapTo(destination)
+        }
+        if (next == null && visibility.value == 0f) target = null
+    }
+}
 
 internal fun edgeSprings(shift: Float): Pair<SpringSpec<Float>, SpringSpec<Float>> =
     if (shift < 0f) HighlightTrailSpring to HighlightLeadSpring else HighlightLeadSpring to HighlightTrailSpring
@@ -494,24 +637,59 @@ fun ControllerFocusHighlight(focus: ControllerFocus, display: FocusDisplay? = Fo
     }
     val edges = remember { EdgeShift() }
     val radiusShift = remember { Animatable(0f) }
+    val badgeMorph = remember { RingBadgeMorph() }
+    val presence = remember { RingDisplayTransition() }
+    var crossingViewport by remember { mutableStateOf(false) }
     LaunchedEffect(focus, display) {
         val tracker = RingTracker()
-        snapshotFlow { focusedTarget.value }.collect { next ->
-            val previous = tracker.previousFor(next, focus.hidden, monotonicNowNanos())
-            val motion = ringMotion(
+        var lastDisplay = focus.display
+        var pendingHide: Job? = null
+        snapshotFlow { Triple(focusedTarget.value, focus.display, focus.hidden) }.collect { (next, activeDisplay, hidden) ->
+            val swapped = activeDisplay != lastDisplay
+            lastDisplay = activeDisplay
+            val previous = tracker.previousFor(next, hidden, monotonicNowNanos())
+            val animate = platformAnimationsEnabled()
+            pendingHide?.cancel()
+            pendingHide = null
+            if (next == null && previous != null && !hidden && !swapped && animate) {
+                // Overlay targets are removed before the Activities card takes focus. Keep
+                // the last drawn ring through that brief gap so its return can slide.
+                pendingHide = launch {
+                    delay(RING_GAP_LIMIT_NANOS / 1_000_000L)
+                    presence.update(null, swapped = false, animate = true)
+                }
+            } else {
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    presence.update(next, swapped, animate && !hidden)
+                }
+            }
+            val motion = if (swapped && next != null) RingMotion.Snap else ringMotion(
                 previous,
                 next,
                 edges.value,
                 radiusShift.value,
-                platformAnimationsEnabled(),
+                animate,
             )
+            if (next != null) {
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    badgeMorph.moveTo(
+                        next.normalizedRingBadge(),
+                        animate = animate && previous != null && motion != RingMotion.Snap,
+                    )
+                }
+            }
             when (motion) {
                 RingMotion.Keep -> Unit
                 RingMotion.Snap -> {
+                    crossingViewport = false
                     edges.snapTo(Rect.Zero)
                     radiusShift.snapTo(0f)
                 }
                 is RingMotion.Slide -> {
+                    // The destination viewport must not cut off a ring still arriving
+                    // from navigation outside it. Preserve this during rapid moves.
+                    crossingViewport = previous?.viewport !== next?.viewport ||
+                        (crossingViewport && edges.value != Rect.Zero)
                     val shift = motion.shift
                     val (leftSpring, rightSpring) = edgeSprings(shift.left + shift.right)
                     val (topSpring, bottomSpring) = edgeSprings(shift.top + shift.bottom)
@@ -527,15 +705,29 @@ fun ControllerFocusHighlight(focus: ControllerFocus, display: FocusDisplay? = Fo
     val masks = remember { HighlightMaskCache() }
     val viewportPath = remember { Path() }
     val viewportMatrix = remember { Matrix() }
-    Canvas(Modifier.fillMaxSize()) {
-        val target = focusedTarget.value ?: return@Canvas
+    Canvas(
+        Modifier.fillMaxSize().graphicsLayer {
+            alpha = presence.alpha
+            scaleX = presence.scale
+            scaleY = presence.scale
+            val center = presence.target?.let { (it.bounds + edges.value).center }
+            transformOrigin = if (center != null && size.width > 0f && size.height > 0f) {
+                TransformOrigin(center.x / size.width, center.y / size.height)
+            } else {
+                TransformOrigin.Center
+            }
+        },
+    ) {
+        val target = presence.target ?: return@Canvas
         val bounds = target.bounds + edges.value
         if (bounds.width <= 0f || bounds.height <= 0f) return@Canvas
         val radius = (target.ringRadius() + radiusShift.value)
             .coerceIn(0f, minOf(bounds.width, bounds.height) / 2f)
+        val badgeBounds = badgeMorph.value.localRingBadge(bounds, target.scale)
         val viewport = target.viewport
-        if (viewport == null || viewport.bounds.isEmpty) {
-            drawHighlight(bounds, radius, target.scale, masks)
+        val travellingAcrossViewport = crossingViewport && edges.value != Rect.Zero
+        if (viewport == null || viewport.bounds.isEmpty || travellingAcrossViewport) {
+            drawHighlight(bounds, radius, target.scale, masks, badgeBounds)
             return@Canvas
         }
         val layoutSize = viewport.layoutSize
@@ -557,7 +749,7 @@ fun ControllerFocusHighlight(focus: ControllerFocus, display: FocusDisplay? = Fo
         viewportMatrix.scale(viewportScale, viewportScale)
         viewportPath.transform(viewportMatrix)
         clipPath(viewportPath) {
-            drawHighlight(bounds, radius, target.scale, masks)
+            drawHighlight(bounds, radius, target.scale, masks, badgeBounds)
         }
     }
 }
@@ -567,6 +759,7 @@ private fun DrawScope.drawHighlight(
     innerRadius: Float,
     scale: Float,
     masks: HighlightMaskCache,
+    badgeBounds: Rect?,
 ) {
     val stroke = HIGHLIGHT_STROKE * scale
     val half = stroke / 2f
@@ -574,21 +767,42 @@ private fun DrawScope.drawHighlight(
     val ringRadius = innerRadius + half
     val outer = bounds.inflate(stroke)
 
-    drawHighlightGlow(masks, bounds, innerRadius, scale)
+    drawHighlightGlow(masks, bounds, innerRadius, scale, badgeBounds)
 
-    drawRoundRect(
-        brush = Brush.verticalGradient(
-            colors = listOf(HighlightTop, HighlightBottom),
-            startY = outer.top,
-            endY = outer.bottom,
-        ),
-        topLeft = ring.topLeft,
-        size = ring.size,
-        cornerRadius = CornerRadius(ringRadius),
-        style = Stroke(width = stroke),
+    val brush = Brush.verticalGradient(
+        colors = listOf(HighlightTop, HighlightBottom),
+        startY = minOf(outer.top, bounds.top + (badgeBounds?.top ?: 0f) * scale - stroke),
+        endY = outer.bottom,
     )
+    if (badgeBounds == null) {
+        drawRoundRect(
+            brush = brush,
+            topLeft = ring.topLeft,
+            size = ring.size,
+            cornerRadius = CornerRadius(ringRadius),
+            style = Stroke(width = stroke),
+        )
+    } else {
+        val badge = badgeBounds.inHighlight(bounds, scale)
+        val innerPath = highlightOutline(bounds, innerRadius, 0f, badge)
+        val outerPath = highlightOutline(bounds, innerRadius, stroke, badge)
+        drawPath(Path.combine(PathOperation.Difference, outerPath, innerPath), brush)
+    }
 
-    drawHighlightGloss(masks, bounds, innerRadius, scale)
+    drawHighlightGloss(masks, bounds, innerRadius, scale, badgeBounds)
 }
 
 internal const val HIGHLIGHT_MASK_SCALE = 0.25f
+
+/** A local panel can dismiss before navigation changes the page underneath it. */
+@Composable
+fun ControllerBackHandler(enabled: Boolean, onBack: () -> Unit) {
+    val focus = LocalControllerFocus.current
+    val current by rememberUpdatedState(onBack)
+    DisposableEffect(focus, enabled) {
+        val previous = focus?.transientBack
+        val handler: () -> Unit = { current() }
+        if(enabled) focus?.transientBack = handler
+        onDispose { if(enabled && focus?.transientBack === handler) focus.transientBack = previous }
+    }
+}

@@ -154,6 +154,7 @@ class RealtimeRuntime(
                     realtime
                         .friendInvalidations(accountId.value)
                         .collect {
+                            bundle.profiles.refreshProfile(accountId)
                             bundle.friends.refreshFriends(accountId)
                             bundle.notifications.refreshNotifications(accountId)
                         }
@@ -356,6 +357,8 @@ class RealtimeRuntime(
             repositories.leaderboard.refresh(accountId, LeaderboardScope.Friends)
             repositories.leaderboard.refresh(accountId, LeaderboardScope.Global)
             repositories.worldTour.refresh(accountId)
+            repositories.puzzle.refresh(accountId)
+            repositories.passingStats.refresh(accountId)
         }
         var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
         while (currentCoroutineContext().isActive) {
@@ -385,6 +388,10 @@ class RealtimeRuntime(
                 realtime
                     .notificationInvalidations(accountId.value)
                     .collect { change ->
+                        if (change == NotificationChange.Boards) {
+                            repositories.boards?.invalidate()
+                            return@collect
+                        }
                         if (change == NotificationChange.Inserted) {
                             soundEffects.play(SoundEffect.Notification)
                         }
@@ -483,6 +490,7 @@ class RealtimeRuntime(
         while (currentCoroutineContext().isActive) {
             bundle.messages.refreshConversations(accountId)
             bundle.messages.refreshMessages(accountId, conversationId)
+            bundle.profiles.refreshMessageColours(accountId, conversationId)
 
             try {
                 realtime
@@ -493,6 +501,9 @@ class RealtimeRuntime(
                     )
                     .collect { event ->
                         when (event) {
+                            is ConversationRealtimeEvent.ChatColourChanged -> {
+                                bundle.profiles.refreshMessageColours(accountId, conversationId)
+                            }
                             is ConversationRealtimeEvent.MessageInvalidated -> {
                                 val invalidation = event.invalidation
                                 if (
@@ -507,6 +518,7 @@ class RealtimeRuntime(
                                     conversationId,
                                 )
                                 bundle.messages.refreshConversations(accountId)
+                                bundle.profiles.refreshMessageColours(accountId, conversationId)
                             }
 
                             is ConversationRealtimeEvent.ConversationInvalidated -> {

@@ -58,6 +58,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -169,6 +170,8 @@ fun PhoneTabBar(
         )
         Row(
             modifier = Modifier
+                .align(Alignment.TopCenter)
+                .widthIn(max = metrics.dp(PHONE_DECK_WIDTH))
                 .fillMaxWidth()
                 .padding(
                     start = metrics.dp(54f + insets.start),
@@ -407,6 +410,7 @@ internal fun PhonePageHeader(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     horizontalPadding: Float = PHONE_CONTENT_MARGIN,
+    foregroundColor: Color? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
@@ -434,12 +438,12 @@ internal fun PhonePageHeader(
                     .padding(start = metrics.dp(12f), end = metrics.dp(40f))
                     .requiredSize(metrics.dp(40.372f), metrics.dp(68.725f))
                     .graphicsLayer { scaleX = -1f },
-                colorFilter = chevronTint(),
+                colorFilter = foregroundColor?.let(ColorFilter::tint) ?: chevronTint(),
             )
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = pocketPalette.textPrimary,
+                    color = foregroundColor ?: pocketPalette.textPrimary,
                     fontFamily = Rubik,
                     fontWeight = FontWeight.Bold,
                     fontSize = metrics.sp(88f),
@@ -449,7 +453,7 @@ internal fun PhonePageHeader(
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
-                        color = pocketPalette.textSecondary,
+                        color = foregroundColor?.copy(alpha = 0.8f) ?: pocketPalette.textSecondary,
                         fontFamily = Rubik,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = metrics.sp(40f),
@@ -786,6 +790,71 @@ fun PhoneTextField(
     focusRequester: FocusRequester? = null,
     enabled: Boolean = true,
     visualTransformation: VisualTransformation = rememberSudofontTransformation(),
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
+    val field = remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    if (field.value.text != value) field.value = TextFieldValue(value, TextRange(value.length))
+    PhoneTextField(
+        value = field.value,
+        onValueChange = {
+            field.value = it
+            if (it.text != value) onValueChange(it.text)
+        },
+        metrics = metrics,
+        modifier = modifier,
+        placeholder = placeholder,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        textColor = textColor,
+        placeholderColor = placeholderColor,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        singleLine = singleLine,
+        maxLines = maxLines,
+        minHeight = minHeight,
+        radius = radius,
+        borderColor = borderColor,
+        borderWidth = borderWidth,
+        fill = fill,
+        textAlign = textAlign,
+        horizontalPadding = horizontalPadding,
+        verticalPadding = verticalPadding,
+        tag = tag,
+        focusRequester = focusRequester,
+        enabled = enabled,
+        visualTransformation = visualTransformation,
+        trailingContent = trailingContent,
+    )
+}
+
+@Composable
+fun PhoneTextField(
+    metrics: DesignMetrics,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    fontSize: Float = 55f,
+    fontWeight: FontWeight = FontWeight.Medium,
+    textColor: Color = pocketPalette.teal,
+    placeholderColor: Color = pocketPalette.tealSoft.copy(alpha = 0.56f),
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    singleLine: Boolean = true,
+    maxLines: Int = 1,
+    minHeight: Float = 166f,
+    radius: Float = 118f,
+    borderColor: Color = pocketPalette.tealBorder,
+    borderWidth: Float = 18f,
+    fill: Brush = PocketWhitePanel,
+    textAlign: TextAlign = TextAlign.Start,
+    horizontalPadding: Float = 52f,
+    verticalPadding: Float = 34f,
+    tag: String? = null,
+    focusRequester: FocusRequester? = null,
+    enabled: Boolean = true,
+    visualTransformation: VisualTransformation = rememberSudofontTransformation(),
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(metrics.dp(radius))
     val style = TextStyle(
@@ -796,19 +865,14 @@ fun PhoneTextField(
         color = textColor,
         textAlign = textAlign,
     )
-    val field = remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
-    if (field.value.text != value) field.value = TextFieldValue(value, TextRange(value.length))
     BasicTextField(
-        value = field.value,
-        onValueChange = {
-            field.value = it
-            if (it.text != value) onValueChange(it.text)
-        },
+        value = value,
+        onValueChange = onValueChange,
         modifier = modifier
             .defaultMinSize(minHeight = metrics.dp(minHeight))
             .phoneShadow(metrics, radius, 12f, 0.12f)
-            .clip(shape)
             .pocketFrame(fill, metrics.dp(borderWidth), borderColor, shape)
+            .clip(shape)
             .then(if (tag == null) Modifier else Modifier.testTag(tag))
             .then(if (focusRequester == null) Modifier else Modifier.focusRequester(focusRequester)),
         enabled = enabled,
@@ -820,17 +884,20 @@ fun PhoneTextField(
         singleLine = singleLine,
         maxLines = maxLines,
         decorationBox = { inner ->
-            Box(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .defaultMinSize(minHeight = metrics.dp(minHeight))
                     .padding(horizontal = metrics.dp(horizontalPadding), vertical = metrics.dp(verticalPadding)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+            Box(Modifier.weight(1f),
                 contentAlignment = when (textAlign) {
                     TextAlign.Center -> Alignment.Center
                     else -> Alignment.CenterStart
                 },
             ) {
-                if (value.isEmpty()) {
+                if (value.text.isEmpty()) {
                     Text(
                         text = placeholder,
                         modifier = Modifier.fillMaxWidth(),
@@ -841,8 +908,27 @@ fun PhoneTextField(
                 }
                 inner()
             }
+            trailingContent?.let { trailing ->
+                Spacer(Modifier.width(metrics.dp(20f)))
+                trailing()
+            }
+            }
         },
     )
+}
+
+@Composable
+internal fun PhoneDeck(
+    metrics: DesignMetrics,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val insets = LocalPhoneInsets.current
+    Box(
+        Modifier.fillMaxSize().padding(start = metrics.dp(insets.start), end = metrics.dp(insets.end)),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(Modifier.widthIn(max = metrics.dp(PHONE_DECK_WIDTH)).fillMaxSize(), content = content)
+    }
 }
 
 @Composable

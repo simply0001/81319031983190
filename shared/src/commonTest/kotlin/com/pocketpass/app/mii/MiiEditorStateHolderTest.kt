@@ -783,7 +783,7 @@ class MiiEditorStateHolderTest {
         holder.dispatch(MiiEditorEvent.SelectTrait(MiiTraitField.HatType, -1))
         assertEquals(-1, holder.state.value.draft.extHatType)
 
-        holder.dispatch(MiiEditorEvent.SelectTrait(MiiTraitField.HatType, 10))
+        holder.dispatch(MiiEditorEvent.SelectTrait(MiiTraitField.HatType, 11))
         assertEquals(-1, holder.state.value.draft.extHatType)
 
         holder.dispatch(MiiEditorEvent.SelectTraitField(MiiTraitField.HairType))
@@ -980,6 +980,137 @@ class MiiEditorStateHolderTest {
         assertEquals(MiiColorField.Hat, holder.state.value.activeColorField)
         assertEquals(5, holder.state.value.draft.extHatType)
         assertTrue(holder.state.value.isDirty)
+    }
+
+    @Test
+    fun wearHatSavesActiveMiiWithoutPresentingEditor() = runTest {
+        val persistence = InMemoryMiiEditorPersistence()
+        persistence.save(
+            ACCOUNT,
+            MiiPersistedEditorSession(
+                savedProfiles = mapOf(
+                    1 to MiiStoredProfile(
+                        appearance = MiiAppearance(height = 90),
+                        portraitFilePath = "/private/old.png",
+                        rendererVersion = "renderer-1",
+                        revision = 1,
+                        savedAtEpochMillis = 10,
+                    ),
+                ),
+            ),
+        )
+        var published: MiiEditorSaveRequest? = null
+        val holder = MiiEditorStateHolder(
+            persistence = persistence,
+            scope = this,
+            saveCallback = MiiEditorSaveCallback { request ->
+                published = request
+                MiiEditorSaveResult.Completed
+            },
+        )
+        holder.activateAccount(ACCOUNT)
+        advanceUntilIdle()
+
+        holder.wearHat(11)
+        assertEquals(MiiEditorMode.Inactive, holder.state.value.mode)
+
+        holder.wearHat(5)
+        assertTrue(holder.state.value.isEditorPreparing)
+        assertTrue(holder.state.value.wearHatInProgress)
+        assertEquals("/private/old.png", holder.state.value.activePortraitFilePath)
+
+        val load = async {
+            holder.rendererCommands.first { it is MiiRendererCommand.LoadAppearance }
+                as MiiRendererCommand.LoadAppearance
+        }
+        runCurrent()
+        holder.dispatch(MiiEditorEvent.RendererReady("renderer-1"))
+        runCurrent()
+        assertEquals(5, load.await().appearance.extHatType)
+        assertFalse(holder.state.value.isEditorPresented)
+
+        val capture = async {
+            holder.rendererCommands.first { it is MiiRendererCommand.CaptureForSave }
+                as MiiRendererCommand.CaptureForSave
+        }
+        runCurrent()
+        holder.dispatch(MiiEditorEvent.RendererAppearanceLoaded)
+        runCurrent()
+        val request = capture.await()
+        assertEquals(90, request.appearance.height)
+        assertEquals(5, request.appearance.extHatType)
+        assertFalse(holder.state.value.isEditorPresented)
+
+        holder.dispatch(
+            MiiEditorEvent.RendererSaveReady(
+                requestId = request.requestId,
+                artifact = MiiRendererSaveArtifact(
+                    portraitFilePath = "/private/with-hat.png",
+                    rendererVersion = "renderer-1",
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(MiiEditorMode.Inactive, holder.state.value.mode)
+        assertFalse(holder.state.value.wearHatInProgress)
+        assertEquals("/private/with-hat.png", holder.state.value.activePortraitFilePath)
+        assertEquals(5, persistence.load(ACCOUNT)?.savedProfiles?.get(1)?.appearance?.extHatType)
+        assertEquals(5, published?.appearance?.extHatType)
+        assertEquals(1, published?.slot)
+    }
+
+    @Test
+    fun rejectedQuickWearRestoresPreviousPortraitAndHat() = runTest {
+        val persistence = InMemoryMiiEditorPersistence()
+        persistence.save(
+            ACCOUNT,
+            MiiPersistedEditorSession(
+                savedProfiles = mapOf(
+                    1 to MiiStoredProfile(
+                        appearance = MiiAppearance(height = 90),
+                        portraitFilePath = "/private/old.png",
+                        revision = 1,
+                        savedAtEpochMillis = 10,
+                    ),
+                ),
+            ),
+        )
+        val holder = MiiEditorStateHolder(
+            persistence = persistence,
+            scope = this,
+            saveCallback = MiiEditorSaveCallback {
+                MiiEditorSaveResult.Rejected(MII_HAT_NOT_OWNED_MESSAGE)
+            },
+        )
+        holder.activateAccount(ACCOUNT)
+        advanceUntilIdle()
+        holder.wearHat(5)
+        holder.dispatch(MiiEditorEvent.RendererReady("renderer-1"))
+        val capture = async {
+            holder.rendererCommands.first { it is MiiRendererCommand.CaptureForSave }
+                as MiiRendererCommand.CaptureForSave
+        }
+        runCurrent()
+        holder.dispatch(MiiEditorEvent.RendererAppearanceLoaded)
+        runCurrent()
+        val request = capture.await()
+        holder.dispatch(
+            MiiEditorEvent.RendererSaveReady(
+                requestId = request.requestId,
+                artifact = MiiRendererSaveArtifact(
+                    portraitFilePath = "/private/rejected.png",
+                    rendererVersion = "renderer-1",
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(MiiEditorMode.Inactive, holder.state.value.mode)
+        assertEquals(MII_HAT_NOT_OWNED_MESSAGE, holder.state.value.wearHatError)
+        assertEquals(-1, holder.state.value.draft.extHatType)
+        assertEquals("/private/old.png", holder.state.value.activePortraitFilePath)
+        assertEquals(-1, persistence.load(ACCOUNT)?.savedProfiles?.get(1)?.appearance?.extHatType)
     }
 
     @Test

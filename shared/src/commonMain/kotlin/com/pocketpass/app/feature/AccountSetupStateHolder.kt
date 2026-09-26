@@ -14,10 +14,13 @@ import com.pocketpass.app.model.BIO_MAX_LENGTH
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -36,6 +39,7 @@ data class AccountSetupUiState(
     val resolved: Boolean = false,
     val step: AccountSetupStep = AccountSetupStep.Name,
     val nameDraft: String = "",
+    val nameLocked: Boolean = false,
     val bioDraft: String = "",
     val ageDraft: String = "",
     val countryCode: String? = null,
@@ -80,41 +84,68 @@ class AccountSetupStateHolder(
     private val profileRepository: ProfileRepository,
     private val scope: CoroutineScope,
     private val now: () -> Instant = Clock.System::now,
+    private val pendingSetupUserId: Flow<String?> = flowOf(null),
+    private val clearPendingSetup: suspend () -> Unit = {},
 ) {
     private val mutableState = MutableStateFlow(AccountSetupUiState())
     val state: StateFlow<AccountSetupUiState> = mutableState.asStateFlow()
+
+    private var pendingSetupCompleted = false
 
     init {
         scope.launch {
             accountId.collectLatest { account ->
                 mutableState.value = AccountSetupUiState()
+                pendingSetupCompleted = false
                 if (account == null) return@collectLatest
                 launch { profileRepository.refreshProfile(account) }
                 val placeholder = placeholderUsername(account)
-                profileRepository.observeProfile(account).collectLatest { profile ->
-                    mutableState.update { current ->
-                        when {
-                            profile == null -> current.copy(resolved = false)
-                            current.submitting -> current
-                            profile.username.isEmpty() ->
-                                current.copy(resolved = true, required = false)
-                            profile.username == placeholder -> {
-                                if (current.required) {
-                                    current.copy(resolved = true)
-                                } else {
-                                    current.copy(
-                                        resolved = true,
-                                        required = true,
-                                        bioDraft = profile.bio.take(BIO_MAX_LENGTH),
-                                        ageDraft = profile.age?.toString().orEmpty(),
-                                        countryCode = profile.countryCode,
-                                    )
+                combine(
+                    profileRepository.observeProfile(account),
+                    pendingSetupUserId,
+                ) { profile, pending ->
+                    profile to (pending == account.value && !pendingSetupCompleted)
+                }
+                    .collectLatest { (profile, pendingForAccount) ->
+                        mutableState.update { current ->
+                            when {
+                                profile == null -> current.copy(resolved = false)
+                                current.submitting -> current
+                                profile.username.isEmpty() ->
+                                    current.copy(resolved = true, required = false)
+                                profile.username == placeholder -> {
+                                    if (current.required) {
+                                        current.copy(resolved = true)
+                                    } else {
+                                        current.copy(
+                                            resolved = true,
+                                            required = true,
+                                            bioDraft = profile.bio.take(BIO_MAX_LENGTH),
+                                            ageDraft = profile.age?.toString().orEmpty(),
+                                            countryCode = profile.countryCode,
+                                        )
+                                    }
                                 }
+                                pendingForAccount -> {
+                                    if (current.required) {
+                                        current.copy(resolved = true)
+                                    } else {
+                                        current.copy(
+                                            resolved = true,
+                                            required = true,
+                                            step = AccountSetupStep.Bio,
+                                            nameDraft = profile.username,
+                                            nameLocked = true,
+                                            bioDraft = profile.bio.take(BIO_MAX_LENGTH),
+                                            ageDraft = profile.age?.toString().orEmpty(),
+                                            countryCode = profile.countryCode,
+                                        )
+                                    }
+                                }
+                                else -> current.copy(resolved = true, required = false)
                             }
-                            else -> current.copy(resolved = true, required = false)
                         }
                     }
-                }
             }
         }
     }
@@ -142,7 +173,7 @@ class AccountSetupStateHolder(
         }
         val previous = when (current.step) {
             AccountSetupStep.Name -> return true
-            AccountSetupStep.Bio -> AccountSetupStep.Name
+            AccountSetupStep.Bio -> if (current.nameLocked) return true else AccountSetupStep.Name
             AccountSetupStep.Age -> AccountSetupStep.Bio
             AccountSetupStep.Country -> AccountSetupStep.Age
         }
@@ -152,7 +183,7 @@ class AccountSetupStateHolder(
 
     private fun setName(value: String) {
         mutableState.update { current ->
-            if (current.submitting) return@update current
+            if (current.submitting || current.nameLocked) return@update current
             val filtered = filterProfileNameInput(value)
             current.copy(nameDraft = filtered, error = null)
         }
@@ -250,12 +281,18 @@ class AccountSetupStateHolder(
                 ),
             )
             when (result) {
-                is RepositoryResult.Success -> mutableState.update {
-                    it.copy(submitting = false, required = false)
+                is RepositoryResult.Success -> {
+                    if (current.nameLocked) {
+                        pendingSetupCompleted = true
+                        clearPendingSetup()
+                    }
+                    mutableState.update {
+                        it.copy(submitting = false, required = false, nameLocked = false)
+                    }
                 }
 
                 is RepositoryResult.Failure -> mutableState.update {
-                    if (result.error.kind == RepositoryFailureKind.Conflict) {
+                    if (result.error.kind == RepositoryFailureKind.Conflict && !it.nameLocked) {
                         it.copy(
                             submitting = false,
                             step = AccountSetupStep.Name,

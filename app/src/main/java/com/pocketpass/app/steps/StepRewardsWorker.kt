@@ -1,11 +1,18 @@
 package com.pocketpass.app.steps
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import java.time.Duration
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 fun interface StepRewardsWorkRunner {
@@ -48,11 +55,45 @@ object StepRewardsScheduler {
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
+        scheduleNextMidnight(context)
+    }
+
+    fun scheduleNextMidnight(context: Context) {
+        val appContext = context.applicationContext
+        val alarmManager = appContext.getSystemService(AlarmManager::class.java) ?: return
+        val zone = ZoneId.systemDefault()
+        val triggerAtMillis = ZonedDateTime.now(zone)
+            .toLocalDate()
+            .plusDays(1)
+            .atStartOfDay(zone)
+            .toInstant()
+            .plus(MIDNIGHT_MARGIN)
+            .toEpochMilli()
+        val pending = midnightIntent(appContext)
+        val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        runCatching {
+            if (exactAllowed) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
+            }
+        }
     }
 
     fun cancel(context: Context) {
-        WorkManager.getInstance(context.applicationContext).cancelUniqueWork(UNIQUE_WORK_NAME)
+        val appContext = context.applicationContext
+        WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME)
+        appContext.getSystemService(AlarmManager::class.java)?.cancel(midnightIntent(appContext))
     }
 
+    private fun midnightIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        MIDNIGHT_REQUEST_CODE,
+        Intent(context, StepMidnightReceiver::class.java),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     private const val UNIQUE_WORK_NAME = "pocketpass-step-rewards"
+    private const val MIDNIGHT_REQUEST_CODE = 41
+    private val MIDNIGHT_MARGIN: Duration = Duration.ofMinutes(1)
 }

@@ -6,6 +6,8 @@ import com.pocketpass.app.domain.model.MessageId
 import com.pocketpass.app.domain.model.NotificationAction
 import com.pocketpass.app.domain.model.NotificationId
 import com.pocketpass.app.domain.model.UserId
+import com.pocketpass.app.domain.model.UserProfile
+import com.pocketpass.app.domain.model.AvatarReference
 import com.pocketpass.app.domain.state.LoadState
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
@@ -23,6 +25,9 @@ import com.pocketpass.app.model.MessageComposerAction
 import com.pocketpass.app.model.OAuthConsentUiState
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
+import com.pocketpass.app.model.widgetDesignAfterPick
+import com.pocketpass.app.model.widgetDesignAfterRename
+import com.pocketpass.app.widget.WidgetDesign
 import com.pocketpass.app.model.PocketPassReducer
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
@@ -37,7 +42,11 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collectLatest
+import com.pocketpass.app.domain.state.accountIdOrNull
 import kotlinx.coroutines.launch
+import com.pocketpass.app.model.PuzzleUiState
+import kotlin.time.Clock
 
 /**
  * The platform-neutral heart of the app: it owns PocketPassUiState, folds every feature
@@ -50,6 +59,7 @@ class PocketPassStore(
     private val routeStore: RouteStateStore = NoRouteStateStore,
     private val scope: CoroutineScope,
 ) {
+    private val boards = com.pocketpass.app.boards.BoardsStateHolder(container.repositories.boards, container.activeAccountId, scope)
     private val _state = MutableStateFlow(
         PocketPassUiState(
             routes = routeStore.restore()
@@ -61,6 +71,23 @@ class PocketPassStore(
         ),
     )
     val state: StateFlow<PocketPassUiState> = _state.asStateFlow()
+
+    init {
+        scope.launch { boards.state.collect { value -> _state.update { it.copy(boards = value) } } }
+        scope.launch {
+            state.map { it.sessionState.accountIdOrNull() to it.selectedConversationId }.distinctUntilChanged().collectLatest { (account, conversation) ->
+                _state.update { it.copy(messageAuthorColours = emptyMap()) }
+                if (account != null && conversation != null) {
+                    container.repositories.profiles.observeMessageColours(account, conversation).collect { colours ->
+                        _state.update { current ->
+                            if (current.sessionState.accountIdOrNull() == account && current.selectedConversationId == conversation)
+                                current.copy(messageAuthorColours = colours) else current
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     init {
         collectFeatureState()
@@ -99,10 +126,24 @@ class PocketPassStore(
     fun dispatch(event: PocketPassEvent) {
         soundEffectFor(event, _state.value.rootDestination)?.let(container.soundEffects::play)
         when (event) {
+            is PocketPassEvent.Boards -> {
+                if (!_state.value.boardsVisible && event.action != com.pocketpass.app.boards.BoardAction.OpenChats) return
+                boards.dispatch(event.action); return
+            }
+            is PocketPassEvent.PreviewMessage -> {
+                container.messages.previewConversation(event.conversationId?.let { runCatching { ConversationId(it) }.getOrNull() })
+                return
+            }
             PocketPassEvent.Back -> {
                 if (_state.value.shop.buyPromptItemId != null) {
                     _state.update { current ->
                         PocketPassReducer.reduce(current, PocketPassEvent.CloseBuyShopItem)
+                    }
+                    return
+                }
+                if (_state.value.shop.visible && _state.value.shop.selectedCategoryId != null) {
+                    _state.update { current ->
+                        PocketPassReducer.reduce(current, PocketPassEvent.CloseShopCategory)
                     }
                     return
                 }
@@ -121,6 +162,12 @@ class PocketPassStore(
                 val setupState = container.accountSetup.state.value
                 if (setupState.required && setupState.resolved) {
                     container.accountSetup.backStep()
+                    return
+                }
+                if (
+                    _state.value.routes.lastOrNull() == PocketPassRoute.AccountSecurity &&
+                    container.accountSecurity.backStep()
+                ) {
                     return
                 }
                 val miiState = container.miiEditor.state.value
@@ -162,6 +209,7 @@ class PocketPassStore(
                 if (container.messages.closeMessageActions()) return
                 if (container.messages.closeActionRail()) return
                 if (container.messages.cancelEdit()) return
+                if (_state.value.boardsVisible && _state.value.routes.lastOrNull() == PocketPassRoute.Root(PocketPassDestination.Messages) && boards.back()) return
                 if (_state.value.routes.lastOrNull() is PocketPassRoute.MessageDetail) {
                     container.messages.closeConversation()
                 }
@@ -182,6 +230,9 @@ class PocketPassStore(
 
             PocketPassEvent.OpenShop -> container.shop.open()
             PocketPassEvent.CloseShop -> container.shop.close()
+            is PocketPassEvent.OpenShopCategory,
+            PocketPassEvent.CloseShopCategory,
+            -> Unit
             PocketPassEvent.ConfirmBuyShopItem ->
                 _state.value.shop.buyPromptItemId?.let(container.shop::buy)
 
@@ -192,7 +243,7 @@ class PocketPassStore(
                 when (event.game) {
                     GameTarget.WorldTour -> container.worldTour.refresh()
                     GameTarget.Bingo -> container.bingo.refresh()
-                    GameTarget.PuzzleSwap -> Unit
+                    GameTarget.PuzzleSwap -> container.puzzle.open()
                 }
             }
             is PocketPassEvent.SelectBingoSquare ->
@@ -200,6 +251,19 @@ class PocketPassStore(
             PocketPassEvent.CloseBingoSquare -> container.games.closeBingoGoal()
             PocketPassEvent.OpenWorldTourRegions -> container.games.openWorldTourRegions()
             PocketPassEvent.CloseWorldTourRegions -> container.games.closeWorldTourRegions()
+            PocketPassEvent.PreviousPuzzle -> container.puzzle.browse(-1)
+            PocketPassEvent.NextPuzzle -> container.puzzle.browse(1)
+            PocketPassEvent.OpenBuyPuzzlePiece -> {
+                if (_state.value.puzzle.canBuy) container.games.openPuzzleBuyPrompt()
+            }
+            PocketPassEvent.CloseBuyPuzzlePiece -> container.games.closePuzzleBuyPrompt()
+            PocketPassEvent.ConfirmBuyPuzzlePiece -> {
+                container.games.closePuzzleBuyPrompt()
+                container.puzzle.buyPiece()
+            }
+            PocketPassEvent.DismissPuzzleNotice -> container.puzzle.dismissPurchaseError()
+            PocketPassEvent.OpenPuzzleInfo -> container.games.openPuzzleInfo()
+            PocketPassEvent.ClosePuzzleInfo -> container.games.closePuzzleInfo()
 
             PocketPassEvent.OpenLeaderboard -> container.leaderboard.open()
             PocketPassEvent.CloseLeaderboard -> container.leaderboard.close()
@@ -207,6 +271,7 @@ class PocketPassStore(
                 container.leaderboard.openSettings()
             PocketPassEvent.CloseLeaderboardSettings ->
                 container.leaderboard.closeSettings()
+            is PocketPassEvent.SetGlobalLeaderboardLimit -> container.leaderboard.setGlobalLimit(event.limit)
             is PocketPassEvent.SetLeaderboardScope ->
                 container.leaderboard.setScope(event.scope)
 
@@ -255,6 +320,7 @@ class PocketPassStore(
                     ConversationId(event.conversationId)
                 }.getOrNull() ?: return
                 if (_state.value.conversations.none { it.id == conversationId }) return
+                boards.dispatch(com.pocketpass.app.boards.BoardAction.OpenChats)
                 container.messages.openConversation(conversationId)
             }
 
@@ -273,6 +339,28 @@ class PocketPassStore(
                                 it.profile.userId.value == event.userId
                             }
                             ?.profile
+
+                    ProfileViewerSource.Board -> {
+                        val current = _state.value
+                        current.profile?.takeIf { it.userId.value == event.userId }
+                            ?: current.friends.firstOrNull { it.profile.userId.value == event.userId }?.profile
+                            ?: run {
+                                val author = (current.boards.posts + listOfNotNull(current.boards.thread))
+                                    .firstOrNull { it.authorId == event.userId }
+                                val member = current.boards.members.firstOrNull { it.userId == event.userId }
+                                val name = author?.authorName?.takeIf { it.isNotBlank() }
+                                    ?: member?.displayName?.takeIf { it.isNotBlank() }
+                                    ?: return
+                                val avatarUrl = author?.authorAvatar ?: member?.avatarPath
+                                UserProfile(
+                                    userId = UserId(event.userId),
+                                    displayName = name,
+                                    avatar = avatarUrl?.takeIf { it.startsWith("https://") }
+                                        ?.let(AvatarReference::Remote),
+                                    updatedAt = Clock.System.now(),
+                                )
+                            }
+                    }
                 } ?: return
                 container.homeProfile.closeMoodPicker()
                 container.friends.closeOverlay()
@@ -296,6 +384,7 @@ class PocketPassStore(
                 when (val action = notification.action) {
                     is NotificationAction.OpenConversation -> {
                         container.friends.closeOverlay()
+                        boards.dispatch(com.pocketpass.app.boards.BoardAction.OpenChats)
                         container.messages.openConversation(action.conversationId)
                         _state.update {
                             it.copy(
@@ -335,6 +424,49 @@ class PocketPassStore(
                 }
             }
 
+            PocketPassEvent.CreateWidgetDesign -> {
+                val design = container.widgetDesigns.newDesign()
+                scope.launch {
+                    container.widgetDesigns.save(design)
+                    dispatch(PocketPassEvent.OpenWidgetEditor(design.id))
+                }
+            }
+
+            is PocketPassEvent.UpdateWidgetDesign -> persistWidgetDesign(event.design)
+
+            is PocketPassEvent.PickWidgetBlock ->
+                _state.value.widgetDesignAfterPick(event.block)?.let(::persistWidgetDesign)
+
+            PocketPassEvent.SaveWidgetName ->
+                _state.value.widgetDesignAfterRename()?.let(::persistWidgetDesign)
+
+            is PocketPassEvent.DeleteWidgetDesign -> scope.launch {
+                container.widgetDesigns.delete(event.designId)
+                container.widgetPlatform.refreshAll()
+            }
+
+            is PocketPassEvent.PinWidgetDesign -> {
+                val design = _state.value.widgetDesigns.firstOrNull { it.id == event.designId }
+                if (design != null) {
+                    scope.launch {
+                        val pinned = container.widgetPlatform.pin(design)
+                        val message = if (pinned) {
+                            "Check your home screen to place ${design.name}"
+                        } else {
+                            "Your launcher can't pin widgets. Add a PocketPass widget from its widget list instead."
+                        }
+                        _state.update { it.copy(widgetMaker = it.widgetMaker.copy(message = message)) }
+                    }
+                }
+            }
+
+            is PocketPassEvent.AssignWidgetDesign -> {
+                val appWidgetId = _state.value.widgetMaker.assigningAppWidgetId
+                if (appWidgetId != null) {
+                    scope.launch { container.widgetPlatform.assign(appWidgetId, event.designId) }
+                }
+            }
+
             else -> Unit
         }
         _state.update { current -> PocketPassReducer.reduce(current, event) }
@@ -343,6 +475,9 @@ class PocketPassStore(
             is PocketPassEvent.Auth -> container.auth.dispatch(event.event)
             is PocketPassEvent.AccountSetup ->
                 container.accountSetup.dispatch(event.event)
+            is PocketPassEvent.AccountSecurity ->
+                container.accountSecurity.dispatch(event.event)
+            PocketPassEvent.OpenAccountSecurity -> container.accountSecurity.reset()
             is PocketPassEvent.Mii -> container.miiEditor.dispatch(event.event)
             PocketPassEvent.CloseMiiSlots ->
                 container.miiEditor.dispatch(MiiEditorEvent.ClosePretendoImport)
@@ -361,10 +496,7 @@ class PocketPassStore(
                     (item.id in shop.ownedItemIds || item.id in shop.unlockedItemIds) &&
                     container.miiEditor.state.value.mode == MiiEditorMode.Inactive
                 ) {
-                    container.miiEditor.beginEdit(
-                        slot = container.miiEditor.state.value.activeSlot,
-                        wearHat = hat,
-                    )
+                    container.miiEditor.wearHat(hat)
                 }
             }
             is PocketPassEvent.SetActiveMiiSlot ->
@@ -485,6 +617,78 @@ class PocketPassStore(
             is PocketPassEvent.SetThemeMode -> scope.launch {
                 container.settings.setThemeMode(event.mode)
             }
+            is PocketPassEvent.SetBoardsVisible -> scope.launch {
+                container.settings.setBoardsVisible(event.visible)
+                boards.dispatch(
+                    if (event.visible) com.pocketpass.app.boards.BoardAction.Directory()
+                    else com.pocketpass.app.boards.BoardAction.OpenChats,
+                )
+            }
+            is PocketPassEvent.SetMessagePrivacy -> {
+                val account = _state.value.sessionState.accountIdOrNull() ?: return
+                val repository = container.repositories.profiles as? com.pocketpass.app.domain.repository.MutableProfileRepository ?: return
+                if (_state.value.messagePrivacySaving) return
+                _state.update { it.copy(messagePrivacySaving = true, messagePrivacyError = null) }
+                scope.launch {
+                    try {
+                        val result = repository.setMessagePrivacy(com.pocketpass.app.domain.model.SetMessagePrivacyCommand(account, event.blocked))
+                        _state.update { current -> if (current.sessionState.accountIdOrNull() == account) current.copy(
+                            profile = if (result is RepositoryResult.Success) current.profile?.copy(blockMessages = result.value.blockMessages) else current.profile,
+                            messagePrivacySaving = false,
+                            messagePrivacyError = if (result is RepositoryResult.Failure) "Couldn't save this setting. Check your connection and try again." else null,
+                        ) else current }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) {
+                        _state.update { current -> if (current.sessionState.accountIdOrNull() == account) current.copy(
+                            messagePrivacySaving = false, messagePrivacyError = "Couldn't save this setting. Check your connection and try again.",
+                        ) else current }
+                    }
+                }
+            }
+
+            is PocketPassEvent.SetInvitesPrivacy -> {
+                val account = _state.value.sessionState.accountIdOrNull() ?: return
+                val repository = container.repositories.profiles as? com.pocketpass.app.domain.repository.MutableProfileRepository ?: return
+                if (_state.value.invitesPrivacySaving) return
+                _state.update { it.copy(invitesPrivacySaving = true, invitesPrivacyError = null) }
+                scope.launch {
+                    try {
+                        val result = repository.setInvitesPrivacy(com.pocketpass.app.domain.model.SetInvitesPrivacyCommand(account, event.blocked))
+                        _state.update { current -> if (current.sessionState.accountIdOrNull() == account) current.copy(
+                            profile = if (result is RepositoryResult.Success) current.profile?.copy(blockInvites = result.value.blockInvites) else current.profile,
+                            invitesPrivacySaving = false,
+                            invitesPrivacyError = if (result is RepositoryResult.Failure) "Couldn't save this setting. Check your connection and try again." else null,
+                        ) else current }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) {
+                        _state.update { current -> if (current.sessionState.accountIdOrNull() == account) current.copy(
+                            invitesPrivacySaving = false, invitesPrivacyError = "Couldn't save this setting. Check your connection and try again.",
+                        ) else current }
+                    }
+                }
+            }
+
+            is PocketPassEvent.SaveChatColour -> {
+                val account = _state.value.sessionState.accountIdOrNull() ?: return
+                val repository = container.repositories.profiles as? com.pocketpass.app.domain.repository.MutableProfileRepository ?: return
+                if (_state.value.chatColourSaving) return
+                _state.update { it.copy(chatColourSaving = true, chatColourSaveError = null) }
+                scope.launch {
+                    try {
+                        val result = repository.setChatBubbleColour(com.pocketpass.app.domain.model.SetChatBubbleColourCommand(
+                            account, event.colour, kotlin.time.Clock.System.now(),
+                        ))
+                        _state.update { current -> if (current.sessionState.accountIdOrNull() == account) current.copy(
+                            chatColourSaving = false, chatColourSaveError = (result as? RepositoryResult.Failure)?.error?.message,
+                        ) else current }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) {
+                        _state.update { current -> if (current.sessionState.accountIdOrNull() == account) current.copy(
+                            chatColourSaving = false, chatColourSaveError = "Couldn't save your colour. Try again.",
+                        ) else current }
+                    }
+                }
+            }
 
             is PocketPassEvent.SetRecentInteractionsSort -> scope.launch {
                 container.settings.setRecentInteractionsSort(event.sort)
@@ -512,6 +716,9 @@ class PocketPassStore(
 
             is PocketPassEvent.SetUpdateAlertsEnabled -> scope.launch {
                 container.setUpdateAlertsEnabled(event.enabled)
+            }
+            is PocketPassEvent.SetMessageAlertsEnabled -> scope.launch {
+                container.setMessageAlertsEnabled(event.enabled)
             }
 
             is PocketPassEvent.SetStepRewardsEnabled ->
@@ -572,6 +779,9 @@ class PocketPassStore(
             is PocketPassEvent.RemoveGroupMember -> runCatching {
                 container.messages.removeGroupMember(UserId(event.userId))
             }
+            is PocketPassEvent.AddGroupMemberFriend -> runCatching {
+                container.messages.addGroupMemberFriend(UserId(event.userId))
+            }
             PocketPassEvent.LeaveGroup -> container.messages.leaveGroup()
             is PocketPassEvent.RenameGroup -> container.messages.renameGroup(event.title)
             PocketPassEvent.DismissConversationNotice ->
@@ -604,6 +814,14 @@ class PocketPassStore(
 
     fun onStepRewardsPermissionResult() {
         container.stepRewards.onPermissionResult()
+    }
+
+    private fun persistWidgetDesign(design: WidgetDesign) {
+        val stamped = design.copy(updatedAtEpochMillis = container.widgetDesigns.now())
+        scope.launch {
+            container.widgetDesigns.save(stamped)
+            container.widgetPlatform.refreshAll()
+        }
     }
 
     private fun collectFeatureState() {
@@ -693,6 +911,8 @@ class PocketPassStore(
                         selectedConversationId = feature.selectedConversationId,
                         selectedConversation = feature.selectedConversation,
                         selectedMessages = feature.messages.dataOr(emptyList()),
+                        previewConversationId = feature.previewConversationId,
+                        previewMessages = feature.previewMessages,
                         messageDraft = feature.currentDraft,
                         messageActionRailExpanded = feature.actionRailExpanded,
                         messageSendInProgress = feature.isSending,
@@ -703,6 +923,7 @@ class PocketPassStore(
                         groupInfoOpen = feature.groupInfoOpen,
                         groupOperationInProgress = feature.groupOperationInProgress,
                         groupOperationError = feature.groupOperationError,
+                        groupMemberFriendStates = feature.groupMemberFriendStates,
                         conversationNotice = feature.conversationNotice,
                         selectedMembersById = feature.selectedMembersById,
                         typingUserIds = feature.typingUserIds,
@@ -733,6 +954,7 @@ class PocketPassStore(
                         shop = current.shop.copy(
                             visible = feature.visible,
                             categories = feature.categories,
+                            selectedCategoryId = current.shop.selectedCategoryId.takeIf { feature.visible },
                             tokenBalance = feature.tokenBalance,
                             refreshError = feature.refreshError,
                             ownedItemIds = feature.ownedItemIds,
@@ -754,6 +976,8 @@ class PocketPassStore(
                             activeGame = feature.activeGame,
                             bingoGoalIndex = feature.bingoGoalIndex,
                             worldTourRegionsVisible = feature.worldTourRegionsVisible,
+                            puzzleBuyPromptVisible = feature.puzzleBuyPromptVisible,
+                            puzzleInfoVisible = feature.puzzleInfoVisible,
                         ),
                     )
                 }
@@ -764,6 +988,7 @@ class PocketPassStore(
                 _state.update { current ->
                     current.copy(
                         leaderboard = LeaderboardUiState(
+                            globalLimit = feature.globalLimit,
                             visible = feature.visible,
                             settingsVisible = feature.settingsVisible,
                             scope = feature.scope,
@@ -836,6 +1061,22 @@ class PocketPassStore(
                 }
             }
         }
+        scope.launch {
+            container.puzzle.state.collect { feature ->
+                _state.update { current ->
+                    current.copy(
+                        puzzle = PuzzleUiState(
+                            collection = feature.collection,
+                            viewedIndex = feature.viewedIndex,
+                            tokenBalance = feature.tokenBalance,
+                            buying = feature.buying,
+                            refreshError = feature.refreshError,
+                            purchaseError = feature.purchaseError,
+                        ),
+                    )
+                }
+            }
+        }
         _state.update {
             it.copy(encounterLedSupported = container.encounterLedSupported)
         }
@@ -844,6 +1085,7 @@ class PocketPassStore(
                 _state.update {
                     it.copy(
                         nearbyEnabled = settings.nearbyEnabled,
+                        boardsVisible = settings.boardsVisible,
                         soundLevel = settings.soundLevel,
                         sfxLevel = settings.sfxLevel,
                         themeMode = settings.themeMode,
@@ -854,6 +1096,8 @@ class PocketPassStore(
                         encounterAlertsEnabled = settings.encounterAlertsEnabled,
                         nearbyRepairAlertsEnabled = settings.nearbyRepairAlertsEnabled,
                         updateAlertsEnabled = settings.updateAlertsEnabled,
+                        messageAlertsEnabled = settings.messageAlertsEnabled,
+                        messagePushSupported = container.messagePushSupported,
                         stepRewardsEnabled = settings.stepRewardsEnabled,
                     )
                 }
@@ -881,7 +1125,11 @@ class PocketPassStore(
         }
         scope.launch {
             container.repositories.session.sessionState.collect { session ->
-                _state.update { it.copy(sessionState = session) }
+                _state.update { current ->
+                    if (current.sessionState.accountIdOrNull() != session.accountIdOrNull()) current.copy(
+                        sessionState = session, messagePrivacySaving = false, messagePrivacyError = null, invitesPrivacySaving = false, invitesPrivacyError = null, chatColourSaving = false, chatColourSaveError = null, messageAuthorColours = emptyMap(),
+                    ) else current.copy(sessionState = session)
+                }
             }
         }
         scope.launch {
@@ -895,6 +1143,11 @@ class PocketPassStore(
             }
         }
         scope.launch {
+            container.accountSecurity.state.collect { security ->
+                _state.update { it.copy(accountSecurity = security) }
+            }
+        }
+        scope.launch {
             container.repositories.sync.syncState.collect { sync ->
                 _state.update { it.copy(syncState = sync) }
             }
@@ -902,6 +1155,22 @@ class PocketPassStore(
         scope.launch {
             statusFeed.status().collect { status ->
                 dispatch(PocketPassEvent.StatusChanged(status))
+            }
+        }
+        _state.update {
+            it.copy(widgetMaker = it.widgetMaker.copy(pinSupported = container.widgetPlatform.pinSupported))
+        }
+        scope.launch {
+            container.widgetDesigns.state.collect { designs ->
+                _state.update { it.copy(widgetDesigns = designs) }
+            }
+        }
+        scope.launch {
+            container.requestedWidgetAssignment.collect { appWidgetId ->
+                if (appWidgetId == null) return@collect
+                _state.first { it.sessionState.showsPocketPassApp() && it.accountSetup.resolved }
+                container.consumeRequestedWidgetAssignment()
+                dispatch(PocketPassEvent.BeginWidgetAssign(appWidgetId))
             }
         }
         scope.launch {
@@ -917,7 +1186,15 @@ class PocketPassStore(
             container.requestedConversation.collect { conversationId ->
                 if (conversationId == null) return@collect
                 container.consumeRequestedConversation()
+                val account = container.activeAccountId.value ?: return@collect
+                _state.first {
+                    container.activeAccountId.value != account ||
+                        (it.sessionState.showsPocketPassApp() && it.accountSetup.resolved)
+                }
+                if (container.activeAccountId.value != account) return@collect
                 container.messages.awaitConversation(conversationId)
+                if (container.activeAccountId.value != account) return@collect
+                boards.dispatch(com.pocketpass.app.boards.BoardAction.OpenChats)
                 _state.update {
                     it.copy(
                         routes = listOf(
@@ -926,6 +1203,19 @@ class PocketPassStore(
                         ),
                     )
                 }
+            }
+
+        }
+        scope.launch {
+            container.requestedBoard.collect { destination ->
+                if (destination == null) return@collect
+                container.consumeRequestedBoard()
+                val account = container.activeAccountId.value ?: return@collect
+                _state.first { container.activeAccountId.value != account || (it.sessionState.showsPocketPassApp() && it.accountSetup.resolved) }
+                if (container.activeAccountId.value != account) return@collect
+                if (!container.settings.settings.first().boardsVisible) return@collect
+                _state.update { it.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Messages))) }
+                boards.openDestination(destination.boardId, destination.threadId)
             }
         }
     }

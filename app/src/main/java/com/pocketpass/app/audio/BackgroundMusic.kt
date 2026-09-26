@@ -10,6 +10,7 @@ private val BackgroundMusicTrack.resource: Int
     get() = when (this) {
         BackgroundMusicTrack.Home -> R.raw.bgm_main
         BackgroundMusicTrack.MiiMaker -> R.raw.bgm_mii
+        BackgroundMusicTrack.Boards -> R.raw.bgm_boards
     }
 
 class BackgroundMusicPlayer(private val context: Context) {

@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -60,6 +60,7 @@ import com.pocketpass.app.domain.model.MAX_GROUP_MEMBERS
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.model.GroupComposerState
 import com.pocketpass.app.model.PocketPassEvent
+import com.pocketpass.app.model.GroupMemberFriendState
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
@@ -95,6 +96,7 @@ fun PhoneNewGroupPage(
 ) {
     val insets = LocalPhoneInsets.current
     val composer = state.groupComposer ?: GroupComposerState()
+    com.pocketpass.app.ui.screens.MessagePrivacyBlockedDialog(composer.error)
     val people = remember(state.friends, state.friendsSort) { state.friends.toPhonePeople(state.friendsSort) }
     val selectedIds = remember(composer.selectedMemberIds) { composer.selectedMemberIds.map { it.value }.toSet() }
     val disabledIds = if (composer.remainingSlots == 0) {
@@ -114,31 +116,30 @@ fun PhoneNewGroupPage(
                 .widthIn(max = metrics.dp(PHONE_DECK_WIDTH))
                 .fillMaxHeight(),
         ) {
-            PhonePeopleGrid(
-                metrics = metrics,
-                people = people,
-                colors = homeCardColors(),
-                topInset = insets.top,
-                header = { PhoneNewGroupHeader(metrics, composer, dispatch) },
-                empty = {
-                    PhoneEmptyRow(
-                        metrics = metrics,
-                        icon = Assets.NavFriends,
-                        title = "No friends yet",
-                        subtitle = "Add friends before starting a group",
-                        tag = "group_members_empty",
-                    )
-                },
-                onPerson = { dispatch(PocketPassEvent.ToggleGroupMember(it)) },
-                selectedIds = selectedIds,
-                disabledIds = disabledIds,
-                tagPrefix = "group_member",
-                footer = {
-                    item(span = { GridItemSpan(maxLineSpan) }, key = "create_clearance") {
-                        Spacer(Modifier.height(metrics.dp(bottomClear + CREATE_BUTTON_HEIGHT)))
-                    }
-                },
-            )
+            Box(Modifier.fillMaxSize()
+                .padding(bottom = metrics.dp(bottomClear + CREATE_BUTTON_HEIGHT + 24f))
+                .clipToBounds().testTag("group_members_viewport")) {
+                PhonePeopleGrid(
+                    metrics = metrics,
+                    people = people,
+                    colors = homeCardColors(),
+                    topInset = insets.top,
+                    header = { PhoneNewGroupHeader(metrics, composer, dispatch) },
+                    empty = {
+                        PhoneEmptyRow(
+                            metrics = metrics,
+                            icon = Assets.NavFriends,
+                            title = "No friends yet",
+                            subtitle = "Add friends before starting a group",
+                            tag = "group_members_empty",
+                        )
+                    },
+                    onPerson = { dispatch(PocketPassEvent.ToggleGroupMember(it)) },
+                    selectedIds = selectedIds,
+                    disabledIds = disabledIds,
+                    tagPrefix = "group_member",
+                )
+            }
             PhoneButton(
                 metrics = metrics,
                 label = if (composer.submitting) "Creating…" else "Create Group",
@@ -223,6 +224,7 @@ internal fun PhoneGroupInfoSheet(
     val selfId = state.profile?.userId
     val busy = state.groupOperationInProgress
     val error = state.groupOperationError
+    if (visible) com.pocketpass.app.ui.screens.MessagePrivacyBlockedDialog(error)
     val isOwner = state.isGroupOwner
     val candidates = remember(state.friends, conversation.members) {
         state.friends.filter { conversation.member(it.profile.userId) == null }.toPickerMembers()
@@ -414,6 +416,8 @@ internal fun PhoneGroupInfoSheet(
                             removable = isOwner && !isSelf,
                             busy = busy,
                             onRemove = { pendingRemove = member },
+                            friendState = state.groupMemberFriendStates[member.userId] ?: GroupMemberFriendState.Unavailable,
+                            onAddFriend = { dispatch(PocketPassEvent.AddGroupMemberFriend(member.userId.value)) },
                         )
                     }
                 }
@@ -504,6 +508,8 @@ private fun PhoneGroupMemberRow(
     removable: Boolean,
     busy: Boolean,
     onRemove: () -> Unit,
+    friendState: GroupMemberFriendState,
+    onAddFriend: () -> Unit,
 ) {
     val palette = pocketPalette
     val name = member.displayName.trim().ifEmpty { "PocketPass User" }
@@ -551,17 +557,30 @@ private fun PhoneGroupMemberRow(
                 )
             }
         }
-        if (removable) {
-            PhoneTextAction(
-                metrics = metrics,
-                label = "Remove",
-                tag = "group_remove_${member.userId.value}",
-                enabled = !busy,
-                fontSize = 34f,
-                color = palette.ink(GroupError),
-                modifier = Modifier.padding(start = metrics.dp(4f)),
-                onClick = onRemove,
-            )
+        Column(horizontalAlignment = Alignment.End) {
+            if (!isSelf) {
+                PhoneTextAction(
+                    metrics = metrics,
+                    label = friendState.label,
+                    tag = "group_add_friend_${member.userId.value}",
+                    enabled = !busy && friendState.canSend,
+                    fontSize = 34f,
+                    color = palette.teal,
+                    onClick = onAddFriend,
+                )
+            }
+            if (removable) {
+                PhoneTextAction(
+                    metrics = metrics,
+                    label = "Remove",
+                    tag = "group_remove_${member.userId.value}",
+                    enabled = !busy,
+                    fontSize = 34f,
+                    color = palette.ink(GroupError),
+                    modifier = Modifier.padding(start = metrics.dp(4f)),
+                    onClick = onRemove,
+                )
+            }
         }
     }
 }

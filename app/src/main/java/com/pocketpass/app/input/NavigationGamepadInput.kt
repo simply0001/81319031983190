@@ -5,6 +5,10 @@ import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.blocksShoulderTabs
 import com.pocketpass.app.model.PocketPassUiState
+import com.pocketpass.app.model.PocketPassRoute
+import com.pocketpass.app.model.hasDismissableLayer
+import com.pocketpass.app.boards.BoardAction
+import com.pocketpass.app.boards.BoardsScreen
 import com.pocketpass.app.ui.controller.ControllerFocus
 import com.pocketpass.app.ui.controller.FocusDirection
 
@@ -100,7 +104,33 @@ fun handleNavigationGamepadKeyEvent(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
     focus: ControllerFocus,
-): Boolean = when (
+): Boolean {
+    if(state.rootDestination == PocketPassDestination.Messages && state.boardsVisible &&
+        event.keyCode in listOf(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1)) {
+        // Ignore the Boards shell and its current page when checking for real
+        // overlays. A keyboard, message menu or profile still owns its input.
+        val overlayOpen = state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home))).hasDismissableLayer()
+        if(overlayOpen || focus.keyboardSubmit != null) return false
+        if(event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            val route = state.routes.lastOrNull()
+            val current = when {
+                route is PocketPassRoute.MessageDetail || route is PocketPassRoute.NewGroup -> 1
+                state.boards.screen == BoardsScreen.Chats -> 1
+                state.boards.screen == BoardsScreen.Inbox -> 2
+                else -> 0
+            }
+            val next = Math.floorMod(current + if(event.keyCode == KeyEvent.KEYCODE_BUTTON_R1) 1 else -1, 3)
+            if(route !is PocketPassRoute.Root) dispatch(PocketPassEvent.SelectDestination(PocketPassDestination.Messages))
+            dispatch(PocketPassEvent.Boards(when(next) {
+                1 -> BoardAction.OpenChats
+                2 -> BoardAction.Inbox
+                else -> BoardAction.Directory()
+            }))
+            focus.focus(when(next) { 1 -> "boards_chats"; 2 -> "boards_inbox"; else -> "boards_directory" })
+        }
+        return true
+    }
+    return when (
     classifyNavigationGamepadKey(
         keyCode = event.keyCode,
         action = event.action,
@@ -145,4 +175,5 @@ fun handleNavigationGamepadKeyEvent(
         focus.swapDisplay()
         true
     }
+}
 }

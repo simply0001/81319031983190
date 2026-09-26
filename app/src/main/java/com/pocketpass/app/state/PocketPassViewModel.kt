@@ -48,10 +48,12 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
         override val miiEditorEnabled get() = container.miiEditorEnabled
         override val pretendoImportEnabled get() = container.pretendoImportEnabled
         override val encounterLedSupported get() = container.encounterLedSupported
+        override val messagePushSupported get() = container.messagePush.supported
         override val activeAccountId get() = container.activeAccountId
         override val repositories get() = container.repositories
         override val auth get() = container.auth
         override val accountSetup get() = container.accountSetup
+        override val accountSecurity get() = container.accountSecurity
         override val homeProfile get() = container.homeProfile
         override val profileViewer get() = container.profileViewer
         override val friends get() = container.friends
@@ -65,6 +67,7 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
         override val achievements get() = container.achievements
         override val worldTour get() = container.worldTour
         override val bingo get() = container.bingo
+        override val puzzle get() = container.puzzle
         override val settings get() = container.settings
         override val nearby = object : NearbyActions {
             override val state get() = container.nearby.state
@@ -82,11 +85,17 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
             override fun download() = container.appUpdate.download()
             override fun install() = container.appUpdate.install()
         }
+        override val widgetDesigns get() = container.widgetDesigns
+        override val widgetPlatform get() = container.widgetPlatform
         override val requestedAppUpdate get() = container.requestedAppUpdate
         override val requestedConversation get() = container.requestedConversation
+        override val requestedBoard get() = container.requestedBoard
+        override fun consumeRequestedBoard() = container.consumeRequestedBoard()
+        override val requestedWidgetAssignment get() = container.requestedWidgetAssignment
 
         override fun consumeRequestedAppUpdate() = container.consumeRequestedAppUpdate()
         override fun consumeRequestedConversation() = container.consumeRequestedConversation()
+        override fun consumeRequestedWidgetAssignment() = container.consumeRequestedWidgetAssignment()
 
         override suspend fun deleteMiiSlot(slot: Int) = container.deleteMiiSlot(slot)
         override suspend fun deleteAccount() = container.deleteAccount()
@@ -96,6 +105,8 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
         override suspend fun resetSettings() = container.resetSettings()
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
             container.setUpdateAlertsEnabled(enabled)
+        override suspend fun setMessageAlertsEnabled(enabled: Boolean) =
+            container.setMessageAlertsEnabled(enabled)
     }
 }
 
