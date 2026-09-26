@@ -1,5 +1,8 @@
 # Controller confirmation audio — 21 September 2026
 
+Public since 0.2.0-beta (26) on 23 September 2026. Later confirmation-sound work
+shipped in 0.2.1-beta (27).
+
 Confirm feedback is explicitly enabled on selected silent Boards controls: About,
 settings disclosures, Rules, Settings, Write a Note, feed sort/period filters,
 note options, pinning, spoiler reveal, Yeah, replies and note editing/reporting

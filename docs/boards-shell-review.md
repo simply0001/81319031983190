@@ -1,7 +1,8 @@
 # Boards shell and soundtrack — 20 September 2026
 
-Local review only. Publication and deployment still require fresh user approval.
-The release version remains 0.1.10-alpha (24).
+Review notes from 20 and 21 September 2026, written while the app version was
+0.1.10-alpha (24). This work reached the public app in 0.2.0-beta (26) on
+23 September 2026.
 
 ## Interface
 

@@ -134,8 +134,9 @@ Two things worth knowing, both found while building this:
 
 ## CI
 
-`.github/workflows/ios-spike.yml`. The Linux job (1× minutes) runs on every push to
-`ios-spike/**` and compiles the desktop target, type-checks commonMain against all
-targets, and uploads the renders. The two macOS jobs (10× minutes) are
-`workflow_dispatch` only, cache `~/.konan`, and build the framework first — no secrets and
-no signing — before attempting the simulator app.
+`.github/workflows/ios-spike.yml`, on the public mirror only. Every push to
+`ios-spike/**`, and a manual dispatch, runs the Linux job (1× minutes) and the three macOS
+jobs (10× minutes). The Linux job compiles the desktop target, type-checks commonMain
+against all targets, and uploads the renders. The macOS jobs (`framework`, `app`, `ipa`)
+cache `~/.konan` and build the framework first, with no secrets and no signing, before the
+simulator app and the IPA.

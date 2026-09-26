@@ -37,7 +37,7 @@ If the dashboard is unavailable, an operator with database access can update `pr
 
 ## Media, drafts and retention
 
-Drawing documents use version 1, an 800×600 canvas, at most 1,000 strokes and 20,000 total points, and a bounded serialized size. Posts cannot import media. Static previews come from validated strokes. Branding imports go through `board-media`: authorize before decoding, bound input and decoded image size, flatten animation, remove metadata, resize, and encode WebP. Media reads check current access.
+Drawing documents use version 1, an 800×600 canvas, at most 1,000 strokes and 20,000 total points, and a bounded serialized size. Posts cannot import media. Static previews come from validated strokes. Since 22 September, pixel-pen strokes render on the app's 320×240 grid and bucket fills are supported, on the same 800×600 paper (`20260922000200`, `20260922000300`). Branding imports go through `board-media`: authorize before decoding, bound input and decoded image size, flatten animation, remove metadata, resize, and encode WebP. Media reads check current access.
 
 Cloud draft revisions are immutable and owner-private. Conflicts remain separate; expired offline bases recover as independent copies. Publishing is explicit and keeps the same operation ID/payload across uncertain retries. Sync and publishing are serialized to avoid resurrecting published drafts.
 
@@ -59,7 +59,7 @@ Items can be free, token-priced or achievement-linked. Active supporters can use
 
 ## Deployment and notifications
 
-Deploy migrations in checksum order, admin files, `board-media`, the updated `message-push`, then validate and recreate Caddy for `/boards/media`. Keep Boards off until the Android alpha is published. Applied migrations are immutable; fixes use new migrations.
+Deploy migrations in checksum order, admin files, `board-media`, the updated `message-push`, then validate and recreate Caddy for `/boards/media`. Boards has been enabled in production since 19 September; use the emergency switch above to turn it off. Applied migrations are immutable; fixes use new migrations.
 
 The push worker handles independent chat and board queues. Board alerts group by thread, exclude the actor, and recheck membership, blocks, mutes, preferences and the feature switch. Payloads contain routing IDs and generic text, without board titles or note content. Android has a separate Boards notification channel. Older registrations remain chat-only until upgraded.
 

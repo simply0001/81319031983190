@@ -1,25 +1,27 @@
 # Message privacy
 
-Social settings includes **Block Messages**, off by default. When enabled:
+Social settings has two blocking preferences on the account, both off by default, plus one setting on the device. This is the behaviour since 0.2.1-beta (26 September 2026); the dated sections below record how it got there.
 
-- Incoming direct messages are rejected, including friends, attachments and connected-app sends.
-- Other people cannot add this account to a new or existing group, or re-add it after it leaves. The app displays an explanatory popup when the server rejects the addition.
-- New friend requests are rejected from every PocketPass screen and connected app, including profiles opened from Boards. Existing pending requests remain for the recipient to accept or decline.
-- Existing groups continue working. No memberships, history or friendships are removed. Outgoing messages remain available.
+- **Block Messages** rejects incoming direct messages, including from friends, attachments and connected-app sends.
+- **Block Invites** rejects new group additions by other people, direct Board invitations and new friend requests, from every PocketPass screen and connected app. The app shows an explanatory popup when the server refuses. Existing pending requests remain for the recipient to accept or decline.
+- Neither setting removes groups, Board memberships, history or friendships, and outgoing messages keep working.
+- **Show Boards** only changes this device; see the 25 September section.
 
-This is an account preference. The toggle changes only after the server confirms the save; offline failures retain the last confirmed value and show a retry message. Room persists it across restarts and refreshes it without overwriting pending bio or chat-colour changes. Other signed-in devices refresh through the existing private friends realtime topic.
+Connected apps can read and change Block Messages through `privacy.get` and `privacy.set`. Block Invites has no API: `set_invite_privacy` refuses OAuth tokens.
+
+Both blocking settings are account preferences. A toggle changes only after the server confirms the save; offline failures retain the last confirmed value and show a retry message. Room persists it across restarts and refreshes it without overwriting pending bio or chat-colour changes. Other signed-in devices refresh through the existing private friends realtime topic.
 
 Database migration `20260919000100_message_privacy.sql` adds the default-false profile column, owner-only RPC and write-boundary triggers. It was deployed on 2026-09-19, with a schema backup in `/opt/pocketpass/backups/message-privacy-20260919/schema-before.sql`. Database tests roll back all fixture data. Existing Android installations remain compatible and retain their current behavior until this setting is enabled from an updated client.
 
 Validation passed: 25 privacy database assertions (also rerun after deployment), 200 existing group/GIF/public-API assertions, 622 app/shared/UI unit tests, nine Android UI/persistence/migration tests, and three additional phone portrait UI tests. Light/dark layouts were captured and inspected. Release compilation, signature/16 KB alignment verification and iOS shared/UI metadata compilation passed. iOS native runtime testing requires macOS and is separate from metadata compilation.
 
-The signed Android build at `captures/PocketPass-message-privacy.apk` is a local build only. No GitHub release, release notes, version code or update feed was changed for this feature.
+On 19 September the signed Android build at `captures/PocketPass-message-privacy.apk` was a local build only. No GitHub release, release notes, version code or update feed was changed for this feature.
 
 The setting uses the standard teal circular settings glyph, Rubik bold heading and semibold supporting copy. The explanatory copy is shortened to match the surrounding settings typography without reducing its font size.
 
 ## Friend requests and Board profiles — 22 September 2026
 
-Board note authors and members in Board settings open the existing profile viewer. A nonfriend can use Add Friend unless the profile has Block Messages enabled. The recipient's preference is refreshed from the profile; the database trigger is the final authority when a client has stale data.
+Board note authors and members in Board settings open the existing profile viewer. A nonfriend can use Add Friend unless the profile has Block Messages enabled (Block Invites since 25 September). The recipient's preference is refreshed from the profile; the database trigger is the final authority when a client has stale data.
 
 Migration `20260922000400_friend_request_message_privacy.sql` is deployed. It rejects new pending friend requests at the table boundary, including native RPCs and the connected-app API, and maps the API refusal to HTTP 403 with `FRIEND_REQUESTS_BLOCKED`. Turning the setting off permits new requests again. The developer documentation and Social settings copy describe this behavior.
 
@@ -33,4 +35,4 @@ The new Social settings separate **Block Messages** (incoming direct messages on
 
 **Show Boards** is a local display preference. Turning it off shows only conversations in Messages on phone and dual-screen layouts, hides Board navigation there, and ignores Board deep links until re-enabled. It does not delete Board membership or history.
 
-Migration `20260925000100_split_social_privacy.sql` and the updated app are implemented locally but **not deployed or published**. Deployment requires a fresh approval under [release-approval.md](release-approval.md), a verified backup, migration application, and production checks. The local Board/API contract suite passes 65 tests; Android host builds and focused emulator settings, persistence and migration tests pass. The full emulator UI class was interrupted by an emulator crash while taking its older settings screenshots, so it is not claimed as passing.
+With the owner's approval, migration `20260925000100_split_social_privacy.sql` was applied on production on 26 September 2026, and the app side shipped in 0.2.1-beta (27) the same day. Before deployment the local Board/API contract suite passed 65 tests; Android host builds and focused emulator settings, persistence and migration tests pass. The full emulator UI class was interrupted by an emulator crash while taking its older settings screenshots, so it is not claimed as passing.

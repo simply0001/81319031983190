@@ -1,8 +1,8 @@
 # Boards UI review — 19 September 2026
 
-This work is a local review build. Publication requires fresh user approval;
-see [release-approval.md](release-approval.md). No release feed, GitHub asset,
-version number, server configuration, or dashboard deployment was changed.
+Review notes from 19 September 2026. This work reached the public app in
+0.2.0-beta (26) on 23 September 2026; nothing was published or deployed as part
+of the review itself.
 
 ## Fixes
 

@@ -1,8 +1,9 @@
 # PocketPass
 
-PocketPass is a native Android 11+ Jetpack Compose app for phones and
-dual-screen Android devices. On a device with two physical touch displays,
-such as the AYN Thor, it drives both of them:
+PocketPass is a Kotlin Multiplatform app built with Compose Multiplatform for
+Android 11+ phones, tablets and dual-screen devices, with an iOS 16+ app in
+`ios-app/`. On a device with two physical touch displays, such as the AYN Thor,
+it drives both of them:
 
 - top display: 1920×1080
 - bottom presentation display: 1240×1080
@@ -17,14 +18,22 @@ the thread header), activity shuffle, and local settings controls.
 
 ## Build
 
-Install Android Studio with SDK 36 and JDK 17, then run:
+Install Android Studio and build with its bundled JBR. The Android SDK lives in
+`.toolchains/android-sdk`; `scripts/bootstrap-android.ps1` sets it up.
 
 ```powershell
-.\gradlew.bat assembleDebug
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+.\gradlew.bat :app:assembleDebug
 ```
 
-The Figma-exported resources live under `app/src/main/res/raw` and must not be
-redrawn or replaced with platform icons.
+Build output goes to `%LOCALAPPDATA%\PocketPass\gradle\`, not `app\build`.
+Without the `POCKETPASS_*` values in `~/.gradle/gradle.properties` the app
+builds in fixture mode with sample data. [AGENTS.md](AGENTS.md) covers release
+builds, tests and publishing.
+
+The Figma-exported assets live under
+`ui/src/commonMain/composeResources/files/figma` and must not be redrawn or
+replaced with platform icons.
 
 ## Dual-screen verification
 
@@ -32,8 +41,11 @@ With a dual-screen device such as the AYN Thor connected:
 
 ```powershell
 adb shell dumpsys display
-adb install -r app\build\outputs\apk\debug\app-debug.apk
+adb install -r "$env:LOCALAPPDATA\PocketPass\gradle\app\outputs\apk\release\app-release.apk"
 ```
+
+A device that already runs the published app only accepts release-signed builds;
+debug builds carry a different signature.
 
 Launch PocketPass from the top screen. The activity detects the 1240×1080
 presentation display and opens the lower Compose surface automatically.

@@ -538,7 +538,7 @@
             </div>
             <p><code>blocked</code> and <code>block_messages</code> are booleans; <code>user_id</code> and <code>operation_id</code> are UUIDs. Generate an operation ID once per change and reuse it with identical fields on retry. The list shows only accounts this user has blocked, not who has blocked them.</p>
             <p>Blocking removes the friendship and pending friend requests. Unblocking does not restore them. In Boards, each person's content is hidden from the other and direct replies, reactions and invitations between them are refused. Local moderator review is available only with the extra moderation scope and a valid board role.</p>
-            <p><strong>Block Messages</strong> prevents incoming direct messages and edits, new friend requests, new group-chat additions by other people, and direct board invitations, including from friends. Existing group chats and board memberships remain; sending in an existing group and voluntarily joining with a board code still work. A refusal returns HTTP 403 with <code>DIRECT_MESSAGES_BLOCKED</code>, <code>FRIEND_REQUESTS_BLOCKED</code>, <code>GROUP_MESSAGES_BLOCKED</code> or <code>BOARD_INVITATIONS_BLOCKED</code>, so show the supplied explanation instead of retrying.</p>
+            <p><strong>Block Messages</strong> prevents incoming direct messages and edits, including from friends. <strong>Block Invites</strong>, a separate setting that only the PocketPass app can change, prevents new friend requests, new group-chat additions by other people and direct board invitations. Existing group chats and board memberships remain; sending in an existing group and voluntarily joining with a board code still work. A refusal returns HTTP 403 with <code>DIRECT_MESSAGES_BLOCKED</code>, <code>FRIEND_REQUESTS_BLOCKED</code>, <code>GROUP_MESSAGES_BLOCKED</code> or <code>BOARD_INVITATIONS_BLOCKED</code>, so show the supplied explanation instead of retrying.</p>
           </section>
 
           <section class="panel">
@@ -722,7 +722,7 @@
                   <tr><td><code>boards:&lt;user id&gt;</code></td><td><code>boards:read</code></td><td><code>BOARDS</code></td><td>Visible feeds, memberships, invitations, proposals, notices and activity</td></tr>
                   <tr><td><code>board-drafts:&lt;user id&gt;</code></td><td><code>boards:drafts</code></td><td><code>DRAFTS</code></td><td>Your cloud draft heads</td></tr>
                   <tr><td><code>blocks:&lt;user id&gt;</code></td><td><code>blocks:read</code></td><td><code>BLOCKS</code></td><td>Your block list and visible content</td></tr>
-                  <tr><td><code>privacy:&lt;user id&gt;</code></td><td><code>privacy:read</code></td><td><code>PRIVACY</code></td><td>Your Block Messages setting</td></tr>
+                  <tr><td><code>privacy:&lt;user id&gt;</code></td><td><code>privacy:read</code></td><td><code>PRIVACY</code></td><td>Your Block Messages setting; also sent when Block Invites changes</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1057,7 +1057,7 @@ val reaction = JSONObject().put("board_id", boardId).put("post_id", published.ge
     .put("yeah", true).put("operation_id", java.util.UUID.randomUUID().toString())
 // Send only when the user presses Yeah:
 api("boards.react", reaction)</code></pre></details></details>
-<details class="api-example" id="example-blocking"><summary>Block accounts and block incoming messages</summary><p>These are separate settings. Account blocking removes the friendship; unblocking does not restore it. Block Messages prevents incoming DMs, friend requests and new invitations/group additions without leaving existing groups or boards.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const block = { user_id: selectedUserId, blocked: true, operation_id: crypto.randomUUID() };
+<details class="api-example" id="example-blocking"><summary>Block accounts and block incoming messages</summary><p>These are separate settings. Account blocking removes the friendship; unblocking does not restore it. Block Messages prevents incoming DMs. Friend requests, board invitations and group additions follow Block Invites, which only the PocketPass app can change. Neither setting leaves existing groups or boards.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const block = { user_id: selectedUserId, blocked: true, operation_id: crypto.randomUUID() };
 await api("blocks.set", block); // Requires blocks:write.
 const privacy = { block_messages: true, operation_id: crypto.randomUUID() };
 await api("privacy.set", privacy); // Requires privacy:write.</code></pre></details><details class="language-example"><summary>Kotlin (Android / JVM)</summary><pre class="code-block"><code>val block = JSONObject().put("user_id", selectedUserId).put("blocked", true)

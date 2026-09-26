@@ -10,6 +10,7 @@ Docker stack behind Caddy:
 - `api.pocketpass.xyz`: allow-listed Supabase API routes only
 - `links.pocketpass.xyz`: Android App Link association, auth callback fallback, OAuth consent and connected-apps pages
 - `developer.pocketpass.xyz`: developer portal and public API docs
+- `admin.pocketpass.xyz`: static admin console (see "Admin console")
 - `studio.pocketpass.xyz`: Supabase Studio, opened from the admin console by owners
 - PostgreSQL, Supavisor, Kong, and Studio: Docker-internal only; Studio is reachable solely through Caddy
 
@@ -44,8 +45,12 @@ sudo -u pocketpass git -C /opt/pocketpass/supabase-upstream \
   checkout --detach 241bb11c0627f2981746d37033f57dbfa81d29b0
 ```
 
-The expected application checkout is `/opt/pocketpass/app`; change
-`POCKETPASS_INFRA_DIR` if another absolute path is used.
+The application files live in `/opt/pocketpass/app`; change
+`POCKETPASS_INFRA_DIR` if another absolute path is used. On the production VM
+this is a copied file tree, not a git checkout: copy changed files to the VM and
+`sudo install` them (`-m 644`, scripts `-m 755`, LF line endings) instead of
+pulling. `.env.production` stays root-only and is never replaced from a local
+copy.
 
 ## Configuration
 
@@ -104,7 +109,10 @@ not OTP and Ko-fi POST bodies.
 
 Public email signup uses the same passwordless flow as existing-user sign-in.
 Username accounts sign up with a password instead (see "Username accounts"
-under "Auth setup"). Development fixture accounts are created by `seed.sql`.
+under "Auth setup"). Since 26 September 2026 Kong accepts public
+`POST /auth/v1/signup` only for `@users.pocketpass.xyz` addresses and blocks
+path variants, so email accounts are created only through the email-code flow.
+Development fixture accounts are created by `seed.sql`.
 
 ## Network and DNS prerequisites
 
@@ -254,6 +262,7 @@ a per-admin permission from `private.admin_permission_keys()`:
 | `admins` | the Admins tab: add, edit and remove other admins |
 | `apps` | the Developer apps tab: suspending and reactivating third-party apps |
 | `supporters` | the Supporters tab: Ko-fi payments, linking payer emails, granting or revoking supporter status |
+| `board_*` | ten Boards keys (`board_requests`, `boards`, `board_content`, `board_members`, `board_suspensions`, `board_private_review`, `board_delete`, `board_filters`, `board_stationery`, `board_settings`), described in [boards-operations.md](../../docs/boards-operations.md) |
 
 Owners (`is_owner`) hold every permission implicitly, cannot be edited or
 removed from the console, and are promoted or demoted only with psql. Day-to-day
@@ -409,8 +418,24 @@ user's account or send messages for this test.
 | `tokens:read` | `tokens.get` and the `tokens:<user>` Realtime topic |
 | `encounters:read` | `encounters.list` and the `encounters:<user>` Realtime topic |
 | `puzzles:read` | `puzzles.get` |
+| `boards:read` | Board reads, the stationery catalogue and the `boards:<user>` Realtime topic |
+| `boards:write` | posting, editing and removing notes and replies, reactions, reports and appeals |
+| `boards:membership` | joining and leaving, invitations and ownership offers, board requests, notification preferences and read markers |
+| `boards:invite` | direct invitations and invitation codes |
+| `boards:manage` | owner tools and artwork uploads (`/v1/boards.artwork_upload`) |
+| `boards:moderate` | local moderator tools and explicit review of blocked content |
+| `boards:drafts` | cloud drafts and the `board-drafts:<user>` Realtime topic |
+| `boards:purchase` | `boards.buy_stationery` |
+| `blocks:read` | `blocks.list` and the `blocks:<user>` Realtime topic |
+| `blocks:write` | `blocks.set` |
+| `privacy:read` | `privacy.get` (Block Messages) and the `privacy:<user>` Realtime topic |
+| `privacy:write` | `privacy.set` (Block Messages) |
 
 `session.get` and `session.revoke` need no scope.
+
+The Boards endpoints and fields are listed in `public-api/boards.json`; see
+[public-api-boards.md](../../docs/public-api-boards.md). Block Invites has no
+API: `set_invite_privacy` refuses OAuth tokens.
 
 ### Limits and limit requests
 
@@ -509,8 +534,8 @@ role or the realtime grant is missing; `test-database.sh` proves the grants.
 
 1. Create the DNS A record for `developer.pocketpass.xyz` before touching
    Caddy; the certificate is issued on first request.
-2. Pull, then `migrate.sh` (inert until the flag is on) and
-   `test-database.sh`.
+2. Copy the changed files to the VM (see "Pinned upstream"), then
+   `migrate.sh` (inert until the flag is on) and `test-database.sh`.
 3. `configure-production-env.sh` (new `SITE_URL`, redirect list and
    `PUBLIC_API_ENABLED=true`), `compose up -d --no-deps --wait auth`,
    `sudo docker restart supabase-kong`, then
@@ -879,13 +904,17 @@ also a valid mailbox name.
   with `public.username_available(text)`), and adds the `before insert`
   trigger `private.guard_password_signups()`, which runs only for
   `supabase_auth_admin` (or when the session setting
-  `pocketpass.enforce_signup_guard` is `on`, which the pgTAP test uses) and refuses any password sign-up whose address is not
-  on the login domain, any login-domain address without a password, and any
-  login-domain address whose local part breaks the username rule. Email-code
-  and Discord users carry an empty password hash and are untouched.
+  `pocketpass.enforce_signup_guard` is `on`, which the pgTAP test uses) and refuses any
+  login-domain address without a password or whose local part breaks the
+  username rule. For every other address it clears the password hash, so
+  email-code and Discord users stay passwordless. Until
+  `20260926000200_email_otp_signup_guard.sql` it refused those inserts instead,
+  which broke new email-code sign-ups because GoTrue sets a temporary hash.
 - `ENABLE_EMAIL_AUTOCONFIRM=true` (GoTrue `MAILER_AUTOCONFIRM`) makes a
-  username sign-up usable immediately; the guard is what stops that setting
-  from being abused to register someone else's real address with a password.
+  username sign-up usable immediately. Kong's signup restriction
+  (login-domain addresses only, since 26 September 2026) and the guard stop
+  that setting from being abused to register someone else's real address with
+  a password.
   `GOTRUE_PASSWORD_MIN_LENGTH=8` matches the app's rule.
 - There is no password reset. `POST /auth/v1/recover` is terminated by Kong
   with 404. A username account can link a real email address from Settings:
@@ -898,7 +927,8 @@ also a valid mailbox name.
   password after `GET /auth/v1/reauthenticate` mails a code that is passed as
   the `nonce` of `PUT /auth/v1/user {password}`
   (`GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_REAUTHENTICATION=true` stays).
-- Kong: `auth-v1-signup` (5/minute, 20/hour per IP), `auth-v1-token-password`
+- Kong: `auth-v1-signup` (5/minute, 20/hour per IP; login-domain addresses
+  only since 26 September 2026), `auth-v1-token-password`
   (10/minute, 60/hour; refresh grants stay on the catch-all),
   `auth-v1-user-update` and `auth-v1-reauthenticate` (bearer endpoints with
   the connected-app token block), and `auth-v1-recover-blocked`.
