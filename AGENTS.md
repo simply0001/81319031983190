@@ -139,7 +139,7 @@ Not released; the owner deferred it and wants TestFlight first.
 
 ### Docs
 - `docs/` holds feature notes and dated logs. `docs/2026-09-22-handoff.md` is the detailed log for 22 to 26 September; this file wins where they differ.
-- The docs were brought up to date on 2026-09-26. The corrected developer docs (`infra/supabase/developer/docs.html`, Block Invites wording) are not deployed yet; deploying them needs approval.
+- The docs were brought up to date on 2026-09-26, and the corrected developer docs (Block Invites wording) were deployed the same day.
 - iOS still defaults to 0.1.8 (build 21) in `ios-app/project.yml` and `APP_STORE.md`. Pick the version at the first TestFlight upload.
 
 ## Repos

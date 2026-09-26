@@ -40,3 +40,11 @@ Later on 26 September 2026, after reporting that new email sign-ups returned
 deploying the focused email-OTP sign-up hotfix after testing and a fresh
 encrypted backup. That approval covers the gateway sign-up restriction and
 `20260926000200_email_otp_signup_guard.sql`, not another public app release.
+
+Later on 26 September 2026, the user approved deploying the corrected developer
+docs, which describe Block Messages and Block Invites separately. Only
+`developer/docs.html` changed (SHA-256
+`c1f110b6e646b1a18e9ad8b747fdb8d71d533170bbfd912b4adf560d8060a0a6`, matching the
+live page); the previous file is at
+`/opt/pocketpass/deploy-backups/docs-block-invites-20260926/docs.html` and
+`health.sh` passed. This does not cover later deployments or releases.
