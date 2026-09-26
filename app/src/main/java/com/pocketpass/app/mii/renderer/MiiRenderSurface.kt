@@ -4,6 +4,9 @@ import android.graphics.Color
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -24,7 +27,8 @@ fun MiiRenderSurface(
     initialCanonicalBase64: String = MiiRenderController.DEFAULT_MII_BASE64,
 ) {
     val context = LocalContext.current
-    val webView = remember(context, controller) {
+    val surfaceGeneration by controller.surfaceGeneration.collectAsState()
+    val webView = remember(context, controller, surfaceGeneration) {
         controller.createWebView(context)
     }
 
@@ -36,12 +40,14 @@ fun MiiRenderSurface(
         }
     }
 
-    AndroidView(
-        factory = { webView },
-        modifier = modifier,
-        update = {
-            it.setBackgroundColor(Color.TRANSPARENT)
-            it.visibility = View.VISIBLE
-        },
-    )
+    key(webView) {
+        AndroidView(
+            factory = { webView },
+            modifier = modifier,
+            update = {
+                it.setBackgroundColor(Color.TRANSPARENT)
+                it.visibility = View.VISIBLE
+            },
+        )
+    }
 }

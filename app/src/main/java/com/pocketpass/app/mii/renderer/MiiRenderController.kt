@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.PermissionRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -59,6 +60,9 @@ class MiiRenderController private constructor(
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<String?>>()
     private val pendingCaptures = ConcurrentHashMap<String, CompletableDeferred<ByteArray>>()
     private val captureChunks = ConcurrentHashMap<String, CaptureAccumulator>()
+    private val mutableSurfaceGeneration = MutableStateFlow(0)
+    internal val surfaceGeneration: StateFlow<Int> = mutableSurfaceGeneration.asStateFlow()
+    private var restartsSinceReady = 0
 
     @SuppressLint("SetJavaScriptEnabled")
     internal fun createWebView(context: Context): WebView = WebView(context).apply {
@@ -131,10 +135,14 @@ class MiiRenderController private constructor(
 
         activeWebView?.let(::removeMessageListener)
         failPending(MiiRendererException("Mii render surface was replaced"))
-        readySignal = CompletableDeferred()
+        if (readySignal.isCompleted) readySignal = CompletableDeferred()
         lastOrbit = null
         canonicalBase64 = bootCanonical
         activeWebView = webView
+        if (restartsSinceReady > MAX_RENDERER_RESTARTS) {
+            failRuntime("The Piip preview stopped working.")
+            return
+        }
         mutableStatus.value = MiiRenderStatus.Loading
 
         val assetLoader = WebViewAssetLoader.Builder()
@@ -166,6 +174,7 @@ class MiiRenderController private constructor(
         webView.loadUrl("about:blank")
         activeWebView = null
         lastOrbit = null
+        restartsSinceReady = 0
         failPending(MiiRendererException("Mii render surface was detached"))
         mutableStatus.value = MiiRenderStatus.Detached
     }
@@ -422,6 +431,7 @@ class MiiRenderController private constructor(
         runCatching { validateCanonical(canonical) }.onSuccess {
             canonicalBase64 = canonical
         }
+                restartsSinceReady = 0
                 mutableStatus.value = MiiRenderStatus.Ready(canonicalBase64)
                 if (!readySignal.isCompleted) readySignal.complete(Unit)
             }
@@ -535,6 +545,26 @@ class MiiRenderController private constructor(
                 failRuntime("The local Mii renderer page could not be loaded.")
             }
         }
+
+        override fun onRenderProcessGone(
+            view: WebView,
+            detail: RenderProcessGoneDetail,
+        ): Boolean {
+            onRendererGone(view, detail.didCrash())
+            return true
+        }
+    }
+
+    private fun onRendererGone(webView: WebView, crashed: Boolean) {
+        if (activeWebView !== webView) return
+        Log.w(TAG, if (crashed) "Renderer crashed" else "Renderer was stopped by the system")
+        activeWebView = null
+        lastOrbit = null
+        restartsSinceReady += 1
+        failPending(MiiRendererException("The Piip preview restarted."))
+        if (readySignal.isCompleted) readySignal = CompletableDeferred()
+        mutableStatus.value = MiiRenderStatus.Loading
+        mutableSurfaceGeneration.value += 1
     }
 
     private fun removeMessageListener(webView: WebView) {
@@ -618,6 +648,7 @@ class MiiRenderController private constructor(
         private const val MAX_CAPTURE_CHUNKS = 512
         private const val MAX_CAPTURE_CHUNK_LENGTH = 40 * 1024
         private const val MAX_CAPTURE_BASE64_LENGTH = 16 * 1024 * 1024
+        private const val MAX_RENDERER_RESTARTS = 2
         private val FIELD_NAME_REGEX = Regex("[A-Za-z][A-Za-z0-9]{0,63}")
 
         @Volatile
