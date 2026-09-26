@@ -56,7 +56,7 @@ val generateIosBuildConfig = tasks.register("generateIosBuildConfig") {
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "com.pocketpass.shared"
         compileSdk = 37
         minSdk = 30

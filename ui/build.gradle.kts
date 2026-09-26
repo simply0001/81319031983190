@@ -11,7 +11,7 @@ System.getenv("LOCALAPPDATA")?.let { localAppData ->
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "com.pocketpass.ui"
         compileSdk = 37
         minSdk = 30

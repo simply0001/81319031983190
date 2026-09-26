@@ -43,6 +43,7 @@ internal fun trustedLinkOrigin(rawUri: String): TrustedLink {
 
     val authority = origin.substring(HTTPS_PREFIX.length)
     if (authority.isEmpty() || authority.startsWith('/')) return TrustedLink.UntrustedOrigin
+    if (MALFORMED_ESCAPE.containsMatchIn(origin)) return TrustedLink.Malformed
 
     val url = runCatching { Url(origin) }.getOrElse { return TrustedLink.Malformed }
     if (
@@ -79,3 +80,4 @@ private const val HTTPS_PREFIX = "https://"
 private const val MOBILE_SCHEME_PREFIX = "pocketpass://"
 private const val UNSPECIFIED_PORT = 0
 private val ACCEPTED_PORTS = setOf(UNSPECIFIED_PORT, 443)
+private val MALFORMED_ESCAPE = Regex("%(?![0-9A-Fa-f]{2})")

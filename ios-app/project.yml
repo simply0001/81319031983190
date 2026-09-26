@@ -8,7 +8,7 @@ options:
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk.git
-    exactVersion: 12.19.1
+    exactVersion: 12.19.2
 
 settings:
   base:
