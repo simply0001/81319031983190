@@ -43,7 +43,6 @@ from (
     ('98a70000-0000-4000-8000-000000000002'::uuid, 'handshake-b@pocketpass.test', 'Handshake B')
 ) as seed(id, email, name);
 
--- Two single-use credentials per person: one pair for handshake X, one for Y.
 insert into private.nearby_credentials (token, owner_id, signing_public_key, created_at, expires_at)
 values
   ('98a80000-0000-4000-8000-0000000000a1', '98a70000-0000-4000-8000-000000000001', repeat('A', 90), now() - interval '2 days', now() + interval '5 days'),
@@ -53,7 +52,6 @@ values
 
 set local role authenticated;
 
--- A records handshake X (a1 <-> b1).
 select pg_catalog.set_config('request.jwt.claim.sub', '98a70000-0000-4000-8000-000000000001', true);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.is(
@@ -76,7 +74,6 @@ select extensions.is(
   'the first receipt of the day opens the encounter'
 );
 
--- B only saw handshake Y (b2 <-> a2) and records that instead.
 select pg_catalog.set_config('request.jwt.claim.sub', '98a70000-0000-4000-8000-000000000002', true);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.is(
@@ -121,7 +118,6 @@ select extensions.is(
 
 set local role authenticated;
 
--- B later records its side of handshake X after all.
 select pg_catalog.set_config('request.jwt.claim.sub', '98a70000-0000-4000-8000-000000000002', true);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.is(
@@ -175,7 +171,6 @@ select extensions.is(
 
 set local role authenticated;
 
--- Retrying the same receipt is still a no-op.
 select pg_catalog.set_config('request.jwt.claim.sub', '98a70000-0000-4000-8000-000000000002', true);
 select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.is(

@@ -1,7 +1,7 @@
 # PocketPass iPhone mockups
 
 The five `iphone-*.png` files are editable Figma exports; their optimized WebP
-versions in `../assets/` are used by the homepage hero and device tour.
+versions in `../website/assets/` are used by the homepage hero and device tour.
 
 - Template: [iPhone 14 Pro by Anshuman Jha](https://www.figma.com/design/fhHJmkgn1U838IEK2nWIez/).
 - Completed mockups: [PocketPass phone screenshots](https://www.figma.com/design/fhHJmkgn1U838IEK2nWIez/?node-id=105-2).

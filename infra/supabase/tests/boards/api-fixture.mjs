@@ -2,8 +2,12 @@ import { readFile } from 'node:fs/promises';
 
 const migration = name => readFile(new URL(`../../migrations/${name}`, import.meta.url), 'utf8');
 
-// Load the real production guard/validation/idempotency functions; only the
-// surrounding Supabase services, auth tables and test crypto are fixture data.
+export async function loadWorkerRoleChecks(db) {
+  await db.exec('set check_function_bodies=off');
+  await db.exec(await migration('20260927000100_worker_rpc_service_role_checks.sql'));
+  await db.exec('reset check_function_bodies');
+}
+
 export async function setupApiDatabase(db) {
   await db.exec(await readFile(new URL('./fixture.sql', import.meta.url), 'utf8'));
   await db.exec(`
@@ -54,14 +58,12 @@ export async function setupApiDatabase(db) {
     'private.begin_rpc_operation','private.finish_rpc_operation','public.set_user_block',
   ]);
   await loadFunctions('20260829000400_developer_limit_requests.sql',['private.api_meter','private.api_guard']);
-  // These functions have no PUBLIC grants in the complete production schema.
   await db.exec('revoke all on all functions in schema private from public; revoke all on function public.set_user_block(uuid,boolean,uuid) from public;');
   for(const file of ['20260919000200_boards_foundation.sql','20260919000300_boards_api.sql',
     '20260919000400_board_push.sql','20260919000500_board_branding.sql','20260919000600_board_staff_review.sql',
     '20260919000700_board_account_deletion.sql','20260919000800_board_settings_safe_update.sql']) {
     await db.exec(await migration(file));
   }
-  // Profiles already have this column in the shared Boards fixture.
   await db.exec((await migration('20260919000100_message_privacy.sql')).replace(
     'alter table public.profiles add column block_messages boolean not null default false;', ''));
   for(const file of ['20260921000100_public_api_boards.sql','20260921000200_public_api_blocking.sql','20260921000300_public_api_board_media.sql','20260922000200_board_pixel_raster.sql','20260922000300_board_bucket_fill.sql','20260923000100_board_inbox_details.sql','20260923000200_board_admin_cases.sql']) {
@@ -72,4 +74,5 @@ export async function setupApiDatabase(db) {
   await db.exec(`create trigger friend_requests_enforce_message_privacy
     before insert or update of addressee_id,status on public.friend_requests
     for each row execute function private.enforce_friend_request_message_privacy()`);
+  await loadWorkerRoleChecks(db);
 }

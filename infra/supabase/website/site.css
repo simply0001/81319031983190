@@ -551,7 +551,6 @@ code { font-family: var(--mono); font-size: 0.85em; }
   .story-set { animation: none; }
 }
 
-/* PocketPass: flat panels, paper tabs and an encounter-pass download stub. */
 #backdrop { opacity: 1; }
 .site-shell { max-width: 1240px; padding: 0 28px 24px; }
 .topbar { top: 8px; min-height: 86px; padding: 12px 18px; border: 1px solid var(--divider); border-radius: 12px; background: var(--card-0); box-shadow: none; }
@@ -621,7 +620,6 @@ code { font-family: var(--mono); font-size: 0.85em; }
 .cta-actions { grid-column: 2; justify-content: flex-start; }
 .footer { border: 1px solid var(--divider); border-top: 2px solid var(--accent-text); border-radius: 12px; background: var(--card-0); padding: 32px; }
 .mobile-nav { border: 1px solid var(--divider); border-radius: 8px; box-shadow: var(--shadow-1); background: var(--card-0); }
-/* Soft paper surfaces: consistent edges, quiet depth and tinted inner cards. */
 .site-shell {
   --panel-edge: var(--divider);
   --panel-fill: linear-gradient(145deg, var(--card-0), color-mix(in srgb, var(--card-0) 88%, var(--card-1)));

@@ -50,7 +50,6 @@ compose exec -T db \
     --dbname "${POSTGRES_DB}" \
     --format custom \
     --no-owner \
-    --no-privileges \
   >"${temporary_directory}/database.dump"
 
 compose exec -T db \

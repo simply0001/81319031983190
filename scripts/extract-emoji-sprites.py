@@ -1,11 +1,3 @@
-"""Recover transparent emoji sprites from Figma backdrop-blended screenshots.
-
-Figma's asset export omits the emoji pixels for these blend-mode text nodes,
-while its node screenshot contains the composited emoji. Given both lossless
-PNGs, this script solves the standard source-over equation per pixel and emits
-the smallest-alpha foreground that recreates the screenshot over its backdrop.
-"""
-
 from __future__ import annotations
 
 import argparse

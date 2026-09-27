@@ -58,8 +58,6 @@ from (
 ) as names(user_id, username)
 where profiles.user_id = names.user_id;
 
--- Ann and Ben are friends and share a direct conversation; Cal is a stranger
--- Ann met once; Dee is blocked by Ann.
 insert into public.friendships (user_low, user_high, created_by, created_at)
 values (
   '99650000-0000-4000-8000-000000000001',
@@ -230,8 +228,6 @@ values
   (gen_random_uuid(), '99650000-0000-4000-8000-000000000001', current_setting('pte_test.bare')::uuid, 'openid', now()),
   (gen_random_uuid(), '99650000-0000-4000-8000-000000000002', current_setting('pte_test.full')::uuid, 'openid', now());
 
--- Catalog -------------------------------------------------------------------
-
 select extensions.is(
   private.api_scope_keys(),
   array[
@@ -271,8 +267,6 @@ select extensions.is(
   'See the people you have met nearby',
   'encounters:read has its consent line'
 );
-
--- Privileges and policies ------------------------------------------------------
 
 select extensions.ok(
   pg_catalog.has_function_privilege('api_client', 'public.api_v1_tokens_get(jsonb)', 'execute'),
@@ -357,8 +351,6 @@ select extensions.has_trigger(
   'nearby_encounters_broadcast_change',
   'encounter changes still broadcast'
 );
-
--- The full app, acting for Ann ------------------------------------------------
 
 set local role api_client;
 select pg_catalog.set_config('request.jwt.claim.sub', '', true);
@@ -582,8 +574,6 @@ select extensions.ok(
   'tracking on a pair with a stranger stays closed'
 );
 
--- Confirmation bumps the encounter and broadcasts a curated payload ------------
-
 reset role;
 select pg_catalog.set_config('request.jwt.claims', '', true);
 
@@ -630,8 +620,6 @@ select extensions.ok(
   'a confirmation moves the encounter to the top with a matching updated_at'
 );
 
--- The reader app: presence:read without the carrier scopes ----------------------
-
 select pg_catalog.set_config(
   'request.jwt.claims',
   jsonb_build_object(
@@ -667,8 +655,6 @@ select extensions.is(
   'encounters.list needs encounters:read'
 );
 
--- The tracker app: presence:write implies read ----------------------------------
-
 select pg_catalog.set_config(
   'request.jwt.claims',
   jsonb_build_object(
@@ -699,8 +685,6 @@ select extensions.ok(
   'tracking in a conversation still needs messages:read'
 );
 
--- The bare app ------------------------------------------------------------------
-
 select pg_catalog.set_config(
   'request.jwt.claims',
   jsonb_build_object(
@@ -729,8 +713,6 @@ select extensions.is(
   'SCOPE_REQUIRED',
   'an app without tokens:read cannot read the balance'
 );
-
--- Revocation closes everything ----------------------------------------------------
 
 reset role;
 select pg_catalog.set_config('request.jwt.claims', '', true);
@@ -778,8 +760,6 @@ select extensions.is(
   'CONSENT_REVOKED',
   'a revoked consent closes tokens.get'
 );
-
--- Ben has no balance row and no supporter status ----------------------------------
 
 reset role;
 select pg_catalog.set_config('request.jwt.claims', '', true);

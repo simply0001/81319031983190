@@ -49,12 +49,10 @@ parts.append('</details></section>')
 s=DOCS.read_text(encoding='utf-8')
 a='<!-- api-examples:start -->';b='<!-- api-examples:end -->'
 s=s[:s.index(a)+len(a)]+'\n'+'\n'.join(parts)+'\n          '+s[s.index(b):]
-# Link endpoint names without adding columns or disturbing the contract's layout.
 for name,section,scope,fields in entries:
     plain=f'<td><code>{name}</code></td>'
     linked=f'<td><code>{name}</code><br><a class="endpoint-example" href="#example-{name.replace(".","-")}">Kotlin / JavaScript</a></td>'
     s=s.replace(plain,linked)
-# Each reference section gets a relevant workflow link, even when it has no code block.
 links={'overview':'http','getting-started':'oauth','connect':'oauth','redirect-uris':'oauth','scopes':'last-seen','tokens':'tokens','calling':'http','endpoints':'http','boards-api':'boards','blocking-api':'blocking','objects':'last-seen','errors':'http','rate-limits':'http','sync':'pagination','realtime':'presence','media':'media','scope-changes':'oauth','idempotency':'boards','first-party':'http'}
 for section,target in links.items():
     marker=f'<p class="section-examples"><a href="#example-{target}">Kotlin &amp; JavaScript examples →</a></p>'

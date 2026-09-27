@@ -1,4 +1,3 @@
--- Run only in the isolated schema-copy database. Everything rolls back.
 begin;
 insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,confirmation_token,email_change,email_change_token_new,recovery_token)
 select '00000000-0000-0000-0000-000000000000', id, 'authenticated','authenticated',email,'',now(),'{"provider":"email","providers":["email"]}','{"display_name":"Boards validation"}',now(),now(),'','','',''
@@ -24,10 +23,18 @@ begin
   assert public.boards_query('post',jsonb_build_object('post_id',p,'reveal',true))->>'body'='Full-schema note';
   assert (select count(*) from private.board_push_queue)=1;
   update private.board_push_queue set available_at=now()-interval '1 second';
+  begin
+    perform public.claim_board_push_batch();
+    raise exception 'Push claim accepted a signed-in user';
+  exception when sqlstate '42501' then null; end;
+  perform set_config('request.jwt.claims',jsonb_build_object('role','service_role')::text,true);
   r:=public.claim_board_push_batch();assert jsonb_array_length(r)=1;
   assert r->0->'data'->>'body'='There is new activity in your boards.';
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'role','authenticated')::text,true);
   ticket:=public.prepare_board_branding(b,'cover',gen_random_uuid(),repeat('a',64));
+  perform set_config('request.jwt.claims',jsonb_build_object('role','service_role')::text,true);
   r:=public.commit_board_branding(ticket,encode(convert_to('RIFF0000WEBPtest','UTF8'),'base64'),32,32);
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',owner_id,'role','authenticated')::text,true);
   assert (public.boards_query('board',jsonb_build_object('board_id',b))->>'cover_asset_id')::uuid=(r->>'asset_id')::uuid;
   perform public.boards_mutate('draw_branding',jsonb_build_object('board_id',b,'kind','icon','drawing',drawing),gen_random_uuid());
   perform set_config('request.jwt.claims',jsonb_build_object('sub',staff_id,'role','authenticated')::text,true);

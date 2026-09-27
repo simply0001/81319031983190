@@ -35,6 +35,14 @@ separate work. It does **not** layer the upstream Caddy override:
 Studio on its own hostname behind an owner-session gate (see "Studio
 access").
 
+The overlay also pins the Docker network to `172.30.77.0/24` and sets Kong's
+`KONG_TRUSTED_IPS` to it, so only Caddy can assert `X-PocketPass-Client-IP`
+and the range survives recreations. It turns on asymmetric JWTs in one step:
+with `GOTRUE_JWT_KEYS` set, GoTrue signs new sessions with the ES256 key, so
+Realtime and Storage receive the public `JWT_JWKS` at the same time, and
+PostgREST already verifies with `JWT_JWKS`. Both key sets include the legacy
+HS256 key, so existing sessions stay valid.
+
 Prepare the upstream checkout:
 
 ```bash
@@ -112,7 +120,9 @@ Username accounts sign up with a password instead (see "Username accounts"
 under "Auth setup"). Since 26 September 2026 Kong accepts public
 `POST /auth/v1/signup` only for `@users.pocketpass.xyz` addresses and blocks
 path variants, so email accounts are created only through the email-code flow.
-Development fixture accounts are created by `seed.sql`.
+Development fixture accounts are created by `seed.sql`, which the Supabase
+CLI applies on a local `db reset` (`db push` does not). Never run it against
+production.
 
 ## Network and DNS prerequisites
 
@@ -166,7 +176,9 @@ sudo /opt/pocketpass/app/infra/supabase/scripts/configure-host-hardening.sh
 ```
 
 - SSH (`/etc/ssh/sshd_config.d/10-pocketpass.conf`): key-only authentication,
-  no root login, `AllowUsers ubuntu`. The `pocketpass` service account has no
+  no root login, `AllowUsers ubuntu`. OpenSSH keeps the first value it reads
+  for each keyword, so the `10-` prefix wins over `50-cloud-init.conf`. The
+  `pocketpass` service account has no
   SSH access; reach it with `sudo -u pocketpass`. The script refuses to run if
   `ubuntu` has no `authorized_keys` and self-reverts if `sshd -t` rejects the
   drop-in.
@@ -474,21 +486,24 @@ either way. The same script syncs `DISCORD_SUPPORTERS_WEBHOOK_URL` and
 
 `PUBLIC_API_ENABLED` in `.env.production` drives both
 `GOTRUE_OAUTH_SERVER_ENABLED` and `GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED`,
-so the server never runs without the hook. `configure-production-env.sh`
-writes `true` unless `PUBLIC_API_ENABLED=false` is in its environment. To
-switch the feature off:
+so the server never runs without the hook. To switch the feature off, change
+that one line in place and recreate Auth:
 
 ```bash
-sudo env PUBLIC_API_ENABLED=false RESEND_SECRET_FILE=... BACKUP_AGE_RECIPIENT=... \
-  /opt/pocketpass/app/infra/supabase/scripts/configure-production-env.sh
+sudo sed -i 's/^PUBLIC_API_ENABLED=.*/PUBLIC_API_ENABLED=false/' \
+  /opt/pocketpass/app/infra/supabase/.env.production
+sudo grep -x 'PUBLIC_API_ENABLED=false' \
+  /opt/pocketpass/app/infra/supabase/.env.production
 docker compose ... up -d --no-deps --force-recreate --wait auth
 sudo docker restart supabase-kong
 ```
 
-Editing the `PUBLIC_API_ENABLED=` line in `.env.production` by hand is
-equivalent. Kong caches the `auth` container's address, so `/auth/v1/*`
-answers 502 after the recreate until Kong is restarted; the third command is
-not optional. With the flag off GoTrue stops serving `/auth/v1/oauth/*`, so
+`sed -i` keeps the file's owner and mode and leaves every other key alone.
+Never run `configure-production-env.sh` for this: it only creates a new
+`.env.production` (`--bootstrap`) and refuses to touch an existing one.
+Kong caches the `auth` container's address, so `/auth/v1/*` answers 502
+after the recreate until Kong is restarted; the last command is not
+optional. With the flag off GoTrue stops serving `/auth/v1/oauth/*`, so
 connected apps can neither obtain nor refresh tokens; access tokens already
 issued keep working on `/v1/*` for at most one hour. The migration, the
 `api_client` role, the Kong fence and the static pages stay in place and are
@@ -517,18 +532,24 @@ docker compose ... exec -T db psql -U postgres -d postgres -c \
 
 ### After a restore
 
-`restore.sh` runs `pg_restore --no-owner --no-privileges` and does not apply
-`roles.sql`, so a restored cluster may lack the `api_client` role and loses
-every grant made to it. Re-create the role (`roles.sql` from the archive, or
-`create role api_client nologin; grant api_client to authenticator;`), then
-re-run the grant statements of `migrations/20260829000100_public_api.sql`,
+`backup.sh` keeps every grant and revoke in the dump. Before `pg_restore`
+runs, `restore.sh` creates each role from the archive's `roles.sql` that the
+cluster lacks, with its attributes, settings and memberships but no password,
+so the `api_client` role and its grants come back with the database. If
+`health.sh` reports that `api_client` lacks usage on `realtime`, run
+`grant usage on schema realtime to api_client` as `supabase_admin`.
+
+Archives made before 2026-09-27 were dumped with `--no-privileges`. After
+restoring one, every function is executable by `PUBLIC` again: replay the
+`grant` and `revoke` statements of every migration, including the
+`api_client` grants of `migrations/20260829000100_public_api.sql`,
 `migrations/20260829000300_public_api_followups.sql` and
-`migrations/20260903000100_public_api_presence_tokens_encounters.sql`
-(schema usage, `select`/`insert` on `storage.objects`, `select`/`insert` on
-`realtime.messages`, and `execute` on the `public.api_v1_*` functions and
-the `private.api_can_*` predicates), and as `supabase_admin` run
-`grant usage on schema realtime to api_client`. `health.sh` fails while the
-role or the realtime grant is missing; `test-database.sh` proves the grants.
+`migrations/20260903000100_public_api_presence_tokens_encounters.sql`.
+
+`health.sh` fails while the role or the realtime grant is missing, and while
+`anon` or `authenticated` can execute the push worker or branding commit
+RPCs. Those RPCs also refuse any caller whose role is not `service_role`.
+`test-database.sh` proves the grants.
 
 ### Rollout
 
@@ -536,8 +557,9 @@ role or the realtime grant is missing; `test-database.sh` proves the grants.
    Caddy; the certificate is issued on first request.
 2. Copy the changed files to the VM (see "Pinned upstream"), then
    `migrate.sh` (inert until the flag is on) and `test-database.sh`.
-3. `configure-production-env.sh` (new `SITE_URL`, redirect list and
-   `PUBLIC_API_ENABLED=true`), `compose up -d --no-deps --wait auth`,
+3. Set `SITE_URL`, `ADDITIONAL_REDIRECT_URLS` and `PUBLIC_API_ENABLED=true`
+   with one-line in-place edits (see "Feature flag and rollback"),
+   `compose up -d --no-deps --wait auth`,
    `sudo docker restart supabase-kong`, then
    `validate-public-api-production.sh --auth-only` and
    `validate-auth-production.sh`.
@@ -887,6 +909,35 @@ never published. To roll back new signup without invalidating existing
 sessions, set `DISABLE_SIGNUP=true` and `ENABLE_EMAIL_SIGNUP=false`, then
 recreate Auth.
 
+### Rotate the Resend key
+
+```bash
+sudo ENV_FILE=/opt/pocketpass/app/infra/supabase/.env.production \
+  /opt/pocketpass/app/infra/supabase/scripts/rotate-resend-key.sh
+```
+
+`SMTP_PASS` must hold a full-access key; a sending-only key cannot create
+keys, and the script then stops before changing anything. It creates a
+sending-only key named `PocketPass Production SMTP <UTC date>`, proves it can
+log in to `smtp.resend.com:465`, writes it to `SMTP_PASS`, recreates Auth,
+restarts Kong, checks that Auth runs with the new key and runs
+`validate-auth-production.sh`. Only then does it revoke the old key, and only
+when that was the account's single key. If a step after the switch fails, the
+old key stays valid; fix the cause, then revoke it with
+`revoke-resend-key.sh`. The new key is written nowhere but `.env.production`;
+copy it from there into the off-VM secret store.
+
+`inspect-resend-keys.sh` lists the account's keys (id, name, dates) and
+`revoke-resend-key.sh` revokes one by id. Both read a full-access key from
+`SECRET_FILE`:
+
+```bash
+SECRET_FILE=/secure/resend-full-access.txt \
+  /opt/pocketpass/app/infra/supabase/scripts/inspect-resend-keys.sh
+SECRET_FILE=/secure/resend-full-access.txt KEY_ID=<key id> \
+  /opt/pocketpass/app/infra/supabase/scripts/revoke-resend-key.sh
+```
+
 ### Username accounts
 
 A username account is an ordinary GoTrue user whose address is
@@ -971,7 +1022,7 @@ ENV_FILE=/opt/pocketpass/app/infra/supabase/.env.production \
 
 The encrypted archive contains:
 
-- a custom-format logical dump and role snapshot
+- a custom-format logical dump with its privileges, and a role snapshot
 - local Storage objects
 - the `pgsodium_root.key` when present
 - the active environment, Caddy, overlay, manifest, and checksums
@@ -1035,10 +1086,11 @@ ENV_FILE=/opt/pocketpass/app/infra/supabase/.env.production \
 ```
 
 The script verifies both checksum layers, stops application services, restores
-the Vault key and database, and replaces local Storage. The previous Storage
-directory is retained beside the restored one. It does not overwrite the
-active environment or automatically apply `roles.sql`. Run `health.sh` and
-perform auth/avatar/message checks after every restore drill.
+the Vault key, creates the roles from `roles.sql` that the cluster lacks,
+restores the database with its privileges, and replaces local Storage. The
+previous Storage directory is retained beside the restored one. It does not
+overwrite the active environment or change existing roles. Run `health.sh`
+and perform auth/avatar/message checks after every restore drill.
 
 ## Public website
 
@@ -1048,14 +1100,16 @@ perform auth/avatar/message checks after every restore drill.
 `/delete-account`; the `.html` paths redirect there), `404.html`, `site.css`,
 `site.js`, `backdrop.js`, the Rubik font, `robots.txt`, `sitemap.xml` and the
 artwork under `assets/` (copies of the in-app Figma SVGs with
-`preserveAspectRatio="none"` stripped, the achievement glyphs recoloured
-teal, the five tab icons as `nav-*.svg`, a generated Open Graph image and
-touch icon, and the AYN Thor mockups: `thor-black.webp` is the frame,
+`preserveAspectRatio="none"` stripped, the five tab icons as `nav-*.svg`, a
+generated Open Graph image and touch icon, `game-steps.svg` with the outer
+contours of Google's Material Symbols Rounded "footprint" icon (Apache 2.0),
+the iPhone mockups, and the AYN Thor mockups: `thor-black.webp` is the frame,
 `thor-<tab>-{top,bottom}.webp` are screenshots taken on the device by
 `scripts/capture-thor-tabs.sh` (the Piip Creator pair is captured by hand from
 Settings > Social > Edit Piip) and cut to the screen openings by
-`scripts/build-website-mockups.py`, whose source render lives in
-`website/source/` and is not deployed). The site follows the visitor's light
+`scripts/build-website-mockups.py`). The source renders and the iPhone mockup
+notes live in `website-source/`, outside the served directory; never copy
+them into `website/`. The site follows the visitor's light
 or dark scheme, loads nothing from other hosts, sets no cookies and has no
 analytics; the CSP allows `'self'` only. `site.js` runs on every page: it
 drives the mobile menu, the tabbed device tour on the landing page (a tab
@@ -1095,11 +1149,15 @@ sentinel `{"schemaVersion":1,"versionCode":0}`, which clients read as
 up-to-date.
 
 Releases are published from the workstation with `scripts/publish-release.ps1`
-(repo root), which builds `assembleRelease`, stages `PocketPass.apk` plus a
+(repo root), which builds `assembleRelease` with
+`-PPOCKETPASS_REQUIRE_FIREBASE=true`, stages `PocketPass.apk` plus a
 generated `update.json` (`versionCode`, `versionName`, `apkSha256`,
-`apkSizeBytes`, optional `minSupportedVersionCode` for forced updates), and
-creates the tagged GitHub release. The release body becomes the in-app
-changelog.
+`apkSizeBytes`, `minSupportedVersionCode`), and creates the tagged GitHub
+release. `-MinSupportedVersionCode` is required. Before staging completes the
+script refuses a fixture build (release `BuildConfig` without the production
+backend, URL and publishable key), an APK whose `aapt2` package, versionCode
+or versionName differ from `app/build.gradle.kts`, and any signer other than
+the production certificate. The release body becomes the in-app changelog.
 
 `updates/latest.json` and `updates/.cache/` are generated on the VM and stay
 untracked. When first deploying this feature: recreate Caddy so the new

@@ -244,16 +244,17 @@ select extensions.throws_ok(
 
 select extensions.lives_ok(
   $$
-    select * from public.save_profile_mii(
+    select * from public.save_profile_mii_slot(
       '98100000-0000-4000-8000-000000000014',
       2,
       1,
       pg_temp.mii_appearance(),
       '98100000-0000-4000-8000-000000000001/mii-r2-98100000-0000-4000-8000-000000000014.png',
-      null
+      null,
+      2
     );
   $$,
-  'the slot-less entry point still succeeds for older clients'
+  'saving the active slot again succeeds'
 );
 
 select extensions.is(
@@ -264,7 +265,7 @@ select extensions.is(
       and mii.slot = 2
   ),
   2::bigint,
-  'the slot-less entry point writes the active slot'
+  'the save writes the new revision to that slot'
 );
 
 select * from extensions.finish();

@@ -13,8 +13,13 @@ const claims = async (account = user, sid = session, extra = {}) => {
 const register = (installation = device, token = 't'.repeat(100), enabled = true) => scalar(
   'select public.register_message_push_device($1, $2, $3)', [installation, token, enabled]);
 const ready = () => db.exec("update private.message_push_queue set available_at = now() - interval '1 second'");
-const claim = async () => { await ready(); return scalar('select public.claim_message_push_batch()'); };
-const finish = (job, outcome = 'sent') => db.query('select public.finish_message_push($1, $2, $3)', [job.id, job.lease_id, outcome]);
+const asWorker = async work => {
+  const previous = await scalar("select current_setting('request.jwt.claims', true)");
+  await db.query("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ role: 'service_role' })]);
+  try { return await work(); } finally { await db.query("select set_config('request.jwt.claims', $1, false)", [previous ?? '']); }
+};
+const claim = async () => { await ready(); return asWorker(() => scalar('select public.claim_message_push_batch()')); };
+const finish = (job, outcome = 'sent') => asWorker(() => db.query('select public.finish_message_push($1, $2, $3)', [job.id, job.lease_id, outcome]));
 const count = () => scalar('select count(*)::int from private.message_push_queue');
 const notify = (count = 1, title = 'Sam', body = 'Hello', recipient = user, actor = sender) => db.query(`
   insert into public.notifications(id, recipient_id, actor_id, conversation_id, kind, title, body, event_count, updated_at)
@@ -29,6 +34,7 @@ before(async () => {
     grant usage on schema public, auth to anon, authenticated, service_role;
     create function auth.jwt() returns jsonb language sql as $$ select coalesce(nullif(current_setting('request.jwt.claims', true),''),'{}')::jsonb $$;
     create function auth.uid() returns uuid language sql as $$ select (auth.jwt()->>'sub')::uuid $$;
+    create function auth.role() returns text language sql as $$ select auth.jwt()->>'role' $$;
     create table public.profiles(user_id uuid primary key);
     create table auth.sessions(id uuid primary key, user_id uuid not null references public.profiles(user_id));
     create table public.conversation_members(conversation_id uuid, user_id uuid references public.profiles(user_id), left_at timestamptz, last_read_at timestamptz, primary key(conversation_id,user_id));
@@ -44,6 +50,9 @@ before(async () => {
   `);
   await db.exec(await readFile(new URL('../migrations/20260912000100_message_push.sql', import.meta.url), 'utf8'));
   await db.exec(await readFile(new URL('../migrations/20260912000300_ios_message_push.sql', import.meta.url), 'utf8'));
+  await db.exec('set check_function_bodies = off');
+  await db.exec(await readFile(new URL('../migrations/20260927000100_worker_rpc_service_role_checks.sql', import.meta.url), 'utf8'));
+  await db.exec('reset check_function_bodies');
 });
 after(() => db.close());
 
@@ -63,6 +72,17 @@ test('private tokens and queue cannot be read or modified by clients', () => iso
   assert.equal(await scalar("select has_function_privilege('authenticated','public.register_message_push_device(uuid,text,boolean)','execute')"), true);
   assert.equal(await scalar("select has_function_privilege('anon','public.register_message_push_device(uuid,text,boolean)','execute')"), false);
   assert.equal(await scalar("select has_function_privilege('service_role','public.claim_message_push_batch()','execute')"), true);
+}));
+
+test('worker RPCs refuse every caller except the service role', () => isolated(async () => {
+  for (const extra of [{}, { role: 'anon' }, { role: 'authenticated' }, { role: 'api_client', client_id: 'third-party' }]) {
+    await claims(user, session, extra);
+    for (const sql of ['select public.claim_message_push_batch()', `select public.finish_message_push('${id(40)}', '${id(41)}', 'sent')`]) {
+      await db.exec('savepoint attempt');
+      await assert.rejects(scalar(sql), e => e.code === '42501');
+      await db.exec('rollback to savepoint attempt');
+    }
+  }
 }));
 
 test('registration requires a real matching auth session and refuses OAuth connected apps', () => isolated(async () => {
@@ -103,7 +123,7 @@ test('direct and group previews fan out to each enabled recipient device', () =>
   assert.equal(jobs[0].data.recipient_id, user);
   assert.equal(jobs[0].data.conversation_id, conversation);
   assert.equal(jobs[0].data.event_count, '1');
-  assert.equal(await scalar('select public.claim_message_push_batch()').then(x => x.length), 0);
+  assert.equal(await asWorker(() => scalar('select public.claim_message_push_batch()')).then(x => x.length), 0);
   for (const job of jobs) await finish(job);
   assert.equal(await count(), 0);
   await notify(2, 'Sam', 'Direct preview');

@@ -1,4 +1,3 @@
--- Production-schema smoke test. All fixtures, broadcasts and writes roll back.
 begin;
 set local lock_timeout='10s';
 set local statement_timeout='30s';
@@ -27,7 +26,6 @@ select set_config('request.jwt.claims','{"sub":"99321000-0000-4000-8000-00000000
 select set_config('boards_api_test.board',public.boards_mutate('staff_create',
   '{"name":"Rollback-only API board","visibility":"private","user_id":"99321000-0000-4000-8000-000000000001"}',gen_random_uuid())->>'board_id',true);
 
--- These helpers are invoker functions, so calls below run with api_client's ACL.
 create function pg_temp.become(who text) returns void language plpgsql as $$
 begin perform set_config('request.jwt.claims',jsonb_build_object('sub',who,'role','api_client','client_id',current_setting('boards_api_test.client'))::text,true);end $$;
 create function pg_temp.args(extra jsonb default '{}') returns jsonb language sql as $$

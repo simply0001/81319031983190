@@ -1,4 +1,3 @@
-"""Authenticated branding imports. Board posts never use this endpoint."""
 import base64
 import binascii
 import hashlib
@@ -27,7 +26,6 @@ def process_image(raw):
             source.seek(0)
             source.load()
             image = ImageOps.exif_transpose(source).convert('RGBA')
-            # A new raster drops EXIF, comments, profiles, and all animation frames.
             clean = Image.new('RGBA', image.size)
             clean.paste(image)
         for edge in (2048, 1600, 1280, 1024, 800):
@@ -52,7 +50,7 @@ def rpc(name, payload, authorization):
 class Handler(BaseHTTPRequestHandler):
     server_version = 'PocketPass'
     def log_message(self, *_args):
-        pass  # Never log tokens, images, or request bodies.
+        pass
 
     def reply(self, status, data, retry_after=None):
         body = json.dumps(data).encode()
@@ -107,13 +105,11 @@ class Handler(BaseHTTPRequestHandler):
             raw = base64.b64decode(body['image'], validate=True)
             if len(raw) > MAX_INPUT:
                 return self.fail(413, 'Choose an image smaller than 10 MB.', 'MEDIA_TOO_LARGE')
-            # JWT verification and owner/staff authorization happen before decoding pixels.
             if public_api:
                 prepared = rpc('api_v1_boards_prepare_branding', {
                     'board_id': body['board_id'], 'kind': body['kind'],
                     'operation_id': body['operation_id'], 'source_hash': hashlib.sha256(raw).hexdigest(),
                 }, authorization)
-                # api_guard can return an error body as well as an HTTP failure.
                 if 'code' in prepared:
                     return self.reply(int(prepared['code'][2:]), prepared)
                 ticket = prepared['ticket']

@@ -15,8 +15,6 @@ SSHD_DROPIN=/etc/ssh/sshd_config.d/10-pocketpass.conf
   || die "ubuntu has no authorized_keys; aborting before disabling password auth"
 
 install -m 0644 /dev/stdin "${SSHD_DROPIN}" <<'EOF'
-# PocketPass SSH policy. Low prefix so these values win over 50-cloud-init
-# (OpenSSH keeps the first value it reads for each keyword).
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no

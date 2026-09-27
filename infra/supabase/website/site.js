@@ -85,7 +85,6 @@
       });
     });
 
-    // Both layouts share the selected app tab; the editor capture is Thor-only.
     deviceButtons.forEach(function (button) {
       button.addEventListener("click", function () {
         var layout = button.getAttribute("data-device-button");
@@ -164,17 +163,12 @@
   }
 
   function setButtonLabel(button, text) {
-    var label = button.querySelector("[data-download-label]");
-    if (label) {
-      label.textContent = text;
-    } else {
-      var icon = button.querySelector("svg");
-      button.textContent = "";
-      if (icon) {
-        button.appendChild(icon);
-      }
-      button.appendChild(document.createTextNode(text));
+    var icon = button.querySelector("svg");
+    button.textContent = "";
+    if (icon) {
+      button.appendChild(icon);
     }
+    button.appendChild(document.createTextNode(text));
   }
 
   fetch("/updates/latest.json", { headers: { Accept: "application/json" } })

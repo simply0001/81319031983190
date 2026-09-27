@@ -489,7 +489,6 @@ input[type="email"], input[type="password"], input[type="text"], input[type="url
   .auth-leaf { animation: none; }
 }
 
-/* Examples remain collapsed until opened or reached through a reference link. */
 #examples, .api-example { scroll-margin-top: 110px; }
 .examples-library > summary, .api-example > summary, .language-example > summary {
   cursor: pointer; font-weight: 600; padding: 14px 16px;

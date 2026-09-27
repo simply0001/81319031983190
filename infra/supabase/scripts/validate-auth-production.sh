@@ -74,7 +74,6 @@ if ! timeout 15 openssl s_client \
   -brief </dev/null >/dev/null 2>&1; then
   fail 'Resend implicit-TLS handshake or certificate verification failed'
 fi
-# Prove that the same probe fails closed when the certificate name is wrong.
 if timeout 15 openssl s_client \
   -connect smtp.resend.com:465 \
   -servername smtp.resend.com \

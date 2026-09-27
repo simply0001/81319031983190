@@ -19,7 +19,7 @@
   "pocketPassSources": [
     {
       "path": "src/renderer.ts",
-      "sha256": "6418531c8b5caefbe6d1e98b00089e96a2008cddc371fb99d85c3b2b0cc6b164"
+      "sha256": "ab5435e3e8ddce2eb508caaf7482503c6ce6e522c80064e5af0cfe0f204407f5"
     },
     {
       "path": "src/RendererFFL.ts",

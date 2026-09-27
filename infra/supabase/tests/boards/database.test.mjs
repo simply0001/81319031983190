@@ -3,15 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { setupApiDatabase } from './api-fixture.mjs';
+import { loadWorkerRoleChecks, setupApiDatabase } from './api-fixture.mjs';
 
-// Fast local PostgreSQL contract suite. The production schema/pgcrypto integration
-// is checked separately; these two deterministic crypto stand-ins are test-only.
 const db = new PGlite();
 const id = n => `99290000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const owner=id(1), member=id(2), outsider=id(3), staff=id(4), moderator=id(5), other=id(6);
 const scalar = async(sql,args=[]) => Object.values((await db.query(sql,args)).rows[0])[0];
 const as = (who=owner,extra={}) => db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:who,role:'authenticated',...extra})]);
+const asWorker = () => db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'service_role'})]);
 const query = (operation,args={}) => scalar('select public.boards_query($1,$2)',[operation,args]);
 const mutate = (operation,args={},operationId=randomUUID()) => scalar('select public.boards_mutate($1,$2,$3)',[operation,args,operationId]);
 const board = async(visibility='public') => {
@@ -86,6 +85,10 @@ before(async()=>{
   const splitPrivacy=await readFile(new URL('../../migrations/20260925000100_split_social_privacy.sql',import.meta.url),'utf8');
   const rewriteStart=splitPrivacy.lastIndexOf('do $$');
   await db.exec(splitPrivacy.slice(rewriteStart,splitPrivacy.indexOf('end $$;',rewriteStart)+7));
+  await db.exec("create function auth.role() returns text language sql as $$select auth.jwt()->>'role'$$");
+  await db.exec('alter table private.board_upload_tickets add column client_id uuid');
+  await db.exec('create function private.api_has_scope(text) returns boolean language sql as $$select false$$');
+  await loadWorkerRoleChecks(db);
   }
   for(const user of [owner,member,outsider,staff,moderator,other]) await db.query('insert into public.profiles(user_id) values($1)',[user]);
   await db.query('insert into private.admin_users(user_id,is_owner) values($1,true)',[staff]);
@@ -120,7 +123,10 @@ test('branding imports authorize before processing, commit idempotently and revo
   assert.equal(await scalar("select has_function_privilege('authenticated','public.commit_board_branding(uuid,text,integer,integer)','execute')"),false);
   await as(owner);
   const commit=()=>scalar('select public.commit_board_branding($1,$2,64,64)',[ticket,Buffer.from('RIFF0000WEBPpayload').toString('base64')]);
+  await reject(commit,/Service role required/);
+  await asWorker();
   const first=await commit();assert.deepEqual(await commit(),first);
+  await as(owner);
   assert.equal((await query('board',{board_id:bid})).icon_asset_id,first.asset_id);
   const invite=await mutate('invite',{board_id:bid,user_id:member});await as(member);await mutate('accept_invitation',{id:invite.id});
   assert.equal((await query('asset',{asset_id:first.asset_id})).mime,'image/webp');
@@ -138,16 +144,21 @@ test('board push is independent of chats, grouped, spoiler safe and checked agai
   await mutate('publish',{board_id:bid,thread_id:post.id,body:'second'});
   assert.equal(await scalar('select count(*)::int from private.board_push_queue'),1);
   await db.exec("update private.board_push_queue set available_at=now()-interval '1 second'");
+  await reject(()=>scalar('select public.claim_board_push_batch()'),/Service role required/);
+  await asWorker();
   const jobs=await scalar('select public.claim_board_push_batch()');
   assert.equal(jobs.length,1);assert.equal(jobs[0].data.event_count,'2');
   assert.equal(JSON.stringify(jobs).includes('SECRET'),false);assert.equal(jobs[0].data.type,'board');
   await as(member);await mutate('push_preference',{enabled:false});
+  await reject(()=>scalar('select public.finish_board_push($1,$2,$3)',[jobs[0].id,jobs[0].lease_id,'retry']),/Service role required/);
+  await asWorker();
   await scalar('select public.finish_board_push($1,$2,$3)',[jobs[0].id,jobs[0].lease_id,'retry']);
   assert.deepEqual(await scalar('select public.claim_board_push_batch()'),[]);
-  await mutate('push_preference',{enabled:true});
+  await as(member);await mutate('push_preference',{enabled:true});
   await as(owner);await mutate('publish',{board_id:bid,thread_id:post.id,body:'third'});
   await mutate('update_board',{board_id:bid,visibility:'private'});
   await as(member);await mutate('leave',{board_id:bid});
+  await asWorker();
   assert.deepEqual(await scalar('select public.claim_board_push_batch()'),[]);
 }));
 

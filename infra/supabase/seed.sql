@@ -1,7 +1,3 @@
--- DEVELOPMENT FIXTURES ONLY.
--- Supabase CLI applies this during a local `db reset`; `db push` does not.
--- Never execute this file against production.
-
 insert into auth.users (
   instance_id,
   id,

@@ -2,7 +2,6 @@
 Description=Daily off-site pull of the latest PocketPass backup
 
 [Timer]
-# The VM backup runs at 03:30 UTC (+10m jitter); pull comfortably after it.
 OnCalendar=*-*-* 04:15:00 UTC
 RandomizedDelaySec=5m
 Persistent=true

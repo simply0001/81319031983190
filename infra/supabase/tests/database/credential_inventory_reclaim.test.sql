@@ -39,8 +39,6 @@ values (
   ''
 );
 
--- 48 stale unused passes and 12 fresh ones: a full inventory that keeps
--- refusing under the old rule.
 insert into private.nearby_credentials (owner_id, signing_public_key, created_at, expires_at)
 select
   '98b70000-0000-4000-8000-000000000001',
@@ -123,7 +121,6 @@ select extensions.is(
   'a following request keeps working while stale passes remain'
 );
 
--- Four stale passes are left; a request for 24 cannot be made room for.
 select extensions.throws_ok(
   $sql$
     select count(*)

@@ -29,8 +29,6 @@ def deliver(job, messaging):
     board = data.get("type") == "board"
     thread = (data.get("thread_id") or data.get("board_id")) if board else data.get("conversation_id")
     if ios:
-        # APNs must display an alert without launching the app. Never send a chat
-        # preview to iOS: logout while offline cannot revoke an already queued alert.
         data = {**data, "title": "PocketPass", "body": "There is new activity in your boards." if board else "You have a new message."}
         options["apns"] = messaging.APNSConfig(
             headers={

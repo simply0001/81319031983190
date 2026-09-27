@@ -39,7 +39,6 @@ for migration_file in "${migration_files[@]}"; do
 
   [[ "${version}" =~ ^[0-9]{14}$ ]] \
     || die "migration filename must begin with a 14-digit version: ${filename}"
-  # Accept Windows line endings without changing the bytes used for checksum validation.
   [[ "$(head -n 1 "${migration_file}" | tr -d '\r')" == "begin;" ]] \
     || die "migration must start with begin;: ${filename}"
   [[ "$(tail -n 1 "${migration_file}" | tr -d '\r')" == "commit;" ]] \

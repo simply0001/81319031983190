@@ -67,9 +67,6 @@ where user_id = '99800000-0000-4000-8000-000000000002';
 update public.profiles set country_code = 'JP'
 where user_id = '99800000-0000-4000-8000-000000000003';
 
--- Player one meets two (FR) and three (JP). 2026-08-30 is a Sunday. Seen from
--- UTC+2 the 28 Aug 23:30 pass lands on the 29th, so that offset gives the days
--- 18-20, 27, 29, 30; UTC gives 18-20, 27-30. The 26 Aug pass never confirmed.
 insert into public.nearby_encounters (
   id, user_low, user_high, reported_by, reporter_operation_id, occurred_at, confirmed_at
 )

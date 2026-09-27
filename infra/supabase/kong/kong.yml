@@ -415,7 +415,6 @@ services:
         config:
           access:
             - |
-              -- Keep variant signup paths from bypassing the exact username-only route.
               local path = ngx.unescape_uri(kong.request.get_path()):lower()
               if kong.request.get_method() == "POST" and path:find("signup", 1, true) then
                 return kong.response.exit(404, { error = "not_found" })

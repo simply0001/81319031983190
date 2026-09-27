@@ -453,33 +453,29 @@ select extensions.is(
 );
 
 reset role;
-set local role authenticated;
-select pg_catalog.set_config(
-  'request.jwt.claim.sub',
+insert into public.interaction_events (
+  id,
+  actor_id,
+  subject_user_id,
+  event_type,
+  client_operation_id,
+  payload,
+  occurred_at
+)
+values (
+  '93000000-0000-4000-8000-000000000002',
   '90000000-0000-4000-8000-000000000001',
-  true
+  '90000000-0000-4000-8000-000000000002',
+  'nearby_encounter',
+  '93000000-0000-4000-8000-000000000001',
+  '{"source":"pgtap"}'::jsonb,
+  now()
 );
 
-select extensions.is(
-  (
-    public.record_interaction_event(
-      '93000000-0000-4000-8000-000000000002',
-      '90000000-0000-4000-8000-000000000002',
-      'nearby_encounter',
-      '93000000-0000-4000-8000-000000000001',
-      '{"source":"pgtap"}'::jsonb
-    )
-  ).id,
-  (
-    public.record_interaction_event(
-      '93000000-0000-4000-8000-000000000002',
-      '90000000-0000-4000-8000-000000000002',
-      'nearby_encounter',
-      '93000000-0000-4000-8000-000000000001',
-      '{"source":"pgtap"}'::jsonb
-    )
-  ).id,
-  'interaction event retries are idempotent'
+select extensions.hasnt_function(
+  'public',
+  'record_interaction_event',
+  'clients have no RPC that writes interaction events'
 );
 
 reset role;

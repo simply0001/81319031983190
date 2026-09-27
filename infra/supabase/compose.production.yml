@@ -46,8 +46,6 @@ services:
     environment:
       KONG_REAL_IP_HEADER: X-PocketPass-Client-IP
       KONG_REAL_IP_RECURSIVE: "on"
-      # Only Caddy may assert the client-IP header; the subnet is pinned in the
-      # networks block below so this range is stable across recreations.
       KONG_TRUSTED_IPS: "172.30.77.0/24"
       KONG_PLUGINS: request-transformer,cors,key-auth,acl,request-termination,ip-restriction,post-function,rate-limiting
       KONG_UNTRUSTED_LUA: sandbox
@@ -67,18 +65,10 @@ services:
       - "5432"
       - "6543"
 
-  # No Edge Functions are deployed; keep the container off until they ship.
   functions:
     profiles:
       - disabled
 
-  # Asymmetric JWT enablement. The upstream compose ships these commented out;
-  # they must move together: with GOTRUE_JWT_KEYS set, GoTrue signs new
-  # sessions with the ES256 key (key_ops includes "sign"), so Realtime and
-  # Storage need the public JWKS at the same time. PostgREST already verifies
-  # via the upstream default PGRST_JWT_SECRET: ${JWT_JWKS:-${JWT_SECRET}}.
-  # JWT_KEYS/JWT_JWKS both include the legacy HS256 oct key, so existing
-  # sessions stay valid during the transition.
   realtime:
     environment:
       API_JWT_JWKS: ${JWT_JWKS}
@@ -132,7 +122,6 @@ services:
       GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI}
       GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
       GOTRUE_SMTP_HOST: ${SMTP_HOST}
-      # Resend's implicit-TLS endpoint; never permit opportunistic SMTP downgrade.
       GOTRUE_SMTP_PORT: "465"
       GOTRUE_SMTP_USER: ${SMTP_USER}
       GOTRUE_SMTP_PASS: ${SMTP_PASS}

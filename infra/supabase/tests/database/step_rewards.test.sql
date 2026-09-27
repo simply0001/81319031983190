@@ -71,7 +71,6 @@ values
     ''
   );
 
--- No JWT claims are set yet, so this runs as nobody.
 select extensions.throws_ok(
   $$ select * from public.report_daily_steps((now() at time zone 'utc')::date, 100, 0) $$,
   '42501',

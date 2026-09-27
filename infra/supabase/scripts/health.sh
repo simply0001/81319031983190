@@ -98,6 +98,30 @@ else
   fail "expected RLS on 11 application tables, found ${rls_count:-none}"
 fi
 
+worker_rpc_exposure="$(
+  compose exec -T db \
+    psql --username postgres --dbname postgres --tuples-only --no-align \
+      --command "
+        select count(*)
+        from unnest(array[
+          'public.claim_message_push_batch()',
+          'public.finish_message_push(uuid,uuid,text)',
+          'public.claim_board_push_batch()',
+          'public.finish_board_push(uuid,uuid,text)',
+          'public.commit_board_branding(uuid,text,integer,integer)'
+        ]::regprocedure[]) as worker_rpc(signature)
+        cross join unnest(array['anon', 'authenticated']) as client_role(name)
+        where has_function_privilege(client_role.name, worker_rpc.signature, 'execute')
+      " \
+    </dev/null | tr -d '[:space:]'
+)"
+
+if [[ "${worker_rpc_exposure}" == "0" ]]; then
+  pass 'push worker and branding commit RPCs are closed to anon and authenticated'
+else
+  fail "anon or authenticated can execute push worker or branding commit RPCs (${worker_rpc_exposure:-query failed} grants; re-apply the migration grants, see the README)"
+fi
+
 if curl --fail --silent --show-error \
   --max-time 10 \
   https://api.pocketpass.xyz/healthz \

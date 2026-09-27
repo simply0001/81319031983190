@@ -5,6 +5,17 @@ umask 077
 
 BASE_ENV="${BASE_ENV:-/opt/pocketpass/supabase-upstream/docker/.env}"
 OUTPUT_ENV="${OUTPUT_ENV:-/opt/pocketpass/app/infra/supabase/.env.production}"
+
+[[ "$#" == 1 && "$1" == --bootstrap ]] || {
+  printf 'usage: %s --bootstrap\n' "$0" >&2
+  printf 'Creates a new %s from %s. To change one key of a live file, edit that line in place (see the README).\n' "${OUTPUT_ENV}" "${BASE_ENV}" >&2
+  exit 2
+}
+[[ ! -e "${OUTPUT_ENV}" ]] || {
+  printf 'error: %s already exists; this script never replaces it\n' "${OUTPUT_ENV}" >&2
+  exit 1
+}
+
 RESEND_SECRET_FILE="${RESEND_SECRET_FILE:?RESEND_SECRET_FILE is required}"
 BACKUP_AGE_RECIPIENT="${BACKUP_AGE_RECIPIENT:?BACKUP_AGE_RECIPIENT is required}"
 PUBLIC_API_ENABLED="${PUBLIC_API_ENABLED:-true}"
@@ -26,7 +37,11 @@ PUBLIC_API_ENABLED="${PUBLIC_API_ENABLED:-true}"
   exit 1
 }
 
-install -m 600 "${BASE_ENV}" "${OUTPUT_ENV}"
+( set -o noclobber; cat -- "${BASE_ENV}" >"${OUTPUT_ENV}" ) || {
+  printf 'error: could not create %s\n' "${OUTPUT_ENV}" >&2
+  exit 1
+}
+chmod 600 "${OUTPUT_ENV}"
 
 set_env() {
   local key="$1"
@@ -92,11 +107,6 @@ set_env EMAIL_OTP_SUBJECT 'Your PocketPass verification code'
 set_env SMTP_MAX_FREQUENCY 60s
 set_env AUTH_EMAILS_PER_HOUR 1000
 
-set_env DISCORD_ENABLED false
-set_env DISCORD_CLIENT_ID ''
-set_env DISCORD_CLIENT_SECRET ''
-set_env DISCORD_REDIRECT_URI https://api.pocketpass.xyz/auth/v1/callback
-
 set_env SMTP_ADMIN_EMAIL no-reply@pocketpass.xyz
 set_env SMTP_HOST smtp.resend.com
 set_env SMTP_PORT 465
@@ -143,4 +153,5 @@ for key in "${required_keys[@]}"; do
   }
 done
 
-printf 'Production environment configured at %s (mode 600).\n' "${OUTPUT_ENV}"
+printf 'Production environment created at %s (mode 600).\n' "${OUTPUT_ENV}"
+printf 'Next: scripts/configure-discord-oauth.sh, then the Ko-fi, webhook and Firebase keys from .env.production.example.\n'

@@ -11,6 +11,7 @@ const owner=id(1), member=id(2), outsider=id(3), staff=id(4), moderator=id(5), c
 const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
 const claims=(who=owner,app=null)=>db.query("select set_config('request.jwt.claims',$1,false)",[
   JSON.stringify({sub:who,role:app?'api_client':'authenticated',...(app?{client_id:app}:{})})]);
+const asWorker=()=>db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'service_role'})]);
 const contract=JSON.parse(await readFile(new URL('../../public-api/boards.json',import.meta.url),'utf8'));
 const drawing={version:1,width:800,height:600,strokes:[{pen:'pixel',color:'#222222',size:4,points:[[10,10],[30,40]]}]};
 const native=(op,args={},operation=randomUUID())=>scalar('select public.boards_mutate($1,$2,$3)',[op,args,operation]);
@@ -314,7 +315,9 @@ test('imported artwork retains OAuth identity and rechecks consent before commit
   assert.equal(ok(await api('boards.prepare_branding',args)).ticket,ticket);
   assert.equal((await api('boards.prepare_branding',args,owner,secondClient)).code,'PT409');
   denied(await api('boards.prepare_branding',{...args,operation_id:randomUUID()},staff));
-  const commit=()=>scalar('select public.commit_board_branding($1,$2,40,30)',[ticket,Buffer.from('RIFF0000WEBPpayload').toString('base64')]);
+  const commit=async()=>{await asWorker();return scalar('select public.commit_board_branding($1,$2,40,30)',[ticket,Buffer.from('RIFF0000WEBPpayload').toString('base64')]);};
+  await claims(owner,client);
+  await reject(()=>scalar('select public.commit_board_branding($1,$2,40,30)',[ticket,Buffer.from('RIFF0000WEBPpayload').toString('base64')]),/Service role required/);
   await db.query('update auth.oauth_consents set revoked_at=now() where client_id=$1 and user_id=$2',[client,owner]);
   await reject(commit,/permission is no longer/);
   assert.equal(await scalar('select count(*)::int from private.board_assets'),0);
@@ -410,7 +413,7 @@ test('artwork cannot reuse a committed note operation and ownership loss prevent
   const args={board_id:bid,kind:'cover',operation_id:operation,source_hash:'b'.repeat(64)};
   const {ticket}=ok(await api('boards.prepare_branding',args));
   ok(await write('publish',{board_id:bid,body:'A separate action with a reused ID',operation_id:operation}));
-  const commit=id=>scalar('select public.commit_board_branding($1,$2,40,30)',[id,Buffer.from('RIFF0000WEBPpayload').toString('base64')]);
+  const commit=async id=>{await asWorker();return scalar('select public.commit_board_branding($1,$2,40,30)',[id,Buffer.from('RIFF0000WEBPpayload').toString('base64')]);};
   await reject(()=>commit(ticket),/operation ID/);
   const next=ok(await api('boards.prepare_branding',{...args,operation_id:randomUUID()}));
   ok(await write('join',{board_id:bid},member));

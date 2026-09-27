@@ -67,8 +67,6 @@ h1, h2 { margin: 0; color: var(--teal); font-weight: 700; }
 p { margin: 0; }
 [hidden] { display: none !important; }
 
-/* Login / forbidden */
-
 .auth-shell {
   min-height: 100vh;
   display: grid;
@@ -93,8 +91,6 @@ p { margin: 0; }
 .auth-copy { color: var(--teal-soft); font-weight: 600; font-size: 17px; line-height: 1.5; margin-bottom: 0.4rem; }
 .auth-card .stack { text-align: left; }
 .auth-card .btn-block { margin-top: 0.4rem; }
-
-/* Forms */
 
 .stack { display: grid; gap: 1rem; }
 .row { display: flex; gap: 0.7rem; flex-wrap: wrap; align-items: center; }
@@ -156,8 +152,6 @@ input:focus { outline: none; border-color: var(--green-border); box-shadow: inse
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
 }
 
-/* App shell */
-
 .topbar {
   position: sticky;
   top: 0;
@@ -209,8 +203,6 @@ input:focus { outline: none; border-color: var(--green-border); box-shadow: inse
 .view-head h1 { font-size: 1.7rem; }
 .view-actions { display: flex; align-items: center; gap: 0.75rem; }
 
-/* Panels (the app's settings/friend cards) */
-
 .panel {
   background: linear-gradient(180deg, #ffffff 0%, #ffffff 62.6%, #ececec 100%);
   border: 6px solid var(--grey-border);
@@ -254,8 +246,6 @@ input:focus { outline: none; border-color: var(--green-border); box-shadow: inse
 .search { display: flex; gap: 0.6rem; align-items: center; flex: 1 1 320px; max-width: 560px; }
 .search input { flex: 1; }
 
-/* Tables */
-
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 th, td { text-align: left; padding: 0.6rem 0.65rem; border-bottom: 2px solid rgba(29, 89, 107, 0.12); vertical-align: top; }
@@ -289,8 +279,6 @@ a { color: var(--teal); font-weight: 700; }
 .badge-admin { border-color: var(--purple); background: #ebe7ff; color: #4a3ac0; }
 .badge-bad { border-color: var(--red-border); background: #ffe6e6; color: #8b1f1f; }
 
-/* User detail */
-
 .user-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .user-name { font-size: 1.6rem; }
 .user-sub { color: var(--teal-soft); font-weight: 600; margin-top: 0.2rem; }
@@ -303,8 +291,6 @@ a { color: var(--teal); font-weight: 700; }
 .facts dd { margin: 0; word-break: break-all; font-weight: 500; }
 
 code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.85em; }
-
-/* Toast */
 
 .banner {
   position: fixed;
@@ -332,8 +318,6 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   .view-head h1 { font-size: 1.4rem; }
 }
 
-/* Permissions */
-
 .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.6rem; }
 .perm-option {
   display: flex;
@@ -356,8 +340,6 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .hint { display: block; margin-top: 0.4rem; font-size: 0.85rem; color: var(--teal-soft); font-weight: 600; }
 .badge-you { border-color: var(--teal-border); background: var(--teal-pale); color: var(--teal); }
 .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-
-/* Motion */
 
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(14px) scale(0.985); }
@@ -440,7 +422,6 @@ input[type="email"], input[type="text"], input[type="number"], input[type="searc
   *, *::before, *::after { animation-duration: 0.001s !important; animation-iteration-count: 1 !important; transition-duration: 0.001s !important; }
   .auth-leaf { animation: none; }
 }
-/* Boards use the same console controls and never render user HTML. */
 .board-prose { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 .board-note-preview { width: min(100%, 800px); aspect-ratio: 4 / 3; object-fit: contain; background: white; border-radius: 12px; }
 #boards-console .panel { padding: 24px; }

@@ -1,9 +1,3 @@
-"""Add PocketPass's hand-drawn crying face to the bundled DS-style font.
-
-Run with fontTools available. The original 240-unit advance, 20-unit strokes,
-square frame and sad-eye contours are retained. U+1F62D is the message text;
-U+E029 is its private-use alias, following the other DS characters.
-"""
 from pathlib import Path
 from fontTools.ttLib import TTFont
 from fontTools.pens.recordingPen import RecordingPen
@@ -11,10 +5,10 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 
 FONT = Path(__file__).resolve().parents[1] / "ui/src/commonMain/composeResources/font/sudofont.ttf"
 NAME = "face-cry-1"
+OVERLAP_SIMPLE = 0x40
 
 
 def rounded_rectangle(pen, left, bottom, right, top, radius):
-    # Clockwise solid contour, like the original faces' features.
     pen.moveTo((left + radius, top))
     pen.lineTo((right - radius, top))
     pen.qCurveTo((right, top), (right, top - radius))
@@ -39,7 +33,6 @@ def main():
             current = []
     assert len(contours) == 5
     pen = TTGlyphPen(None)
-    # Exact outer frame and counter; lift the existing sad eyes by 20 units.
     for index in (0, 1, 3, 4):
         for operation, points in contours[index]:
             offset = 20 if index >= 3 else 0
@@ -48,8 +41,7 @@ def main():
     rounded_rectangle(pen, 160, 10, 180, 118, 10)
     rounded_rectangle(pen, 100, 10, 140, 75, 20)
     glyph = pen.glyph()
-    # The tears overlap the eyelids, so rasterizers must use the union fill.
-    glyph.flags[0] |= 0x40  # OVERLAP_SIMPLE
+    glyph.flags[0] |= OVERLAP_SIMPLE
     order = font.getGlyphOrder()
     if NAME not in order:
         font.setGlyphOrder(order + [NAME])

@@ -378,11 +378,10 @@ select extensions.ok(
   ),
   'mark-read updates only the recipient row'
 );
-select extensions.throws_ok(
-  $$select public.publish_system_notification('Not allowed', 'client call')$$,
-  '42501',
-  'Service role required',
-  'authenticated clients cannot author system notifications'
+select extensions.hasnt_function(
+  'public',
+  'publish_system_notification',
+  'no RPC authors system notifications'
 );
 select extensions.ok(
   private.can_access_realtime_topic(

@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""Read-only email disclosure check using two explicitly consented test-account sessions."""
-
 import argparse
 import base64
 import json
@@ -49,7 +47,7 @@ def request_json(url: str, token: str, body: bytes | None = None) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description="Read-only email disclosure check using two explicitly consented test-account sessions.")
     parser.add_argument("--openid-only", type=Path, required=True,
                         help="OAuth token response for scope=openid")
     parser.add_argument("--email-scope", type=Path, required=True,

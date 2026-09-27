@@ -65,7 +65,7 @@ select pg_catalog.set_config('request.jwt.claim.role', 'authenticated', true);
 select extensions.lives_ok(
   $$
     select *
-    from public.save_profile_mii(
+    from public.save_profile_mii_slot(
       '98000000-0000-4000-8000-000000000011',
       1,
       1,
@@ -122,7 +122,8 @@ select extensions.lives_ok(
         "extFacePaintColor":-1
       }'::jsonb,
       '98000000-0000-4000-8000-000000000001/mii-r1-98000000-0000-4000-8000-000000000011.png',
-      'AQID'
+      'AQID',
+      1
     );
   $$,
   'a valid Mii portrait publication succeeds'
@@ -151,7 +152,7 @@ select extensions.is(
 select extensions.lives_ok(
   $$
     select *
-    from public.save_profile_mii(
+    from public.save_profile_mii_slot(
       '98000000-0000-4000-8000-000000000011',
       1,
       1,
@@ -208,7 +209,8 @@ select extensions.lives_ok(
         "extFacePaintColor":-1
       }'::jsonb,
       '98000000-0000-4000-8000-000000000001/mii-r1-98000000-0000-4000-8000-000000000011.png',
-      'AQID'
+      'AQID',
+      1
     );
   $$,
   'replaying the same Mii publication remains idempotent'

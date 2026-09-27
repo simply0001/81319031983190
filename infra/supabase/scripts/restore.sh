@@ -129,7 +129,45 @@ fi
 POSTGRES_DB="$(env_or_file POSTGRES_DB)"
 [[ -n "${POSTGRES_DB}" ]] || POSTGRES_DB="postgres"
 
-printf 'Replacing PostgreSQL objects...\n'
+roles_file="${temporary_directory}/roles.sql"
+[[ -s "${roles_file}" ]] || die "backup does not contain roles.sql"
+
+declare -A existing_roles=()
+while IFS= read -r role_name; do
+  [[ -n "${role_name}" ]] && existing_roles["${role_name}"]=1
+done < <(
+  compose exec -T db \
+    psql --username postgres --dbname "${POSTGRES_DB}" --tuples-only --no-align \
+      --command 'select rolname from pg_catalog.pg_roles' \
+    </dev/null | tr -d '\r'
+)
+((${#existing_roles[@]} > 0)) || die "could not list the database roles"
+
+missing_roles=()
+while IFS= read -r role_name; do
+  role_name="${role_name//\"/}"
+  [[ -n "${existing_roles[${role_name}]:-}" ]] && continue
+  [[ "${role_name}" =~ ^[a-z_][a-z0-9_]*$ ]] \
+    || die "roles.sql names a missing role that must be created by hand: ${role_name}"
+  missing_roles+=("${role_name}")
+done < <(sed -n 's/^CREATE ROLE \(.*\);$/\1/p' "${roles_file}")
+
+if ((${#missing_roles[@]} > 0)); then
+  printf 'Creating roles the backup grants to: %s\n' "${missing_roles[*]}"
+  {
+    for role_name in "${missing_roles[@]}"; do
+      printf 'create role %s;\n' "${role_name}"
+      sed -n -E "/^ALTER ROLE ${role_name} (WITH|SET) /{s/ PASSWORD '[^']*'//;p}" "${roles_file}"
+    done
+    for role_name in "${missing_roles[@]}"; do
+      sed -n -E "/^GRANT (${role_name} TO [a-z0-9_\"]+|[a-z0-9_\"]+ TO ${role_name})[ ;]/{s/ GRANTED BY [^;]+;$/;/;p}" "${roles_file}"
+    done
+  } | compose exec -T db \
+        psql --username postgres --dbname "${POSTGRES_DB}" \
+          --quiet --set ON_ERROR_STOP=1
+fi
+
+printf 'Replacing PostgreSQL objects and their privileges...\n'
 compose exec -T db \
   pg_restore \
     --username postgres \
@@ -137,7 +175,6 @@ compose exec -T db \
     --clean \
     --if-exists \
     --no-owner \
-    --no-privileges \
     --exit-on-error \
   <"${temporary_directory}/database.dump"
 
@@ -166,6 +203,6 @@ compose up -d
 compose ps
 
 printf '\nRestore complete.\n'
-printf 'roles.sql and the encrypted configuration snapshot were verified but not applied.\n'
+printf 'Roles missing from this cluster were created from roles.sql; the encrypted configuration snapshot was verified but not applied.\n'
 printf 'Run scripts/health.sh, then validate auth, avatars, and message access manually.\n'
 

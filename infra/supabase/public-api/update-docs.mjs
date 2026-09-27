@@ -1,5 +1,3 @@
-// Keep the published endpoint table in sync with the validated API contract.
-// Run with --check in validation, or without it after changing boards.json.
 import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
