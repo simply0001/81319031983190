@@ -56,3 +56,17 @@ the "Original protocol and walkthrough examples" archive and its links. Only
 live page); the previous file is at
 `/opt/pocketpass/deploy-backups/docs-archive-removal-20260927/docs.html` and
 `health.sh` passed. This does not cover later deployments or releases.
+
+Later on 27 September 2026, the user approved pushing everything to the server
+("push everything, so server, private repo and then make new ios build, but no
+public release"). Deployed: migrations `20260927000100_worker_rpc_service_role_checks`,
+`20260927000200_drop_unused_rpcs` and `20260927000300_piip_wording`; the updated
+`backup.sh`, `restore.sh`, `health.sh`, `configure-production-env.sh`,
+`rotate-resend-key.sh` and comment-only script changes; the website, admin and
+developer copy and asset cleanup. A fresh backup was taken first with the new
+`backup.sh` (`pocketpass-20260927T122416Z.tar.gz.age`, SHA-256 `ee3ed38c2c1340c67163ee9736aab0f29c8bc798b6f3881196786071f11f9d47`) and copied
+to `PocketPass-backups\production-backups\`; the previous files are in
+`/opt/pocketpass/deploy-backups/cleanup-20260927/`. The migrations passed a
+rolled-back dry run, then `health.sh` (48 passes), `validate-auth-production.sh`
+and `validate-public-api-production.sh` passed. No app release or update-feed
+change was made. This does not cover later deployments or releases.

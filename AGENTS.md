@@ -88,7 +88,8 @@ Earlier releases:
 | 0.1.7-alpha | 20 | 09-09 |
 
 ### Backend
-Migrations are applied through `20260926000200_email_otp_signup_guard` (checked on the VM). The 09-26 changes:
+Migrations are applied through `20260927000300_piip_wording` (checked on the VM). The 09-26 changes:
+Applied on 2026-09-27 after a dry run and a fresh backup: `20260927000100_worker_rpc_service_role_checks` (the push and branding worker RPCs refuse anyone but `service_role`; `health.sh` checks their grants), `20260927000200_drop_unused_rpcs` and `20260927000300_piip_wording`. Backups now keep privileges.
 - `20260925000100_split_social_privacy` and `20260926000100_email_privacy`;
 - Resend SMTP moved to implicit TLS on port 465;
 - privacy notice live at `pocketpass.xyz/privacy`;
@@ -116,7 +117,7 @@ Not released; the owner deferred it and wants TestFlight first.
 - `admin_console.test.sql` expects 8 permissions; there are 18.
 - `public_api_followups.test.sql` has 3 stale expectations.
 - Older pgTAP files assume an empty database.
-- 3 known Ko-fi count failures.
+- `kofi_supporters.test.sql` has 6 failures on production: counts that assume an empty database, plus the permission catalog (8 expected, 18 real).
 - `WidgetBindingStoreTest` has 3 failures on Windows.
 - `PuzzleSwapFocusUiTest` compiles but has never run.
 - `:app:lintRelease` stops on 2 `MissingPermission` errors at `notify()` in `push/BoardNotifications.kt` and `push/MessageNotifications.kt`. Both calls are guarded by `allowed()`; the errors predate the 2026-09-27 dependency update.
@@ -124,14 +125,14 @@ Not released; the owner deferred it and wants TestFlight first.
 
 ### Thor quirks
 - System WebView 109.
-- `PocketPassReducer.reduce` is over the ART compile limit (17,833 instructions).
+- `PocketPassReducer.reduce` was over the ART compile limit (17,833 instructions); on 2026-09-27 it was split into per-area helpers. Check on the Thor that it is no longer interpreted.
 
 ### Open asks
 - The top-screen notification ticker should scroll a little, then reset (09-12).
 - Declutter the consent/permission review, move it to the top screen, and flag dangerous permissions (09-21).
 - Before any store release: update the privacy policy and declare `READ_STEPS`.
 - Moving Kong to Envoy is not started.
-- Realtime is pinned to protocol V1 (`vsn` in `PocketPassSupabaseClientFactory`) since the 2026-09-27 move to Supabase 3.8.0 / Kotlin 2.4.20 / AGP 9.4.1 / Gradle 9.7.1. The server (Realtime v2.102.3) also accepts V2, the client default; switch after testing on a device. The Supabase server needed no update for that client.
+- Realtime uses protocol V2 (the supabase-kt 3.8 default) from 2026-09-27, checked on the Thor with a server-sent notification event. The server (Realtime v2.102.3) serves V1 and V2 clients side by side and needed no update.
 - The public API cannot read or set Block Invites: `set_invite_privacy` refuses OAuth tokens, and `privacy.get`/`privacy.set` cover Block Messages only.
 
 ### Video (`video/pocketpass-presentation`, Remotion + Cavalry, untracked)
@@ -171,6 +172,7 @@ Not released; the owner deferred it and wants TestFlight first.
 - `ui/`: Compose Multiplatform screens:
   - `PocketPassDisplays.kt`, `DesignSystem.kt`, `screens/`, `phone/`, `controller/ControllerFocus.kt`, `theme/PocketPalette.kt`;
   - resources in `composeResources/`. `Res` is internal, so anything that reads fonts or assets must live in `:ui`.
+  - `:ui` needs `androidResources.enable = true` in its `android {}` block, or `Res.readBytes` crashes on Android. iOS reads its backend config from generated Kotlin, not Info.plist.
 - `ios-app/`: XcodeGen `project.yml`, a UIKit host (`AppDelegate` → `PhoneEntryKt.PhoneAppViewController()`), the Swift WidgetKit `PocketPassWidget`, `scripts/archive.sh`, `APP_STORE.md`.
 - `ios-spike/`: a separate Gradle build (`./gradlew -p ios-spike`), historical.
 - `infra/supabase/`: the backend. `README.md` (58 KB) is the operations manual.
@@ -288,6 +290,7 @@ Not released; the owner deferred it and wants TestFlight first.
 - **Emulator gotchas.**
   - QEMU 0xc0000005: use software graphics with Vulkan off.
   - With `-gpu swiftshader_indirect`, `pp36` segfaults (exit 139) within minutes, usually on Messages or Settings, whatever the app version. `-gpu host` got through the same screens without a crash (2026-09-27).
+  - `pp36` has 2 GB of RAM: after hours of uptime it swaps, Bluetooth can stick in `BLE_TURNING_ON`, and the app ANRs inside Android's own view code. Cold boot (`-no-snapshot-load`) before judging performance.
   - Emulators have no step sensor.
   - Non-exported receivers ignore `am broadcast` on API 36.
   - Install with `adb install -r -g`, then tap Allow Permissions.
