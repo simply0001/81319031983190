@@ -138,33 +138,26 @@
             <h3>Step 1 — generate a verifier, a challenge and a state</h3>
             <p>Create 32 random bytes and base64url-encode them: that is your <code>code_verifier</code>. Hash it with SHA-256 and base64url-encode the digest: that is your <code>code_challenge</code>. Generate a second random string as <code>state</code>. Keep both the verifier and the state somewhere tied to this user's session (a cookie, <code>sessionStorage</code>, a row in your database) — you need them when the user comes back.</p>
             <h3>Step 2 — send the user to the authorization endpoint</h3>
-            <p class="example-link"><a href="#example-reference-connect-1">Open code examples →</a></p>
+            <p>The URL is <code>https://api.pocketpass.xyz/auth/v1/oauth/authorize</code> with <code>client_id</code>, a registered <code>redirect_uri</code>, <code>response_type=code</code>, <code>scope</code>, <code>code_challenge</code>, <code>code_challenge_method=S256</code> and <code>state</code>.</p>
             <p>Open this URL in the user's browser (a full navigation on the web, the system browser or a custom tab on mobile and desktop — never a web view you control). PocketPass redirects to the consent screen at <code>https://links.pocketpass.xyz/oauth/consent</code>, where the user signs in if needed and sees your app's name, website, description and the PocketPass permissions you registered. If the user already has a live grant for your app the screen is skipped and they land straight back on your redirect URI.</p>
             <h3>Step 3 — handle the redirect</h3>
             <p>On approval the browser lands on your <code>redirect_uri</code> with <code>?code=…&amp;state=…</code>. On denial it lands there with <code>?error=access_denied&amp;state=…</code>. Always check that <code>state</code> matches the value you stored before doing anything with the code.</p>
             <h3>Step 4 — exchange the code for tokens</h3>
-            <p>Codes are single-use and expire ten minutes after they were issued. Send the exchange as <code>application/x-www-form-urlencoded</code> (JSON with <code>Content-Type: application/json</code> is accepted too):</p>
-            <p class="example-link"><a href="#example-reference-connect-2">Open code examples →</a></p>
-            <p>Confidential clients leave <code>client_id</code> out of the body and send <code>Authorization: Basic base64(client_id:client_secret)</code> instead. The response:</p>
-            <p class="example-link"><a href="#example-reference-connect-3">Open code examples →</a></p>
+            <p>Codes are single-use and expire ten minutes after they were issued. Send it to <code>POST https://api.pocketpass.xyz/auth/v1/oauth/token</code> as <code>application/x-www-form-urlencoded</code> (JSON with <code>Content-Type: application/json</code> is accepted too), with <code>grant_type=authorization_code</code>, the <code>code</code>, the same <code>redirect_uri</code>, the <code>code_verifier</code> and, for public clients, your <code>client_id</code>.</p>
+            <p>Confidential clients leave <code>client_id</code> out of the body and send <code>Authorization: Basic base64(client_id:client_secret)</code> instead. The response has <code>access_token</code>, <code>token_type</code> (<code>bearer</code>), <code>expires_in</code> (3600 seconds), <code>refresh_token</code> and <code>id_token</code>.</p>
             <p>Store the access token and the refresh token per user. You can ignore <code>id_token</code>; the user id it carries is also returned by <code>session.get</code> and <code>me.get</code>, which is the reliable way to know who just connected.</p>
             <h3>Step 5 — check the connection</h3>
-            <p class="example-link"><a href="#example-reference-connect-4">Open code examples →</a></p>
             <p><code>session.get</code> needs no scope and returns the user id, your client id, the scopes the user granted and your remaining rate-limit budget. It is the right first call after every connect and a good health check afterwards.</p>
 
-            <h3>Website example (public client, browser <code>fetch</code>)</h3>
-            <p>Two functions: one that starts the flow, one that runs on your callback page.</p>
-            <p class="example-link"><a href="#example-reference-connect-5">Open code examples →</a></p>
+            <h3>Websites (public clients)</h3>
             <p>The API sends CORS headers, so a browser app can call <code>/v1/…</code> directly with the access token. Remember that anything in the browser is visible to the user, which is why a website is a public client.</p>
 
-            <h3>Native app example (public client, loopback redirect)</h3>
-            <p>Desktop and CLI apps listen on a loopback port and register <code>http://127.0.0.1:&lt;port&gt;/callback</code> as the redirect URI. Node.js, using only built-in modules; <code>openBrowser</code> is whatever your platform uses to open a URL in the default browser.</p>
-            <p class="example-link"><a href="#example-reference-connect-6">Open code examples →</a></p>
+            <h3>Native apps (public clients)</h3>
+            <p>Desktop and CLI apps listen on a loopback port and register <code>http://127.0.0.1:&lt;port&gt;/callback</code> as the redirect URI.</p>
             <p>Mobile apps do the same with a custom scheme (<code>com.example.app:/callback</code>) or an https App Link / Universal Link, opened in the system browser or an in-app browser tab.</p>
 
-            <h3>Server-side example (confidential client)</h3>
-            <p>The browser part is identical; only the exchange changes. Run it on your server with the secret from your secret store:</p>
-            <p class="example-link"><a href="#example-reference-connect-7">Open code examples →</a></p>
+            <h3>Servers (confidential clients)</h3>
+            <p>The browser part is the same. Run the code exchange on your server, with the client secret from your secret store.</p>
           </section>
 
           <section class="panel">
@@ -244,7 +237,7 @@
               <li><strong>Authorization code:</strong> single-use, ten minutes.</li>
             </ul>
             <h3>Refreshing</h3>
-            <p class="example-link"><a href="#example-reference-tokens-1">Open code examples →</a></p>
+            <p>Send <code>grant_type=refresh_token</code> and the <code>refresh_token</code> to the same token endpoint, with your <code>client_id</code> for a public client or HTTP Basic for a confidential one.</p>
             <p>Refresh a little before expiry (for example when fewer than 60 seconds remain) or on the first <code>401</code>, then retry the request once. A refresh that answers <code>400</code> with <code>"error": "invalid_grant"</code> means the grant is gone — the user disconnected your app, PocketPass suspended it, you changed the app's scopes, or the refresh token was already rotated. Drop the stored tokens and offer the user the connect flow again. <code>invalid_client</code> means your client id, secret or client type is wrong.</p>
             <h3>Revocation</h3>
             <p>Three things end a connection, and all of them take effect within one request:</p>
@@ -260,8 +253,7 @@
           <section class="panel">
             <h2 id="calling">Calling the API</h2>
             <p class="section-examples"><a href="#example-http">Kotlin &amp; JavaScript examples →</a></p>
-            <p>Every endpoint is <code>POST https://api.pocketpass.xyz/v1/&lt;resource&gt;.&lt;action&gt;</code> with these headers and a JSON <strong>object</strong> body — <code>{}</code> when the endpoint takes no arguments:</p>
-            <p class="example-link"><a href="#example-reference-calling-1">Open code examples →</a></p>
+            <p>Every endpoint is <code>POST https://api.pocketpass.xyz/v1/&lt;resource&gt;.&lt;action&gt;</code> with <code>Authorization: Bearer &lt;access token&gt;</code> and <code>Content-Type: application/json</code> headers and a JSON <strong>object</strong> body — <code>{}</code> when the endpoint takes no arguments.</p>
             <p>Rules that hold everywhere:</p>
             <ul>
               <li>Only <code>POST</code> (and <code>OPTIONS</code> for CORS preflight). A <code>GET</code> is a 404.</li>
@@ -273,10 +265,6 @@
               <li>Timestamps are ISO 8601 with a timezone offset; ids are UUIDs.</li>
               <li>An unknown path under <code>/v1/</code> answers <code>404</code> with <code>{ "code": "PT404", "hint": "UNKNOWN_ENDPOINT" }</code>.</li>
             </ul>
-            <p>Paging through a conversation, newest first:</p>
-            <p class="example-link"><a href="#example-reference-calling-2">Open code examples →</a></p>
-            <p>A minimal client that handles the envelope:</p>
-            <p class="example-link"><a href="#example-reference-calling-3">Open code examples →</a></p>
           </section>
 
           <section class="panel">
@@ -494,11 +482,10 @@
             </div>
             <h3>Notes, replies and spoilers</h3>
             <p>A note has text, one drawing, or both. Text and captions are limited to 1,000 characters; replies to 500. Use <code>thread_id</code> to reply to a top-level note and optional <code>reply_to</code> to identify a particular note in that thread. Imported images, GIFs and audio cannot be attached to board notes.</p>
-            <p class="example-link"><a href="#example-reference-boards-api-1">Open code examples →</a></p>
             <p>Note objects include <code>id</code>, <code>board_id</code>, <code>author_id</code>, <code>author_name</code>, <code>author_avatar</code>, <code>thread_id</code>, <code>reply_to</code>, <code>body</code>, <code>drawing</code>, a versioned <code>stationery</code> snapshot, <code>spoiler</code>, <code>has_drawing</code>, <code>removed</code>, creation/activity/edit timestamps, <code>yeah</code>, <code>yeah_count</code> and <code>reply_count</code>. Avatar downloads retain the existing <code>profile:read</code> requirement.</p>
             <p>Spoilers return an empty body and no drawing, stationery or preview until the user explicitly reveals them with <code>boards.post</code> or <code>boards.preview</code> and <code>reveal: true</code>. Activity previews contain no note text. Removed notes remain as placeholders so replies stay readable. Published drawings cannot be edited.</p>
             <h3>Drawing format</h3>
-            <p class="example-link"><a href="#example-reference-boards-api-2">Open code examples →</a></p>
+            <p>A drawing is <code>{ "version": 1, "width": 800, "height": 600, "strokes": [...] }</code>. Each stroke has <code>pen</code>, <code>color</code>, <code>size</code> and <code>points</code> as <code>[x, y]</code> pairs.</p>
             <p>The paper is always white and 4:3. Pens are <code>pixel</code>, <code>smooth</code> and <code>eraser</code>; sizes are numbers from 1 to 40. Colours are <code>#222222</code>, <code>#E84A5F</code>, <code>#F6B93B</code>, <code>#4CAF70</code>, <code>#3379D6</code>, <code>#9564C8</code> and <code>#FFFFFF</code>. Each stroke needs at least one point inside the 800×600 canvas. Limits are 1,000 strokes, 20,000 total points and 524,288 bytes of validated drawing JSON. Unknown fields and external media are rejected. Render the strokes locally or use <code>boards.preview</code> for a static SVG generated by the server.</p>
             <h3>Draft recovery and publishing</h3>
             <p><code>boards.save_draft</code> takes a persistent <code>draft_id</code>, a new <code>revision_id</code>, optional <code>base_id</code> for the revision being replaced, and a <code>payload</code> containing <code>body</code>, <code>drawing</code>, <code>spoiler</code>, <code>stationery_id</code>, <code>thread_id</code>, <code>reply_to</code> and/or <code>branding_kind</code> (<code>icon</code> or <code>cover</code>). Saving never publishes. Concurrent edits keep separate heads and return <code>conflict: true</code>; let the user choose what to keep.</p>
@@ -511,8 +498,7 @@
             <p>Restrictions use <code>kind: "mute"</code> or <code>"ban"</code>, with optional ISO 8601 <code>expires_at</code>. Bans prevent participation and revoke private membership; public boards remain readable. Reports concerning an owner/moderator go to PocketPass staff. Report queues omit reporter identity. Resolutions use <code>status: "resolved"</code> (default) or <code>"dismissed"</code> and a reason. Removed content and previous versions follow the existing 30-day retention policy, extended for active cases.</p>
             <p><code>boards.preferences</code> controls per-board <code>muted</code> and <code>push_enabled</code>; <code>boards.push_preference</code> controls the separate global board push preference. New memberships receive in-app and push activity by default, excluding the person's own actions. Activity is grouped by thread. Connected apps use scoped Realtime events and <code>boards.inbox</code>; registering a third-party push device is not exposed.</p>
             <h3>Board artwork and stationery</h3>
-            <p>For a drawn icon or cover, use <code>boards.draw_branding</code>. Imported branding uses <code>POST /v1/boards.artwork_upload</code>, with <code>boards:manage</code> and this JSON body:</p>
-            <p class="example-link"><a href="#example-reference-boards-api-3">Open code examples →</a></p>
+            <p>For a drawn icon or cover, use <code>boards.draw_branding</code>. Imported branding uses <code>POST /v1/boards.artwork_upload</code>, with <code>boards:manage</code> and a JSON body of <code>board_id</code>, <code>kind: "icon"</code>, one new <code>operation_id</code> per upload and <code>image</code> (base64 PNG, JPEG, WebP or GIF bytes, without a data URL prefix).</p>
             <p>Use <code>kind: "cover"</code> for a cover. The input must be at most 10 MiB (14 MiB for the whole JSON request). The service checks ownership before decoding pixels, strips metadata, flattens animation, limits dimensions to 2048 pixels and stores a WebP up to 2 MiB. It rechecks consent, scope and board ownership before committing. Success returns <code>{ ok, board_id, asset_id }</code>; fetch the bytes through <code>boards.asset</code>. Keep the same operation ID and exact source bytes on retries. Incomplete uploads never appear as board artwork.</p>
             <p><code>boards.prepare_branding</code> is the processor's scoped preparation endpoint: it accepts <code>board_id</code>, <code>kind</code>, <code>operation_id</code> and a lowercase SHA-256 <code>source_hash</code>, and returns <code>{ ticket }</code>. A ticket cannot be committed by a connected app or reused across apps. Use <code>boards.artwork_upload</code> for a complete upload.</p>
             <p>Stationery starts with plain paper. Catalogue entries include versioned artwork, access rules, token price, <code>available</code> and <code>owned</code>. Active supporters can use all active stationery and can still buy permanent ownership through <code>boards.buy_stationery</code>. A purchase requires <code>boards:purchase</code> and never charges twice on a retry. Owned items remain owned after rule changes or supporter expiry; published notes keep their original stationery snapshot. Reading token balances separately requires <code>tokens:read</code>.</p>
@@ -731,7 +717,6 @@
             <p><strong>Always sort the two lowercase UUID user IDs.</strong> Do not always put the signed-in user first as <code>friend-presence:me:friend</code>: that only works when their ID sorts first. The reverse order is rejected as unauthorized. Use user IDs, not usernames or friend codes.</p>
             <p>With <code>presence:read</code>, full profile objects include <code>last_seen_at</code> for yourself and, with <code>friends:read</code>, accepted friends with no block in either direction. Read it through <code>friends.list</code>, or <code>me.get</code>/<code>profiles.get</code>/<code>profiles.get_many</code> with their usual scopes. The key is omitted without permission, and is <code>null</code> if no activity has been recorded. It is an ISO 8601 timestamp of last recorded PocketPass app activity, not an exact disconnect time; a connected app tracking Presence does not update this timestamp. Use Realtime Presence for live online status. Refetch when needed; there is no last-seen broadcast event.</p>
             <p>Presence is the ephemeral "who is here" state of a channel. With <code>presence:read</code> your app sees it on two kinds of topic it can already read: <code>friend-presence:&lt;lower user id&gt;:&lt;higher user id&gt;</code>, one per accepted friendship with the two ids sorted as strings (needs <code>friends:read</code>), tells whether that friend is online; <code>conversation:&lt;conversation id&gt;</code> (needs <code>messages:read</code>) tells who has the conversation open and who is typing. With <code>presence:write</code> your app may also <em>track</em> Presence there, which makes the connected user appear online to their friends and shows them as typing in a chat — the consent screen says so in as many words.</p>
-            <p class="example-link"><a href="#example-reference-realtime">Open code examples →</a></p>
             <ul>
               <li>PocketPass itself tracks <code>{ user_id }</code> on friend pairs and <code>{ user_id, active_conversation_id, is_typing }</code> in conversations, keyed by the user id. Track the same shape so PocketPass and other apps understand you, and untrack or leave the channel when the user goes away.</li>
               <li>Presence payloads come from clients and are not verified by the server: read the key and <code>user_id</code> as a hint, not as proof.</li>
@@ -740,12 +725,8 @@
             </ul>
             <h3>Connecting</h3>
             <p>Connect to <code>wss://api.pocketpass.xyz/realtime/v1/websocket?apikey=&lt;publishable key&gt;&amp;vsn=1.0.0</code>. The publishable key is public and the same for every app: <code data-publishable-key>see https://developer.pocketpass.xyz/config.js</code>. The user's access token goes into every join message, never into the URL.</p>
-            <p>With <a href="https://github.com/supabase/supabase-js" rel="noopener noreferrer">supabase-js</a> (browser or Node):</p>
-            <p class="example-link"><a href="#example-reference-realtime">Open code examples →</a></p>
             <p>Without a library, speak the Phoenix channel protocol over the socket: join, heartbeat every 30 seconds, and hand over each refreshed token before the previous one expires.</p>
-            <p class="example-link"><a href="#example-reference-realtime">Open code examples →</a></p>
-            <p>The join is answered with a <code>phx_reply</code> whose <code>payload.status</code> is <code>"ok"</code> or <code>"error"</code>. Events then arrive as broadcast frames whose payload mirrors the database change:</p>
-            <p class="example-link"><a href="#example-reference-realtime">Open code examples →</a></p>
+            <p>The join is answered with a <code>phx_reply</code> whose <code>payload.status</code> is <code>"ok"</code> or <code>"error"</code>. Events then arrive as broadcast frames whose payload mirrors the database change.</p>
             <ul>
               <li><strong><code>private: true</code> is mandatory.</strong> A public channel with the same name joins happily and never receives anything.</li>
               <li><strong>The join is refused</strong> (a <code>phx_reply</code> with <code>"status": "error"</code>) when your app lacks the scope, the user is not in that conversation, the topic belongs to someone else, or the user disconnected your app. Treat it like <code>PT403</code> / <code>PT401</code> on the API: do not retry in a loop.</li>
@@ -762,14 +743,11 @@
             <p class="section-examples"><a href="#example-media">Kotlin &amp; JavaScript examples →</a></p>
             <p>Avatars and image attachments are files in two private buckets, referenced by path: <code>profile.avatar_path</code> lives in <code>avatars</code>, <code>message.attachment.path</code> in <code>message-media</code>. The same token that calls the API can read them, subject to the same rules — an avatar is readable when the user could see that profile (<code>profile:read</code>), an attachment when the user is a member of its conversation (<code>messages:read</code>).</p>
             <h3>Direct download</h3>
-            <p class="example-link"><a href="#example-reference-media-1">Open code examples →</a></p>
+            <p><code>GET https://api.pocketpass.xyz/storage/v1/object/authenticated/avatars/&lt;avatar_path&gt;</code>, or <code>message-media/&lt;path&gt;</code>, with the bearer token.</p>
             <p>Use this from a server or a native app. The response is the file itself with its <code>Content-Type</code>. Files you may not read come back as a 404 or a 400, never a 403.</p>
             <h3>Signed URLs for browsers</h3>
-            <p>An <code>&lt;img&gt;</code> tag cannot send a bearer token, so ask for short-lived signed URLs instead. Batch, up to a whole page of avatars in one call:</p>
-            <p class="example-link"><a href="#example-reference-media-2">Open code examples →</a></p>
-            <p class="example-link"><a href="#example-reference-media-3">Open code examples →</a></p>
-            <p>Or one file at a time:</p>
-            <p class="example-link"><a href="#example-reference-media-4">Open code examples →</a></p>
+            <p>An <code>&lt;img&gt;</code> tag cannot send a bearer token, so ask for short-lived signed URLs instead. Batch up to a whole page of avatars in one call to <code>POST /storage/v1/object/sign/avatars</code> with <code>{ "expiresIn": 600, "paths": [...] }</code>. Each result has <code>path</code>, <code>signedURL</code> and <code>error</code>.</p>
+            <p>Or sign one file with <code>POST /storage/v1/object/sign/message-media/&lt;attachment path&gt;</code> and <code>{ "expiresIn": 600 }</code>.</p>
             <div class="callout"><p><strong><code>signedURL</code> is relative.</strong> Prefix it with <code>https://api.pocketpass.xyz/storage/v1</code> before you use it. The full URL then works without any headers, in an <code>&lt;img&gt;</code> or anywhere else.</p></div>
             <ul>
               <li><code>expiresIn</code> is in seconds and is clamped to <strong>15 minutes (900)</strong>; ask for a larger value and you silently get 900. Keep it short — a minute or two for a screen you are rendering now is plenty — and re-sign when the user comes back.</li>
@@ -777,9 +755,7 @@
               <li>Signing a file the user may not see returns an error for that path (batch) or a 400/404 (single). Treat it as "no image".</li>
             </ul>
             <h3>Sending images</h3>
-            <p>Upload the file first, then send the message that references it. Both steps use the same token and need <code>messages:write</code>.</p>
-            <p class="example-link"><a href="#example-reference-media-5">Open code examples →</a></p>
-            <p class="example-link"><a href="#example-reference-media-6">Open code examples →</a></p>
+            <p>Upload the file first, then send the message that references it. Both steps use the same token and need <code>messages:write</code>. Upload with <code>POST /storage/v1/object/message-media/&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;</code> and the image's <code>Content-Type</code>, then call <code>messages.send</code> with a <code>client_operation_id</code> and <code>attachment: { path, mime_type }</code>.</p>
             <ul>
               <li>The path is exactly <code>&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;</code>: the connected user's id (<code>user_id</code> from <code>session.get</code>), a conversation they are an active member of, and a file name of 1…128 characters made of letters, digits, <code>.</code>, <code>_</code> and <code>-</code> that starts with a letter or digit. Use a fresh UUID as the name: an app can neither overwrite nor delete uploads, so a reused name fails.</li>
               <li><code>image/jpeg</code>, <code>image/png</code>, <code>image/webp</code> and <code>image/gif</code> up to 10 MiB. Storage refuses other types and larger files; <code>messages.send</code> refuses a <code>mime_type</code> outside that list with <code>PT400 UNSUPPORTED_MEDIA</code>.</li>
@@ -832,7 +808,7 @@
 
           <!-- api-examples:start -->
 <section class="panel" id="examples"><h2>Kotlin &amp; JavaScript examples</h2><p>Open a topic, then choose a language. Examples do not execute here. Replace sample UUIDs and values with IDs returned by your API calls. Only run mutations after the corresponding user action. Kotlin examples use Android’s <code>org.json</code> (add that dependency on JVM) and blocking HTTP: call them on a background/IO thread, never the Android main thread. JavaScript examples use browser fetch and Web Crypto. Start with the shared HTTP helpers.</p>
-<details class="examples-library"><summary>Browse Kotlin, JavaScript and protocol examples</summary>
+<details class="examples-library"><summary>Browse Kotlin and JavaScript examples</summary>
 <details class="api-example" id="example-http"><summary>Shared HTTP helpers and errors</summary><p>Set currentAccessToken from the OAuth token response. Helpers throw structured errors and expose Retry-After. Refresh expired tokens through OAuth, obtain new consent for scope changes, and retry only transient failures; do not blindly retry permission or validation errors.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>let currentAccessToken = "YOUR_USER_ACCESS_TOKEN";
 class ApiError extends Error {
   constructor(status, data, retryAfter) {
@@ -2528,248 +2504,6 @@ const result = await api("boards.prepare_branding", request);
 request.put("operation_id", java.util.UUID.randomUUID().toString())
 val result = api("boards.prepare_branding", request)
 // Render result in your app; handle ApiError without discarding pending work.</code></pre></details></details>
-<h3>Original protocol and walkthrough examples</h3><p>All earlier examples are preserved here, including raw HTTP, JSON responses, cURL and the Node loopback walkthrough. The language examples above provide Kotlin and JavaScript request construction.</p>
-<details class="api-example" id="example-reference-connect"><summary>Connecting a user — original examples</summary><details class="api-example" id="example-reference-connect-1"><summary>Connecting a user · original example 1</summary><pre class="code-block"><code>GET https://api.pocketpass.xyz/auth/v1/oauth/authorize
-    ?client_id=&lt;your client id&gt;
-    &amp;redirect_uri=&lt;one of your registered redirect URIs&gt;
-    &amp;response_type=code
-    &amp;scope=openid
-    &amp;code_challenge=&lt;challenge&gt;
-    &amp;code_challenge_method=S256
-    &amp;state=&lt;state&gt;</code></pre></details><details class="api-example" id="example-reference-connect-2"><summary>Connecting a user · original example 2</summary><pre class="code-block"><code>POST https://api.pocketpass.xyz/auth/v1/oauth/token
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=authorization_code
-&amp;code=&lt;code from the redirect&gt;
-&amp;redirect_uri=&lt;the same redirect_uri as in step 2&gt;
-&amp;code_verifier=&lt;verifier from step 1&gt;
-&amp;client_id=&lt;your client id&gt;            (public clients only)</code></pre></details><details class="api-example" id="example-reference-connect-3"><summary>Connecting a user · original example 3</summary><pre class="code-block"><code>{
-  "access_token": "eyJhbGciOiJIUzI1NiIs…",
-  "token_type": "bearer",
-  "expires_in": 3600,
-  "refresh_token": "…",
-  "id_token": "eyJhbGciOiJIUzI1NiIs…"
-}</code></pre></details><details class="api-example" id="example-reference-connect-4"><summary>Connecting a user · original example 4</summary><pre class="code-block"><code>curl -X POST https://api.pocketpass.xyz/v1/session.get \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{}'</code></pre></details><details class="api-example" id="example-reference-connect-5"><summary>Connecting a user · original example 5</summary><pre class="code-block"><code>const AUTH = "https://api.pocketpass.xyz/auth/v1";
-const CLIENT_ID = "your-client-id";
-const REDIRECT_URI = "https://example.com/pocketpass/callback";
-
-const base64url = (bytes) =&gt;
-  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-async function startConnect() {
-  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
-  const state = base64url(crypto.getRandomValues(new Uint8Array(16)));
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  sessionStorage.setItem("pp_connect", JSON.stringify({ verifier, state }));
-  const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
-    response_type: "code",
-    scope: "openid",
-    code_challenge: base64url(new Uint8Array(digest)),
-    code_challenge_method: "S256",
-    state,
-  });
-  location.assign(`${AUTH}/oauth/authorize?${params}`);
-}
-
-async function finishConnect() {
-  const query = new URLSearchParams(location.search);
-  const saved = JSON.parse(sessionStorage.getItem("pp_connect") || "null");
-  sessionStorage.removeItem("pp_connect");
-  if (query.get("error")) throw new Error(query.get("error_description") || query.get("error"));
-  if (!saved || query.get("state") !== saved.state) throw new Error("state mismatch");
-  const response = await fetch(`${AUTH}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code: query.get("code"),
-      redirect_uri: REDIRECT_URI,
-      code_verifier: saved.verifier,
-    }),
-  });
-  const tokens = await response.json();
-  if (!response.ok) throw new Error(tokens.error_description || tokens.error);
-  return tokens;
-}</code></pre></details><details class="api-example" id="example-reference-connect-6"><summary>Connecting a user · original example 6</summary><pre class="code-block"><code>import http from "node:http";
-import crypto from "node:crypto";
-
-const AUTH = "https://api.pocketpass.xyz/auth/v1";
-const CLIENT_ID = "your-client-id";
-const REDIRECT_URI = "http://127.0.0.1:8765/callback";
-
-const verifier = crypto.randomBytes(32).toString("base64url");
-const state = crypto.randomBytes(16).toString("base64url");
-const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
-
-const server = http.createServer(async (request, response) =&gt; {
-  const url = new URL(request.url, REDIRECT_URI);
-  if (url.pathname !== "/callback") {
-    response.writeHead(404).end();
-    return;
-  }
-  response.end("PocketPass is connected. You can close this tab.");
-  server.close();
-  if (url.searchParams.get("state") !== state) throw new Error("state mismatch");
-  const exchange = await fetch(`${AUTH}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code: url.searchParams.get("code"),
-      redirect_uri: REDIRECT_URI,
-      code_verifier: verifier,
-    }),
-  });
-  const tokens = await exchange.json();
-  if (!exchange.ok) throw new Error(tokens.error_description || tokens.error);
-  saveTokens(tokens);
-});
-
-server.listen(8765, "127.0.0.1", () =&gt; {
-  const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
-    response_type: "code",
-    scope: "openid",
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    state,
-  });
-  openBrowser(`${AUTH}/oauth/authorize?${params}`);
-});</code></pre></details><details class="api-example" id="example-reference-connect-7"><summary>Connecting a user · original example 7</summary><pre class="code-block"><code>curl -X POST https://api.pocketpass.xyz/auth/v1/oauth/token \
-  -u "$CLIENT_ID:$CLIENT_SECRET" \
-  -d grant_type=authorization_code \
-  -d "code=$CODE" \
-  -d "redirect_uri=$REDIRECT_URI" \
-  -d "code_verifier=$VERIFIER"</code></pre></details></details>
-<details class="api-example" id="example-reference-tokens"><summary>Tokens — original examples</summary><details class="api-example" id="example-reference-tokens-1"><summary>Tokens · original example 1</summary><pre class="code-block"><code>POST https://api.pocketpass.xyz/auth/v1/oauth/token
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=refresh_token
-&amp;refresh_token=&lt;refresh token&gt;
-&amp;client_id=&lt;your client id&gt;            (public clients; confidential clients use HTTP Basic instead)</code></pre></details></details>
-<details class="api-example" id="example-reference-calling"><summary>Calling the API — original examples</summary><details class="api-example" id="example-reference-calling-1"><summary>Calling the API · original example 1</summary><pre class="code-block"><code>POST /v1/conversations.list HTTP/1.1
-Host: api.pocketpass.xyz
-Authorization: Bearer &lt;access token&gt;
-Content-Type: application/json
-
-{ "limit": 20 }</code></pre></details><details class="api-example" id="example-reference-calling-2"><summary>Calling the API · original example 2</summary><pre class="code-block"><code>let cursor = null;
-do {
-  const page = await api("messages.list", { conversation_id, limit: 100, cursor });
-  render(page.items);
-  cursor = page.next_cursor;
-} while (cursor);</code></pre></details><details class="api-example" id="example-reference-calling-3"><summary>Calling the API · original example 3</summary><pre class="code-block"><code>async function api(endpoint, body = {}) {
-  const response = await fetch(`https://api.pocketpass.xyz/v1/${endpoint}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    const error = new Error(data.message || `HTTP ${response.status}`);
-    error.code = data.code;
-    error.hint = data.hint;
-    error.retryAfter = Number(response.headers.get("Retry-After")) || 0;
-    throw error;
-  }
-  return data;
-}</code></pre></details></details>
-<details class="api-example" id="example-reference-boards-api"><summary>Boards — original examples</summary><details class="api-example" id="example-reference-boards-api-1"><summary>Boards · original example 1</summary><pre class="code-block"><code>// Keep this object and operation_id when retrying after a lost response.
-const note = {
-  board_id: boardId,
-  body: "Hello everyone!",
-  operation_id: crypto.randomUUID()
-};
-const published = await api("boards.publish", note);
-await api("boards.react", {
-  board_id: boardId, post_id: published.id, yeah: true,
-  operation_id: crypto.randomUUID()
-});</code></pre></details><details class="api-example" id="example-reference-boards-api-2"><summary>Boards · original example 2</summary><pre class="code-block"><code>{
-  "version": 1, "width": 800, "height": 600,
-  "strokes": [
-    { "pen": "pixel", "color": "#222222", "size": 4,
-      "points": [[10, 10], [40, 30]] }
-  ]
-}</code></pre></details><details class="api-example" id="example-reference-boards-api-3"><summary>Boards · original example 3</summary><pre class="code-block"><code>{
-  "board_id": "&lt;board UUID&gt;", "kind": "icon",
-  "operation_id": "&lt;one UUID per upload&gt;",
-  "image": "&lt;base64 PNG, JPEG, WebP or GIF bytes; no data URL prefix&gt;"
-}</code></pre></details></details>
-<details class="api-example" id="example-reference-realtime"><summary>Realtime — original examples</summary><details class="api-example" id="example-reference-realtime-1"><summary>Realtime · original example 1</summary><pre class="code-block"><code>fun friendPresenceTopic(myUserId: String, friendUserId: String): String {
-    val (low, high) = listOf(
-        myUserId.trim().lowercase(),
-        friendUserId.trim().lowercase()
-    ).sorted()
-    return "friend-presence:$low:$high"
-}
-
-val me = "97000000-0000-4000-8000-000000000002"
-val friend = "97000000-0000-4000-8000-000000000001"
-val topic = friendPresenceTopic(me, friend)
-// friend-presence:97000000-0000-4000-8000-000000000001:97000000-0000-4000-8000-000000000002</code></pre></details><details class="api-example" id="example-reference-realtime-2"><summary>Realtime · original example 2</summary><pre class="code-block"><code>const [low, high] = [me, friendId].sort();
-const pair = supabase
-  .channel(`friend-presence:${low}:${high}`, { config: { private: true, presence: { key: me } } })
-  .on("presence", { event: "sync" }, () =&gt; {
-    const online = Object.values(pair.presenceState()).flat().some((p) =&gt; p.user_id === friendId);
-    showFriendOnline(friendId, online);
-  })
-  .subscribe(async (status) =&gt; {
-    if (status === "SUBSCRIBED") await pair.track({ user_id: me }); // needs presence:write
-  });</code></pre></details><details class="api-example" id="example-reference-realtime-3"><summary>Realtime · original example 3</summary><pre class="code-block"><code>import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient("https://api.pocketpass.xyz", PUBLISHABLE_KEY, {
-  accessToken: async () =&gt; currentAccessToken,
-});
-
-const channel = supabase
-  .channel(`conversation:${conversationId}`, { config: { private: true } })
-  .on("broadcast", { event: "INSERT" }, () =&gt; refreshMessages(conversationId))
-  .on("broadcast", { event: "UPDATE" }, () =&gt; refreshMessages(conversationId))
-  .on("broadcast", { event: "DELETE" }, () =&gt; refreshMessages(conversationId))
-  .subscribe((status, error) =&gt; console.log(status, error));</code></pre></details><details class="api-example" id="example-reference-realtime-4"><summary>Realtime · original example 4</summary><pre class="code-block"><code>{ "topic": "realtime:conversation:&lt;conversation id&gt;", "event": "phx_join", "ref": "1", "join_ref": "1",
-  "payload": { "config": { "broadcast": { "self": false }, "presence": { "key": "" }, "private": true },
-               "access_token": "&lt;access token&gt;" } }
-
-{ "topic": "phoenix", "event": "heartbeat", "payload": {}, "ref": "2" }
-
-{ "topic": "realtime:conversation:&lt;conversation id&gt;", "event": "access_token", "ref": "3",
-  "payload": { "access_token": "&lt;refreshed access token&gt;" } }</code></pre></details><details class="api-example" id="example-reference-realtime-5"><summary>Realtime · original example 5</summary><pre class="code-block"><code>{ "topic": "realtime:conversation:&lt;conversation id&gt;", "event": "broadcast", "ref": null,
-  "payload": { "type": "broadcast", "event": "INSERT",
-               "payload": { "operation": "INSERT", "schema": "public", "table": "messages",
-                            "record": { "id": "…", "conversation_id": "…", "sender_id": "…", "body": "…", "created_at": "…" },
-                            "old_record": null } } }</code></pre></details></details>
-<details class="api-example" id="example-reference-media"><summary>Media — original examples</summary><details class="api-example" id="example-reference-media-1"><summary>Media · original example 1</summary><pre class="code-block"><code>curl https://api.pocketpass.xyz/storage/v1/object/authenticated/avatars/&lt;avatar_path&gt; \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  --output avatar.png</code></pre></details><details class="api-example" id="example-reference-media-2"><summary>Media · original example 2</summary><pre class="code-block"><code>curl -X POST https://api.pocketpass.xyz/storage/v1/object/sign/avatars \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{ "expiresIn": 600, "paths": ["&lt;path 1&gt;", "&lt;path 2&gt;"] }'</code></pre></details><details class="api-example" id="example-reference-media-3"><summary>Media · original example 3</summary><pre class="code-block"><code>[
-  { "path": "&lt;path 1&gt;", "signedURL": "/object/sign/avatars/&lt;path 1&gt;?token=…", "error": null },
-  { "path": "&lt;path 2&gt;", "signedURL": null, "error": "Object not found" }
-]</code></pre></details><details class="api-example" id="example-reference-media-4"><summary>Media · original example 4</summary><pre class="code-block"><code>curl -X POST "https://api.pocketpass.xyz/storage/v1/object/sign/message-media/&lt;attachment path&gt;" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{ "expiresIn": 600 }'
-
-{ "signedURL": "/object/sign/message-media/&lt;attachment path&gt;?token=…" }</code></pre></details><details class="api-example" id="example-reference-media-5"><summary>Media · original example 5</summary><pre class="code-block"><code>curl -X POST "https://api.pocketpass.xyz/storage/v1/object/message-media/&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @photo.jpg
-
-{ "Key": "message-media/&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;", "Id": "…" }</code></pre></details><details class="api-example" id="example-reference-media-6"><summary>Media · original example 6</summary><pre class="code-block"><code>POST /v1/messages.send
-{
-  "conversation_id": "&lt;conversation id&gt;",
-  "client_operation_id": "&lt;uuid&gt;",
-  "body": "optional caption",
-  "attachment": { "path": "&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;", "mime_type": "image/jpeg" }
-}</code></pre></details></details>
 </details></section>
           <!-- api-examples:end -->
 

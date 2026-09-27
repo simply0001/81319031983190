@@ -5,7 +5,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / 'developer/docs.html'
 CONTRACT = json.loads((ROOT / 'public-api/boards.json').read_text(encoding='utf-8'))
 CORE = json.loads((ROOT / 'public-api/core-examples.json').read_text(encoding='utf-8'))
-LEGACY = json.loads((ROOT / 'public-api/legacy-examples.json').read_text(encoding='utf-8'))
 WORKFLOWS = json.loads((ROOT / 'public-api/workflow-examples.json').read_text(encoding='utf-8'))
 U = '97000000-0000-4000-8000-000000000001'
 DRAWING = {'version':1,'width':800,'height':600,'strokes':[{'pen':'pixel','color':'#222222','size':4,'points':[[10,10],[40,30]]}]}
@@ -30,7 +29,7 @@ for name,spec in CONTRACT.items():entries.append(('boards.'+name,'boards-api',sp
 entries += [('boards.artwork_upload','boards-api','boards:manage',['board_id','kind','operation_id','image']),('boards.prepare_branding','boards-api','boards:manage',['board_id','kind','operation_id','source_hash'])]
 VALUES.update(image='REPLACE_WITH_BASE64_IMAGE_BYTES',source_hash='REPLACE_WITH_LOWERCASE_SHA256')
 parts=['<section class="panel" id="examples"><h2>Kotlin &amp; JavaScript examples</h2><p>Open a topic, then choose a language. Examples do not execute here. Replace sample UUIDs and values with IDs returned by your API calls. Only run mutations after the corresponding user action. Kotlin examples use Android’s <code>org.json</code> (add that dependency on JVM) and blocking HTTP: call them on a background/IO thread, never the Android main thread. JavaScript examples use browser fetch and Web Crypto. Start with the shared HTTP helpers.</p>']
-parts.append('<details class="examples-library"><summary>Browse Kotlin, JavaScript and protocol examples</summary>')
+parts.append('<details class="examples-library"><summary>Browse Kotlin and JavaScript examples</summary>')
 for w in WORKFLOWS:
     parts.append(detail('example-'+w['id'],w['title'],'<p>'+w['description']+'</p>'+pair(w['javascript'],w['kotlin'])))
 parts.append('<h3>Every endpoint</h3><p>Use <a href="#example-http">the shared HTTP helpers</a>. Fields shown are a minimal useful request; the endpoint reference lists optional fields, response shapes and access rules. Keep the entire request and operation ID for retries, including across app restarts.</p>')
@@ -46,10 +45,6 @@ for name,section,scope,fields in entries:
     js+=f'const result = await api("{name}", request);\n// Render result in your app; handle ApiError without discarding pending work.'
     kt+=f'val result = api("{name}", request)\n// Render result in your app; handle ApiError without discarding pending work.'
     parts.append(detail('example-'+name.replace('.','-'),name,f'<p>Scope: <code>{esc(scope)}</code>. <a href="#{section}">Endpoint reference</a>.</p>'+pair(js,kt)))
-parts.append('<h3>Original protocol and walkthrough examples</h3><p>All earlier examples are preserved here, including raw HTTP, JSON responses, cURL and the Node loopback walkthrough. The language examples above provide Kotlin and JavaScript request construction.</p>')
-for entry in LEGACY:
-    snippets=''.join(detail(f'example-reference-{entry["section"]}-{i}',f'{entry["title"]} · original example {i}',block(code)) for i,code in enumerate(entry['snippets'],1))
-    parts.append(detail('example-reference-'+entry['section'],entry['title']+' — original examples',snippets))
 parts.append('</details></section>')
 s=DOCS.read_text(encoding='utf-8')
 a='<!-- api-examples:start -->';b='<!-- api-examples:end -->'
@@ -65,7 +60,5 @@ for section,target in links.items():
     marker=f'<p class="section-examples"><a href="#example-{target}">Kotlin &amp; JavaScript examples →</a></p>'
     pat=r'(<h2 id="'+section+r'">.*?</h2>)(?!\s*<p class="section-examples">)'
     s=re.sub(pat,lambda m:m[1]+'\n            '+marker,s)
-# The former realtime snippets have an extra Kotlin example in the preserved archive.
-s=re.sub(r'href="#example-reference-realtime-\d+"', 'href="#example-reference-realtime"',s)
 DOCS.write_text(s,encoding='utf-8',newline='\n')
 print(f'Generated {len(entries)} endpoint pairs and {len(WORKFLOWS)} workflow pairs.')

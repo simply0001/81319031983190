@@ -48,3 +48,11 @@ docs, which describe Block Messages and Block Invites separately. Only
 live page); the previous file is at
 `/opt/pocketpass/deploy-backups/docs-block-invites-20260926/docs.html` and
 `health.sh` passed. This does not cover later deployments or releases.
+
+On 27 September 2026, the user approved deploying the developer docs without
+the "Original protocol and walkthrough examples" archive and its links. Only
+`developer/docs.html` changed on the VM (SHA-256
+`8b051ce8d161f975a74a1b1dd9218d2914ebd7b1dee83c51296b7b58c2459ebe`, matching the
+live page); the previous file is at
+`/opt/pocketpass/deploy-backups/docs-archive-removal-20260927/docs.html` and
+`health.sh` passed. This does not cover later deployments or releases.
