@@ -1084,7 +1084,8 @@ private fun AuthConfirmButton(
             shadowAlpha = AUTH_PRIMARY_SHADOW,
             shadowOffset = 12f,
             tag = tag,
-            onClick = if (enabled) onClick else null,
+            onClick = onClick,
+            enabled = enabled,
             horizontal = if (width < AUTH_FIELD_WIDTH) DesignAnchor.Start else DesignAnchor.Stretch,
         ) {
             FigmaAsset(
@@ -1131,7 +1132,8 @@ private fun AuthSecondaryButton(
             shadowAlpha = AUTH_SECONDARY_SHADOW,
             shadowOffset = 14f,
             tag = tag,
-            onClick = if (enabled) onClick else null,
+            onClick = onClick,
+            enabled = enabled,
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -1387,7 +1389,8 @@ internal fun AuthButton(
             shadowAlpha = shadowAlpha,
             shadowOffset = shadowOffset,
             tag = tag,
-            onClick = if (enabled) onClick else null,
+            onClick = onClick,
+            enabled = enabled,
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -1452,34 +1455,6 @@ internal fun AuthTextAction(
             maxLines = 1,
         )
     }
-}
-
-@Composable
-private fun AuthError(
-    metrics: DesignMetrics,
-    error: AuthUiError?,
-    y: Float = 968f,
-) {
-    if (error == null) return
-    Text(
-        text = error.message,
-        modifier = Modifier.designBounds(metrics, 110f, y, 1020f, 48f),
-        style = pocketAuthText(metrics, 30f, Color(0xFF9B3434), FontWeight.SemiBold),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-    )
-    Text(
-        text = error.code,
-        modifier = Modifier.designBounds(metrics, 110f, y + 54f, 1020f, 36f),
-        style = pocketAuthText(
-            metrics,
-            24f,
-            PocketGreenText.copy(alpha = 0.58f),
-            FontWeight.Medium,
-        ),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-    )
 }
 
 @Composable

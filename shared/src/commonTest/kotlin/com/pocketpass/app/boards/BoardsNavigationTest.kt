@@ -12,7 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 class BoardsNavigationTest {
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test fun messagesReturnToTheSharedBoardDirectoryWithoutAChooser() = runTest {
-        val holder = BoardsStateHolder(null, MutableStateFlow(null), backgroundScope)
+        val holder = BoardsStateHolder(null, MutableStateFlow(null), backgroundScope, MutableStateFlow(true))
         runCurrent()
         assertEquals(BoardsScreen.Directory, holder.state.value.screen)
         assertFalse(holder.back())

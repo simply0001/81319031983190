@@ -18,7 +18,6 @@ settings:
     DEVELOPMENT_TEAM: 72PMGDSD3B
     MARKETING_VERSION: "0.1.8"
     CURRENT_PROJECT_VERSION: "21"
-    # Compose Multiplatform 1.12 publishes no iosX64, so the simulator is arm64-only.
     "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
 
 targets:
@@ -46,21 +45,12 @@ targets:
         FirebaseAppDelegateProxyEnabled: false
         FirebaseMessagingAutoInitEnabled: false
         FIREBASE_ANALYTICS_COLLECTION_ENABLED: false
-        # Required by Compose Multiplatform: its PlistSanityCheck aborts the
-        # process at launch when this entry is absent, and high-refresh iPhones
-        # render at 60Hz without it.
         CADisableMinimumFrameDurationOnPhone: true
         UILaunchScreen: {}
-        # Discord OAuth redirects back through this scheme (allowlisted
-        # server-side as pocketpass://auth/callback).
         CFBundleURLTypes:
           - CFBundleURLName: xyz.pocketpass.auth
             CFBundleURLSchemes:
               - pocketpass
-        # fetch: opportunistic background sync via BGTaskScheduler (the
-        # identifier must match IosBackgroundRefresh.TASK_IDENTIFIER).
-        # bluetooth-central/peripheral: street-pass keeps exchanging passes
-        # with the phone pocketed.
         UIBackgroundModes: [fetch, bluetooth-central, bluetooth-peripheral]
         NSBluetoothAlwaysUsageDescription:
           PocketPass exchanges anonymous encounter passes with nearby players
@@ -73,8 +63,6 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-    # The widget shares its data through this group; the same identifier is
-    # declared on the extension target below.
     entitlements:
       path: Sources/PocketPass.entitlements
       properties:
@@ -119,8 +107,6 @@ targets:
             cp "$config" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/GoogleService-Info.plist"
           fi
 
-  # Pure-Swift WidgetKit extension: it never links the Kotlin framework and
-  # only reads the JSON snapshot the app writes into the App Group.
   PocketPassWidget:
     type: app-extension
     platform: iOS
@@ -135,7 +121,6 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
-        # Rubik faces copied from ui/src/commonMain/composeResources/font.
         UIAppFonts:
           - rubik_500.ttf
           - rubik_600.ttf

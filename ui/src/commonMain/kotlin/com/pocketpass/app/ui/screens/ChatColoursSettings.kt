@@ -3,7 +3,6 @@ package com.pocketpass.app.ui.screens
 import com.pocketpass.app.audio.LocalSoundEffects
 import com.pocketpass.app.audio.SoundEffect
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -16,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -125,7 +123,7 @@ private fun ChatColourButton(metrics: DesignMetrics, label: String, tag: String,
     val shape = RoundedCornerShape(metrics.dp(65f))
     Box(modifier.height(metrics.dp(130f)).alpha(if (enabled) 1f else 0.45f).clip(shape)
         .pocketFrame(greyPanelBrush(), metrics.dp(14f), pocketPalette.borderGrey, shape).testTag(tag)
-        .then(if (enabled) Modifier.controllerTarget(tag, cornerRadius = 65f, onActivate = onClick) else Modifier)
+        .controllerTarget(tag, cornerRadius = 65f) { if (enabled) onClick() }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center) {
         Text(label, color = pocketPalette.textPrimary, fontFamily = Rubik, fontWeight = FontWeight.Bold,

@@ -7,7 +7,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -21,17 +20,19 @@ import com.pocketpass.app.mii.renderer.IosMiiEditorRenderSurface
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.audio.backgroundMusicTrack
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.state.IosAppContainer
 import com.pocketpass.app.state.IosBackgroundRefresh
 import com.pocketpass.app.state.IosStatusFeed
 import com.pocketpass.app.state.PocketPassStore
 import com.pocketpass.app.widget.IosWidgetReload
+import com.pocketpass.app.ui.IosBackHandlers
 import com.pocketpass.app.ui.LocalAppVersionName
 import com.pocketpass.app.ui.PocketPassTheme
 import platform.Foundation.NSBundle
 import platform.UIKit.UIViewController
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import okio.Path.Companion.toPath
 import com.pocketpass.app.boards.BoardBrandingPicker
@@ -81,33 +82,25 @@ private fun bundleVersionName(): String =
         ?.get("CFBundleShortVersionString") as? String
         ?: ""
 
-// Called first thing from the Swift AppDelegate: BGTaskScheduler handlers
-// must be registered before didFinishLaunching returns.
 fun PhoneAppDidLaunch() {
     backgroundRefresh.register()
     backgroundRefresh.schedule()
 }
 
-// The iOS application's root, called from the Swift AppDelegate.
 fun PhoneAppViewController(): UIViewController = ComposeUIViewController {
     IosPhoneApp()
 }.also { rootViewController = it }
 
-// Called from the Swift AppDelegate when the app is opened through its URL
-// scheme. Only the sign-in callback carries anything to act on; widget taps
-// (pocketpass://home) just bring the app forward.
 fun PhoneAppHandleUrl(url: String) {
     if (url.startsWith(AUTH_CALLBACK_PREFIX, ignoreCase = true)) {
         store.handleAuthCallback(url)
     }
 }
 
-// WidgetKit is Swift-only, so the AppDelegate registers the reload call here.
 fun PhoneAppSetWidgetReloader(reloader: () -> Unit) {
     IosWidgetReload.handler = reloader
 }
 
-// Install before PhoneAppDidLaunch so the container can expose the Messages setting.
 fun PhoneAppSetMessagePushHandler(handler: (String) -> Unit) {
     com.pocketpass.app.push.IosMessagePushBridge.handler = handler
 }
@@ -132,12 +125,12 @@ private fun IosPhoneApp() {
         }
     }
     LaunchedEffect(Unit) {
-        snapshotFlow {
-            val current = store.state.value
-            backgroundMusicTrack(current) to current.soundLevel
-        }.collect { (track, level) ->
-            container.backgroundMusic.update(track, level)
-        }
+        store.state
+            .map { current -> backgroundMusicTrack(current) to current.soundLevel }
+            .distinctUntilChanged()
+            .collect { (track, level) ->
+                container.backgroundMusic.update(track, level)
+            }
     }
     LaunchedEffect(Unit) {
         container.messages.imageAttachmentRequested.collect {
@@ -155,7 +148,6 @@ private fun IosPhoneApp() {
             Box(
                 Modifier
                     .fillMaxSize()
-                    // An edge swipe stands in for Android's system back gesture.
                     .pointerInput(Unit) {
                         val edge = 24.dp.toPx()
                         val trigger = 60.dp.toPx()
@@ -169,7 +161,7 @@ private fun IosPhoneApp() {
                                 if (!change.pressed) break
                                 total += change.positionChange().x
                                 if (total > trigger) {
-                                    if (store.state.value.hasDismissableLayer()) {
+                                    if (!IosBackHandlers.handleBack() && store.state.value.hasDismissableLayer()) {
                                         store.dispatch(PocketPassEvent.Back)
                                     }
                                     change.consume()
@@ -185,7 +177,6 @@ private fun IosPhoneApp() {
                         state = state,
                         dispatch = store::dispatch,
                         miiEditorController = container.miiEditor,
-                        extensions = PocketPassExtensions.None,
                     )
                 }
             }

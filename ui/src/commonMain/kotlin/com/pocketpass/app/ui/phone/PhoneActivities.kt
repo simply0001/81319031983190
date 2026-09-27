@@ -45,7 +45,6 @@ import com.pocketpass.app.domain.model.AchievementState
 import com.pocketpass.app.domain.model.LeaderboardScope
 import com.pocketpass.app.model.ActivityVariant
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.DesignMetrics
@@ -90,7 +89,6 @@ fun PhoneActivitiesTab(
     panes: WidePanes?,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     when (state.activitiesSection()) {
         ActivitiesSection.Rows -> ActivitiesScaffold(
@@ -178,7 +176,7 @@ fun PhoneActivitiesTab(
                         entrance = EntranceMotion.OverlayPop,
                         delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + index * OVERLAY_POP_STAGGER_MILLIS,
                     ) {
-                        DeckSlot(metrics, 260f) {
+                        DeckSlot(metrics, 260f, Alignment.TopCenter) {
                             ShopCategoryCard(metrics, category) {
                                 dispatch(PocketPassEvent.OpenShopCategory(category.id))
                             }
@@ -188,7 +186,7 @@ fun PhoneActivitiesTab(
                 }
             } else {
                 selectedCategory.items.forEach { item ->
-                    DeckSlot(metrics, 218f) {
+                    DeckSlot(metrics, 218f, Alignment.TopCenter) {
                         ShopItemCard(
                             metrics = metrics,
                             item = item,
@@ -337,11 +335,17 @@ fun PhoneActivitiesTab(
 }
 
 @Composable
-private fun DeckSlot(metrics: DesignMetrics, height: Float, content: @Composable () -> Unit) {
+private fun DeckSlot(
+    metrics: DesignMetrics,
+    height: Float,
+    alignment: Alignment = Alignment.TopStart,
+    content: @Composable () -> Unit,
+) {
     Box(
         Modifier
             .fillMaxWidth()
             .height(metrics.dp(height)),
+        contentAlignment = alignment,
     ) { content() }
 }
 
@@ -402,7 +406,7 @@ private fun ActivitiesScaffold(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(top = metrics.dp(insets.top + 24f), bottom = metrics.dp(60f)),
+                .padding(top = metrics.dp(insets.top + 24f), bottom = metrics.dp(60f + LocalPhoneTabBarClearance.current)),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             header()
@@ -474,9 +478,6 @@ private fun PhoneActivitiesHero(
     }
     val stepsVisible = state.stepRewards.visible
     val swap = swapProgress.value
-    // Steps join the first page as a third column, which shrinks its two
-    // counters; the shuffled page keeps the full-width pair, so the column
-    // slides away with the first page.
     val fullArt = if (big) 400f else 320f
     val compactArt = if (big) 300f else 240f
     val artSize = if (stepsVisible) compactArt else fullArt

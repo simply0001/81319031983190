@@ -52,6 +52,7 @@ import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.controller.FocusDirection
 import com.pocketpass.app.ui.controller.ControllerFocusViewport
+import com.pocketpass.app.ui.controller.LocalControllerFocus
 import com.pocketpass.app.ui.controller.LocalControllerFocusViewport
 import com.pocketpass.app.ui.controller.controllerFocusViewport
 import com.pocketpass.app.ui.phone.PhoneRoundAction
@@ -66,30 +67,33 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.pocketShadow
 
-// Boards occupies its own shell, including the space used by the main app tabs.
 internal const val BOARDS_THOR_TOP = 0f
 internal val LocalBoardNavigationRail = staticCompositionLocalOf { false }
 internal val LocalBoardKeyboardOpen = staticCompositionLocalOf { false }
-// The shell is a page, not a modal: keep it on the app's base layer so that
-// message actions and other overlays can take focus above the navigation rail.
 internal val LocalBoardFocusLayer = staticCompositionLocalOf { 0 }
 private val LocalBoardTargetsEnabled = staticCompositionLocalOf { true }
 internal val LocalBoardFocusParent = staticCompositionLocalOf<String?> { null }
 internal val LocalBoardFocusOrder = staticCompositionLocalOf<List<String>?> { null }
 
-/** Keep every board control on the same layer, with an outline matching its shape. */
 internal fun Modifier.boardControllerTarget(
     id: String, radius: Float = 28f, enabled: Boolean = true,
     neighbors: Map<FocusDirection, String> = emptyMap(), onActivate: () -> Unit,
 ): Modifier = composed {
-    if(enabled && LocalBoardTargetsEnabled.current) {
+    val focus = LocalControllerFocus.current
+    val hold = remember(id) { BoardTargetHold() }
+    hold.registered = LocalBoardTargetsEnabled.current &&
+        (enabled || (hold.registered && focus?.focusId == id))
+    if(hold.registered) {
         controllerTarget(id, layer = LocalBoardFocusLayer.current, cornerRadius = radius,
             revealKey = LocalBoardFocusOrder.current,
-            parentId = LocalBoardFocusParent.current, neighbors = neighbors, onActivate = onActivate)
+            parentId = LocalBoardFocusParent.current, neighbors = neighbors) { if(enabled) onActivate() }
     } else this
 }
 
-/** Use the same reveal for About, filter options and settings sections. */
+private class BoardTargetHold {
+    var registered = false
+}
+
 @Composable
 internal fun BoardReveal(m: DesignMetrics, visible: Boolean, modifier: Modifier = Modifier, topGap: Float = 0f,
     content: @Composable ColumnScope.() -> Unit) {
@@ -99,8 +103,6 @@ internal fun BoardReveal(m: DesignMetrics, visible: Boolean, modifier: Modifier 
         enter = if(motion) expandVertically(tween(320, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) + fadeIn(tween(240)) else EnterTransition.None,
         exit = if(motion) shrinkVertically(tween(260, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) + fadeOut(tween(180)) else ExitTransition.None) {
         CompositionLocalProvider(LocalBoardTargetsEnabled provides targetsEnabled) {
-            // Frames paint outside their layout bounds. Reserve room inside the
-            // animated clip so all four edges appear together, including on exit.
             Column(Modifier.fillMaxWidth().padding(start = m.dp(8f), end = m.dp(8f), top = m.dp(8f + topGap), bottom = m.dp(8f)),
                 verticalArrangement = Arrangement.spacedBy(m.dp(24f)), content = content)
         }
@@ -167,7 +169,6 @@ internal fun BoardInlineBackHandler(enabled: Boolean, onBack: () -> Unit) {
     }
 }
 
-/** Quiet rounded tiles give this space its own identity without extra image assets. */
 @Composable
 internal fun BoardBackdrop(m: DesignMetrics, modifier: Modifier = Modifier) {
     val palette = pocketPalette
@@ -180,8 +181,6 @@ internal fun BoardBackdrop(m: DesignMetrics, modifier: Modifier = Modifier) {
         val tile = m.dp(148f).toPx()
         val gap = m.dp(10f).toPx()
         val radius = CornerRadius(m.dp(22f).toPx())
-        // Read animation state only while drawing; the board UI doesn't recompose
-        // for each frame. Moving one tile on both axes gives a seamless loop.
         val shift = tile * drift.value
         for(row in -1..(size.height / tile).toInt()) {
             for(column in -1..(size.width / tile).toInt()) {
@@ -198,7 +197,6 @@ internal fun BoardHeader(m: DesignMetrics, title: String, back: (() -> Unit)?, o
         .padding(horizontal = m.dp(50f)), verticalAlignment = Alignment.CenterVertically) {
         if(back != null) {
             BoardRoundAction(m, if(exit) "Back to PocketPass" else "Back", if(exit) "boards_exit" else "boards_back", back) {
-                // A chevron's ink is heavier on the open side; compensate after mirroring.
                 FigmaAsset(Assets.SettingsArrow, Modifier.align(Alignment.Center).offset(x = m.dp(-3f))
                     .width(m.dp(25f)).height(m.dp(43f))
                     .graphicsLayer { scaleX = -1f }, contentScale = ContentScale.Fit)
@@ -213,7 +211,6 @@ internal fun BoardHeader(m: DesignMetrics, title: String, back: (() -> Unit)?, o
     }
 }
 
-/** Miiverse-inspired rail replaces the main app navigation on wide screens. */
 @Composable
 internal fun BoardNavigationRail(m: DesignMetrics, state: PocketPassUiState, dispatch: (PocketPassEvent) -> Unit, modifier: Modifier = Modifier) {
     val screen = state.boards.screen
@@ -261,7 +258,6 @@ internal fun BoardNavigationRail(m: DesignMetrics, state: PocketPassUiState, dis
     }
 }
 
-/** One navigation strip for communities, private conversations and board activity. */
 @Composable
 internal fun BoardHubNavigation(m: DesignMetrics, state: PocketPassUiState, send: (BoardAction) -> Unit) {
     val screen = state.boards.screen
@@ -278,7 +274,6 @@ internal fun BoardHubNavigation(m: DesignMetrics, state: PocketPassUiState, send
     ), Modifier.padding(horizontal = m.dp(50f)).testTag("boards_navigation"))
 }
 
-/** Opt-in feedback for silent controls; never intercepts existing app sounds. */
 @Composable
 internal fun boardConfirmAction(onClick: () -> Unit, enabled: Boolean = true): () -> Unit {
     val sounds = LocalSoundEffects.current
@@ -330,7 +325,6 @@ internal fun BoardTabs(m: DesignMetrics, tabs: List<BoardTab>, modifier: Modifie
     }
 }
 
-/** The frame is outside the drawing; exported notes remain plain 4:3 paper. */
 @Composable
 internal fun BoardPaper(m: DesignMetrics, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     Box(modifier.pocketShadow(m, 12f, alpha = .10f, blurRadius = 12f)

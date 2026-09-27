@@ -122,7 +122,7 @@ class AndroidImageAttachmentPreparer(
                         100,
                         output,
                     )
-                    ImageAttachmentFormat.Gif -> false // GIFs bypass the still-image encoder.
+                    ImageAttachmentFormat.Gif -> false
                 }
             }
         } catch (_: Exception) {

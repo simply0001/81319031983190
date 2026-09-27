@@ -52,8 +52,8 @@ class ChatColoursUiTest {
                 if (phone) {
                     PocketPassTheme(state.themeMode) {
                         PhoneSurface { metrics ->
-                            if (threadOnly) PhoneThread(metrics, state, dispatch, PocketPassExtensions.None)
-                            else PhoneRoot(metrics, state, dispatch, null, PocketPassExtensions.None)
+                            if (threadOnly) PhoneThread(metrics, state, dispatch)
+                            else PhoneRoot(metrics, state, dispatch, null)
                         }
                     }
                 } else if (top) {

@@ -28,6 +28,9 @@ import com.pocketpass.app.logPlatformWarning
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -58,10 +61,6 @@ data class RealtimeNetworkState(
     val generation: Long,
 )
 
-// The whole "keep server state fresh while signed in, foregrounded and online"
-// loop, shared verbatim between the Android and iOS containers. Platform
-// concerns (system notifications, update checks, typing state) arrive as
-// callbacks.
 class RealtimeRuntime(
     private val scope: CoroutineScope,
     private val database: PocketPassDatabase,
@@ -118,21 +117,37 @@ class RealtimeRuntime(
                         TAG,
                         "Realtime starting for network generation ${gate.networkGeneration}",
                     )
-                    try {
-                        repositories.sync.synchronize(accountId)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Throwable) {
-                        logPlatformWarning(
-                            TAG,
-                            "Realtime reconciliation failed before reconnect: $error",
-                        )
-                    }
+                    val synchronizedConversationIds = synchronize(accountId)
+                    val synchronizedAtStart = synchronizedConversationIds != null
                     coroutineScope {
+                        val conversationListRefreshes = Channel<Unit>(Channel.CONFLATED)
                         launch { touchLastSeenPeriodically() }
-                        launch { collectRealtimeConversations(accountId) }
-                        launch { collectRealtimeNotifications(accountId) }
-                        launch { collectRealtimeFriends(accountId) }
+                        launch {
+                            refreshConversationListWhenRequested(
+                                accountId = accountId,
+                                requests = conversationListRefreshes,
+                            )
+                        }
+                        launch {
+                            collectRealtimeConversations(
+                                accountId = accountId,
+                                synchronizedConversationIds = synchronizedConversationIds.orEmpty(),
+                                conversationListRefreshes = conversationListRefreshes,
+                            )
+                        }
+                        launch {
+                            collectRealtimeNotifications(
+                                accountId = accountId,
+                                refreshBeforeFirstSubscription = !synchronizedAtStart,
+                                conversationListRefreshes = conversationListRefreshes,
+                            )
+                        }
+                        launch {
+                            collectRealtimeFriends(
+                                accountId = accountId,
+                                refreshBeforeFirstSubscription = !synchronizedAtStart,
+                            )
+                        }
                         launch { collectRealtimeTokenBalance(accountId) }
                         launch { collectRealtimeEncounterStats(accountId) }
                         launch { collectRealtimeAppUpdates() }
@@ -141,12 +156,47 @@ class RealtimeRuntime(
         }
     }
 
+    private suspend fun synchronize(accountId: UserId): Set<ConversationId>? = try {
+        when (repositories.sync.synchronize(accountId)) {
+            is RepositoryResult.Success -> database.conversationDao()
+                .observeForAccount(accountId.value)
+                .first()
+                .mapTo(hashSetOf()) { row -> ConversationId(row.conversationId) }
+
+            is RepositoryResult.Failure -> null
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        logPlatformWarning(
+            TAG,
+            "Realtime reconciliation failed before reconnect: $error",
+        )
+        null
+    }
+
+    private suspend fun refreshConversationListWhenRequested(
+        accountId: UserId,
+        requests: ReceiveChannel<Unit>,
+    ) {
+        while (currentCoroutineContext().isActive) {
+            requests.receive()
+            delay(CONVERSATION_LIST_REFRESH_DELAY_MILLIS)
+            bundle.messages.refreshConversations(accountId)
+        }
+    }
+
     fun clearPostedNearbyNotifications() {
         postedNearbyNotificationIds.clear()
     }
 
-    private suspend fun collectRealtimeFriends(accountId: UserId) = coroutineScope {
-        bundle.friends.refreshFriends(accountId)
+    private suspend fun collectRealtimeFriends(
+        accountId: UserId,
+        refreshBeforeFirstSubscription: Boolean,
+    ) = coroutineScope {
+        if (refreshBeforeFirstSubscription) {
+            bundle.friends.refreshFriends(accountId)
+        }
         launch {
             var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
             while (currentCoroutineContext().isActive) {
@@ -348,11 +398,7 @@ class RealtimeRuntime(
     }
 
     private suspend fun collectRealtimeEncounterStats(accountId: UserId) {
-        suspend fun refreshStats() {
-            // The encounters topic fires for both participants when a pass is
-            // recorded or confirmed, so the encounter list itself must refresh
-            // here too; the device that did not file the receipt otherwise
-            // learns about the pass only at the next full sync.
+        suspend fun refreshEncountersAndStats() {
             repositories.encounters.refresh(accountId)
             repositories.leaderboard.refresh(accountId, LeaderboardScope.Friends)
             repositories.leaderboard.refresh(accountId, LeaderboardScope.Global)
@@ -362,11 +408,11 @@ class RealtimeRuntime(
         }
         var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
         while (currentCoroutineContext().isActive) {
-            refreshStats()
+            refreshEncountersAndStats()
             try {
                 realtime
                     .encounterInvalidations(accountId.value)
-                    .collect { refreshStats() }
+                    .collect { refreshEncountersAndStats() }
                 retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -379,10 +425,18 @@ class RealtimeRuntime(
         }
     }
 
-    private suspend fun collectRealtimeNotifications(accountId: UserId) {
+    private suspend fun collectRealtimeNotifications(
+        accountId: UserId,
+        refreshBeforeFirstSubscription: Boolean,
+        conversationListRefreshes: SendChannel<Unit>,
+    ) {
         var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
+        var refreshBeforeSubscribing = refreshBeforeFirstSubscription
         while (currentCoroutineContext().isActive) {
-            bundle.notifications.refreshNotifications(accountId)
+            if (refreshBeforeSubscribing) {
+                bundle.notifications.refreshNotifications(accountId)
+            }
+            refreshBeforeSubscribing = true
             postUnreadNearbyNotifications(accountId)
             try {
                 realtime
@@ -397,7 +451,7 @@ class RealtimeRuntime(
                         }
                         bundle.notifications.refreshNotifications(accountId)
                         postUnreadNearbyNotifications(accountId)
-                        refreshConversationsForNotifications(accountId)
+                        requestConversationsForNotifications(accountId, conversationListRefreshes)
                     }
                 retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
             } catch (cancelled: CancellationException) {
@@ -416,9 +470,6 @@ class RealtimeRuntime(
 
     private suspend fun postUnreadNearbyNotifications(accountId: UserId) {
         val settings = settingsRepository.settings.first()
-        // Passes are announced once, when they arrive; a reinstall or cold start
-        // records the unread backlog as seen instead of replaying it, just as
-        // the encounter list never resurfaces old passes.
         val plan = planNearbyAlerts(
             unread = database.notificationDao().getUnreadNearbyForAccount(accountId.value),
             seenThroughEpochMillis = settings.nearbyAlertsSeenThroughEpochMillis,
@@ -442,14 +493,23 @@ class RealtimeRuntime(
         }
     }
 
-    private suspend fun refreshConversationsForNotifications(accountId: UserId) {
+    private suspend fun requestConversationsForNotifications(
+        accountId: UserId,
+        conversationListRefreshes: SendChannel<Unit>,
+    ) {
         val pending = database.notificationDao().conversationIdsNeedingRefresh(accountId.value)
         if (pending.isNotEmpty()) {
-            bundle.messages.refreshConversations(accountId)
+            conversationListRefreshes.trySend(Unit)
         }
     }
 
-    private suspend fun collectRealtimeConversations(accountId: UserId) = coroutineScope {
+    private suspend fun collectRealtimeConversations(
+        accountId: UserId,
+        synchronizedConversationIds: Set<ConversationId>,
+        conversationListRefreshes: SendChannel<Unit>,
+    ) = coroutineScope {
+        launch { bundle.profiles.refreshAllMessageColours(accountId) }
+        val unrefreshedSynchronizedIds = synchronizedConversationIds.toMutableSet()
         val channelJobs = mutableMapOf<ConversationId, Job>()
         try {
             database.conversationDao()
@@ -466,12 +526,16 @@ class RealtimeRuntime(
                         channelJobs.remove(conversationId)?.cancel()
                         presence.clearConversation(conversationId)
                     }
+                    unrefreshedSynchronizedIds.retainAll(conversationIds)
 
                     (conversationIds - channelJobs.keys).forEach { conversationId ->
+                        val alreadySynchronized = unrefreshedSynchronizedIds.remove(conversationId)
                         channelJobs[conversationId] = launch {
                             collectConversationRealtime(
                                 accountId = accountId,
                                 conversationId = conversationId,
+                                alreadySynchronized = alreadySynchronized,
+                                conversationListRefreshes = conversationListRefreshes,
                             )
                         }
                     }
@@ -485,13 +549,14 @@ class RealtimeRuntime(
     private suspend fun collectConversationRealtime(
         accountId: UserId,
         conversationId: ConversationId,
+        alreadySynchronized: Boolean,
+        conversationListRefreshes: SendChannel<Unit>,
     ) {
         var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
+        var reconnecting = false
         while (currentCoroutineContext().isActive) {
-            bundle.messages.refreshConversations(accountId)
-            bundle.messages.refreshMessages(accountId, conversationId)
-            bundle.profiles.refreshMessageColours(accountId, conversationId)
-
+            val refreshColoursWhenSubscribed = reconnecting || !alreadySynchronized
+            val refreshListWhenSubscribed = reconnecting
             try {
                 realtime
                     .conversationEvents(
@@ -501,15 +566,26 @@ class RealtimeRuntime(
                     )
                     .collect { event ->
                         when (event) {
+                            ConversationRealtimeEvent.Subscribed -> {
+                                bundle.messages.refreshMessages(accountId, conversationId)
+                                if (refreshColoursWhenSubscribed) {
+                                    bundle.profiles.refreshMessageColours(accountId, conversationId)
+                                }
+                                if (refreshListWhenSubscribed) {
+                                    conversationListRefreshes.trySend(Unit)
+                                }
+                            }
+
                             is ConversationRealtimeEvent.ChatColourChanged -> {
                                 bundle.profiles.refreshMessageColours(accountId, conversationId)
                             }
                             is ConversationRealtimeEvent.MessageInvalidated -> {
                                 val invalidation = event.invalidation
+                                val otherSenderId = invalidation.senderId
+                                    ?.takeIf { it != accountId.value }
                                 if (
                                     invalidation.operation == MessageChangeOperation.Insert &&
-                                    invalidation.senderId != null &&
-                                    invalidation.senderId != accountId.value
+                                    otherSenderId != null
                                 ) {
                                     soundEffects.play(SoundEffect.MessageReceived)
                                 }
@@ -517,12 +593,18 @@ class RealtimeRuntime(
                                     accountId,
                                     conversationId,
                                 )
-                                bundle.messages.refreshConversations(accountId)
-                                bundle.profiles.refreshMessageColours(accountId, conversationId)
+                                conversationListRefreshes.trySend(Unit)
+                                if (
+                                    otherSenderId != null &&
+                                    database.profileDao().get(otherSenderId) == null
+                                ) {
+                                    bundle.profiles.refreshMessageColours(accountId, conversationId)
+                                }
                             }
 
                             is ConversationRealtimeEvent.ConversationInvalidated -> {
-                                bundle.messages.refreshConversations(accountId)
+                                conversationListRefreshes.trySend(Unit)
+                                bundle.profiles.refreshMessageColours(accountId, conversationId)
                             }
 
                             is ConversationRealtimeEvent.PresenceChanged -> {
@@ -558,7 +640,10 @@ class RealtimeRuntime(
             } catch (error: Throwable) {
                 presence.clearConversation(conversationId)
                 logPlatformWarning(TAG, "Conversation Realtime channel failed; retrying: $error")
+                bundle.messages.refreshMessages(accountId, conversationId)
+                conversationListRefreshes.trySend(Unit)
             }
+            reconnecting = true
 
             delay(retryDelayMillis)
             retryDelayMillis = (retryDelayMillis * 2)
@@ -568,6 +653,7 @@ class RealtimeRuntime(
 
     private companion object {
         const val TAG = "PocketPassRealtime"
+        const val CONVERSATION_LIST_REFRESH_DELAY_MILLIS = 500L
         const val INITIAL_REALTIME_RETRY_MILLIS = 1_000L
         const val LAST_SEEN_TOUCH_INTERVAL_MILLIS = 5 * 60_000L
         const val LAST_SEEN_REFRESH_DELAY_MILLIS = 4_000L

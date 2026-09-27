@@ -221,10 +221,6 @@ class FeatureStateHoldersTest {
                 .none { it.id == requestId },
         )
 
-        holder.markAllRead()
-        runCurrent()
-        assertEquals(0, holder.state.value.unreadCount)
-
         holder.clearAll()
         runCurrent()
         assertTrue(
@@ -738,11 +734,6 @@ class FeatureStateHoldersTest {
         assertEquals(FixtureData.SpobConversationId, holder.state.value.selectedConversationId)
         assertEquals(0, holder.state.value.selectedConversation?.unreadCount)
         assertEquals(listOf("Hey bro", "yo"), holder.state.value.messages.data().map { it.body })
-        holder.toggleActionRail()
-        runCurrent()
-        assertTrue(holder.state.value.actionRailExpanded)
-        assertTrue(holder.closeActionRail())
-        runCurrent()
 
         holder.setDraft("spob draft")
         runCurrent()
@@ -901,7 +892,6 @@ class FeatureStateHoldersTest {
 
         holder.toggle()
         runCurrent()
-        assertEquals(ActivityVariant.Shuffled, holder.variant.value)
         assertEquals(ActivityVariant.Shuffled, holder.state.value.variant)
 
         val stateObservedAfterReturningToActivities = holder.state
@@ -1268,14 +1258,14 @@ class FeatureStateHoldersTest {
         val holder = SettingsStateHolder(repository, backgroundScope)
         runCurrent()
 
-        holder.setNearby(false)
+        repository.setNearby(false)
         holder.setSoundLevel(0.8f)
         holder.setThemeMode(ThemeMode.Dark)
         holder.setMoodEmojisEnabled(false)
         holder.setEncounterLedEnabled(false)
         holder.setEncounterAlertsEnabled(false)
         holder.setNearbyRepairAlertsEnabled(false)
-        holder.setStepRewardsEnabled(true)
+        repository.setStepRewardsEnabled(true)
         runCurrent()
 
         assertEquals(
@@ -1739,3 +1729,9 @@ private class RejectingPuzzleRepository : PuzzleRepository {
         PuzzlePiecePurchaseOutcome.Rejected(PuzzlePurchaseRejection.InsufficientTokens),
     )
 }
+
+private val MessagesFeatureState.unreadConversationCount: Int
+    get() = (conversations as? LoadState.Data)
+        ?.value
+        ?.count { it.unreadCount > 0 }
+        ?: 0

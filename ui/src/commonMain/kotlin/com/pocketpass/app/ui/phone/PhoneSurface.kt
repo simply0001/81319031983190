@@ -16,6 +16,7 @@ import com.pocketpass.app.ui.stableStatusBarTop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -44,7 +45,7 @@ private const val PHONE_WIDE_MIN_WIDTH = PHONE_RAIL_WIDTH + PHONE_DECK_WIDTH + P
 private const val LANDSCAPE_WIDE_MIN_WIDTH_DP = (PHONE_WIDE_MIN_WIDTH + 1f) * PHONE_MAX_UNIT_DP
 
 @Immutable
-class PhoneInsets(
+data class PhoneInsets(
     val top: Float = 0f,
     val bottom: Float = 0f,
     val start: Float = 0f,
@@ -53,7 +54,9 @@ class PhoneInsets(
     val safeTop: Float = 0f,
 )
 
-val LocalPhoneInsets = staticCompositionLocalOf { PhoneInsets() }
+val LocalPhoneInsets = compositionLocalOf { PhoneInsets() }
+
+val LocalPhoneTabBarClearance = staticCompositionLocalOf { 0f }
 
 enum class PhoneLayout { Compact, Wide }
 
@@ -70,8 +73,6 @@ fun phoneScale(
     val maxUnitDp = PHONE_MAX_UNIT_DP + (TABLET_MAX_UNIT_DP - PHONE_MAX_UNIT_DP) * tabletProgress
     var unitDp = (shortSideDp / PHONE_DESIGN_SHORT_SIDE).coerceIn(PHONE_MIN_UNIT_DP, maxUnitDp)
     val usableWidthDp = (viewportWidthPx - horizontalInsetsPx).coerceAtLeast(0f) / density
-    // Wide handhelds can fit the rail and both panes even when their short side
-    // is below the tablet breakpoint (for example 960 x 540 dp on Odin 3).
     if (viewportWidthPx > viewportHeightPx && usableWidthDp >= LANDSCAPE_WIDE_MIN_WIDTH_DP) {
         unitDp = min(unitDp, usableWidthDp / (PHONE_WIDE_MIN_WIDTH + 1f))
     }

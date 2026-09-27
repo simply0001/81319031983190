@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
-// Kotlin/Native has no monitor locks, so every mutation replaces one immutable
-// snapshot through a compare-and-set update instead of guarding mutable maps.
 class RealtimePresenceRepository : PresenceRepository {
     private class Snapshot(
         val conversationPresence: Map<ConversationId, Map<UserId, PresenceStatus>>,

@@ -31,7 +31,7 @@ struct ProfileCardWidget: Widget {
             ProfileCardView(entry: entry)
         }
         .configurationDisplayName("Profile card")
-        .description("Your Mii, name and greeting, PocketPass style.")
+        .description("Your Piip, name and greeting, PocketPass style.")
         .supportedFamilies([.systemMedium, .systemLarge])
         .contentMarginsDisabled()
     }

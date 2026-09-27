@@ -1,6 +1,9 @@
 package com.pocketpass.app.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.unit.Density
 import kotlin.time.Instant
@@ -39,8 +42,41 @@ actual fun isoCountryCodes(): List<String> =
 actual fun fileExists(path: String): Boolean =
     NSFileManager.defaultManager.fileExistsAtPath(path)
 
+internal class IosBackCallback(
+    var enabled: Boolean,
+    var onBack: () -> Unit,
+)
+
+internal object IosBackHandlers {
+    private val callbacks = mutableListOf<IosBackCallback>()
+
+    fun add(callback: IosBackCallback) {
+        callbacks += callback
+    }
+
+    fun remove(callback: IosBackCallback) {
+        callbacks -= callback
+    }
+
+    fun handleBack(): Boolean {
+        val callback = callbacks.lastOrNull { it.enabled } ?: return false
+        callback.onBack()
+        return true
+    }
+}
+
 @Composable
-actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) = Unit
+actual fun PlatformBackHandler(enabled: Boolean, onBack: () -> Unit) {
+    val callback = remember { IosBackCallback(enabled, onBack) }
+    SideEffect {
+        callback.enabled = enabled
+        callback.onBack = onBack
+    }
+    DisposableEffect(callback) {
+        IosBackHandlers.add(callback)
+        onDispose { IosBackHandlers.remove(callback) }
+    }
+}
 
 actual fun pocketPlatformTextStyle(): PlatformTextStyle? = null
 

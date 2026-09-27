@@ -3,11 +3,10 @@ package com.pocketpass.app.boards
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-/** A 4:3 pixel grid inspired by Flipnote Studio 3D's 320×240 frames. */
 object BoardPixelRaster {
     const val width = 320
     const val height = 240
-    const val cellSize = 2.5f // Board drawings keep the existing 800×600 document format.
+    const val cellSize = 2.5f
 
     data class Run(val x: Int, val y: Int, val length: Int)
 
@@ -16,7 +15,6 @@ object BoardPixelRaster {
 
     fun brushWidth(size: Float): Int = (size / cellSize).roundToInt().coerceIn(1, 16)
 
-    /** Rasterize once per stroke, then merge adjacent pixels into horizontal runs. */
     fun runs(stroke: BoardStroke): List<Run> {
         if (stroke.points.isEmpty()) return emptyList()
         val filled = HashSet<Int>()

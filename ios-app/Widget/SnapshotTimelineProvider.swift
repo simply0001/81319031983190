@@ -37,8 +37,6 @@ struct SnapshotTimelineProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
         let entry = current()
-        // The app reloads timelines on every change; this keeps relative
-        // times ("Last pass 12m ago") moving when nothing else happens.
         let refresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date()
         completion(Timeline(entries: [entry], policy: .after(refresh)))
     }

@@ -9,7 +9,7 @@ import com.pocketpass.app.domain.state.RepositoryResult
 import kotlin.time.Instant
 
 const val MII_HAT_NOT_OWNED_HINT = "HAT_NOT_OWNED"
-const val MII_HAT_NOT_OWNED_MESSAGE = "That hat is no longer unlocked. Save your Mii again."
+const val MII_HAT_NOT_OWNED_MESSAGE = "That hat is no longer unlocked. Save your Piip again."
 
 class MiiHatNotOwnedException : RuntimeException(MII_HAT_NOT_OWNED_MESSAGE)
 

@@ -24,12 +24,6 @@ import platform.UIKit.UIApplicationOpenSettingsURLString
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
-/**
- * CMPedometer as a [StepSource]. iOS keeps the step history itself, so a
- * reading is a query from local midnight to now and no ledger is needed.
- * The system Motion prompt appears on the first query; a later denial can
- * only be undone in the Settings app.
- */
 class IosPedometerStepSource : StepSource {
     private val pedometer = CMPedometer()
 
@@ -79,7 +73,6 @@ class IosPedometerStepSource : StepSource {
             if (error != null || data == null) {
                 refreshPermission()
             } else if (localDayKey(at) != liveDay) {
-                // Midnight passed: the running query still counts yesterday.
                 pedometer.stopPedometerUpdates()
                 if (live) startLiveUpdates()
             } else {
@@ -98,7 +91,6 @@ class IosPedometerStepSource : StepSource {
             StepPermission.Granted, StepPermission.NotRequired -> refreshPermission()
 
             StepPermission.NotDetermined -> {
-                // The first query is what shows the system prompt.
                 val now = nowMillis()
                 pedometer.queryPedometerDataFromDate(startOfDay(now), date(now)) { _, _ ->
                     refreshPermission()

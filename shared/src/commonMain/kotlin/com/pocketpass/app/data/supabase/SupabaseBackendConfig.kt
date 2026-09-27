@@ -18,9 +18,6 @@ data class SupabaseBackendConfig(
             "A service-role JWT must never be used by the Android client"
         }
 
-        // iOS cannot claim the https link without an associated-domains
-        // entitlement, so it redirects through the app's own scheme instead;
-        // only this exact literal is allowed past the https rules.
         if (authCallbackUrl != MOBILE_AUTH_CALLBACK_URL) {
             validateHttpsUrl("authCallbackUrl", authCallbackUrl, pathMustBeEmpty = false)
             val callback = Url(authCallbackUrl)
@@ -50,7 +47,6 @@ data class SupabaseBackendConfig(
         const val DEFAULT_AUTH_CALLBACK_URL =
             "https://$AUTH_CALLBACK_HOST$AUTH_CALLBACK_PATH"
 
-        // Must stay listed in the server's additional_redirect_urls.
         const val MOBILE_AUTH_CALLBACK_URL = "pocketpass://auth/callback"
 
         private fun validateHttpsUrl(
@@ -61,7 +57,6 @@ data class SupabaseBackendConfig(
             require(value.startsWith(HTTPS_PREFIX, ignoreCase = true)) {
                 "$name must use HTTPS"
             }
-            // Ktor's Url accepts an empty authority; java.net.URI did not.
             val authority = value.substring(HTTPS_PREFIX.length)
             require(authority.isNotEmpty() && !authority.startsWith('/')) {
                 "$name must include a host"

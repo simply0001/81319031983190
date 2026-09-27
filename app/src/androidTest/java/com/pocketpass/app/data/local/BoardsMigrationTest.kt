@@ -47,7 +47,7 @@ class BoardsMigrationTest {
             helper.close()
             val migrated=Room.databaseBuilder(context,PocketPassDatabase::class.java,name).addMigrations(PocketPassDatabase.Migration20To21).build()
             try {
-                val db=migrated.openHelper.writableDatabase // Room validates the complete exported schema.
+                val db=migrated.openHelper.writableDatabase
                 assertEquals(before,snapshot(db))
                 db.execSQL("INSERT INTO board_drafts VALUES ('a','draft','board','{}',1)")
                 db.execSQL("INSERT INTO board_drafts VALUES ('b','draft','board','{}',2)")

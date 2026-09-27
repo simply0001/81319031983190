@@ -54,16 +54,24 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
@@ -72,6 +80,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.BOTTOM_DESIGN_WIDTH
@@ -102,6 +112,40 @@ const val PHONE_CONTENT_MARGIN = 50f
 const val PHONE_PANEL_BORDER = 20.152f
 private const val PHONE_CHROME_CORNER = 130f
 private const val PHONE_CHROME_BLEED = 40f
+
+internal class AboveTabBarShape(
+    private val metrics: DesignMetrics,
+    private val tabBarHeight: Float,
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Outline = with(density) {
+        val corner = CornerRadius(metrics.dp(PHONE_CHROME_CORNER).toPx())
+        val path = Path().apply {
+            fillType = PathFillType.EvenOdd
+            addRect(Rect(0f, 0f, size.width, size.height))
+            addRoundRect(
+                RoundRect(
+                    left = 0f,
+                    top = size.height - metrics.dp(tabBarHeight).toPx(),
+                    right = size.width,
+                    bottom = size.height,
+                    topLeftCornerRadius = corner,
+                    topRightCornerRadius = corner,
+                ),
+            )
+        }
+        Outline.Generic(path)
+    }
+}
+
+private fun Modifier.blocksTouchesBehind(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent()
+    }
+}
 internal val PhoneGreenBorder = Color(0xFF4FC24B)
 internal val PhoneRedBorder = Color(0xFFC24B4B)
 internal val PhoneGreyBorder = Color(0xFF8A8A8A)
@@ -158,7 +202,8 @@ fun PhoneTabBar(
         modifier
             .fillMaxWidth()
             .height(metrics.dp(height))
-            .clipToBounds(),
+            .clipToBounds()
+            .blocksTouchesBehind(),
     ) {
         Box(
             Modifier

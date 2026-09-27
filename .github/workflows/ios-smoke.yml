@@ -10,7 +10,6 @@ concurrency:
 jobs:
   launch:
     name: Simulator launch check (macOS)
-    # Actions minutes are only free on the public mirror; the private repo would bill them.
     if: github.repository == 'simply0001/81319031983190'
     runs-on: macos-15
     timeout-minutes: 40
@@ -32,8 +31,6 @@ jobs:
       - name: Generate the Xcode project
         working-directory: ios-app
         run: xcodegen generate
-      # Same backend wiring as the IPA build so the smoke test exercises the
-      # production container's startup path (database creation, Supabase client).
       - name: Build for the simulator
         working-directory: ios-app
         env:
@@ -61,9 +58,6 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           APP=build/DerivedData/Build/Products/Debug-iphonesimulator/PocketPass.app
           xcrun simctl install "$UDID" "$APP"
-          # A detached launch: tying the app to a console-pty session would kill
-          # it when the watcher exits. Simulator apps are host processes, so the
-          # printed PID works with plain ps.
           LAUNCH_OUT=$(xcrun simctl launch \
             --stdout="$PWD/launch-stdout.txt" \
             --stderr="$PWD/launch-stderr.txt" \

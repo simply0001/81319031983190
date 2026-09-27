@@ -43,7 +43,6 @@ enum class EntranceMotion {
     SettingsTurn,
     TextRise,
     PanelRise,
-    PanelFromLeft,
     PanelFromRight,
     BoardOpen,
     BoardActivityFade,
@@ -52,7 +51,6 @@ enum class EntranceMotion {
 
 enum class IdleMotion {
     None,
-    MessageFloat,
     CoinRock,
     PuzzleBob,
     FriendPulse,
@@ -133,8 +131,6 @@ private fun EntranceMotion.values(): EntranceValues = when (this) {
         EntranceValues(scale = 0.985f, y = 18f, dampingRatio = 0.84f, stiffness = 500f)
     EntranceMotion.PanelRise ->
         EntranceValues(scale = 0.98f, y = 28f, dampingRatio = 0.82f, stiffness = 470f)
-    EntranceMotion.PanelFromLeft ->
-        EntranceValues(scale = 0.985f, x = -30f, dampingRatio = 0.82f, stiffness = 470f)
     EntranceMotion.PanelFromRight ->
         EntranceValues(scale = 0.985f, x = 30f, dampingRatio = 0.82f, stiffness = 470f)
     EntranceMotion.BoardOpen ->
@@ -160,8 +156,6 @@ private data class IdleValues(
 
 private fun IdleMotion.values(): IdleValues = when (this) {
     IdleMotion.None -> IdleValues()
-    IdleMotion.MessageFloat ->
-        IdleValues(y = 7f, rotation = 1.1f, scale = 0.006f, durationMillis = 2_400)
     IdleMotion.CoinRock ->
         IdleValues(y = 1.5f, rotation = 0.9f, scale = 0.002f, durationMillis = 3_200)
     IdleMotion.PuzzleBob ->
@@ -282,8 +276,6 @@ fun MotionLayer(
         )
     }
 
-    // The idle wave starts at -1, so switching it on would land as a small
-    // jump; fading its amplitude in and out keeps the settle seamless.
     val idleGain = animateFloatAsState(
         targetValue = if (idleActive && idle != IdleMotion.None) 1f else 0f,
         animationSpec = tween(durationMillis = IDLE_GAIN_MILLIS, easing = FastOutSlowInEasing),

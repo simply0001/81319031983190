@@ -74,11 +74,11 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
             override fun onNearbyPreferenceChanged(enabled: Boolean) =
                 container.nearby.onNearbyPreferenceChanged(enabled)
             override fun requestPermissions() = container.nearby.requestPermissions()
-            override fun skipOnboarding() = container.nearby.skipOnboarding()
             override fun onAppOpened(openRepair: Boolean) = container.nearby.onAppOpened(openRepair)
             override fun onPermissionResult() = container.nearby.onPermissionResult()
         }
         override val stepRewards get() = container.stepRewards
+        override val appForeground get() = container.appForeground
         override val appUpdate = object : AppUpdateActions {
             override val state get() = container.appUpdate.state
             override fun check() = container.appUpdate.check()

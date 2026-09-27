@@ -30,7 +30,6 @@ data class PocketPalette(
     val textPrimary: Color,
     val textSecondary: Color,
     val textMuted: Color,
-    val textOnAccent: Color,
     val topBackgrounds: Map<PocketPassDestination, BackgroundPair>,
     val bottomBackgrounds: Map<PocketPassDestination, BackgroundPair>,
 ) {
@@ -61,7 +60,6 @@ val LightPalette = PocketPalette(
     textPrimary = Color(0xFF5C5C5C),
     textSecondary = Color(0x8F575757),
     textMuted = Color(0xFF8A8A8A),
-    textOnAccent = Color.White,
     topBackgrounds = mapOf(
         PocketPassDestination.Home to BackgroundPair(Color(0xFF92EBAE), Color.White),
         PocketPassDestination.Activities to BackgroundPair(Color(0xFFFCA5A5), Color.White),
@@ -95,7 +93,6 @@ val DarkPalette = PocketPalette(
     textPrimary = Color(0xFFE8EEF1),
     textSecondary = Color(0xFFA9BAC2),
     textMuted = Color(0xFF8A9BA3),
-    textOnAccent = Color.White,
     topBackgrounds = mapOf(
         PocketPassDestination.Home to BackgroundPair(Color(0xFF1B4A34), Color(0xFF16242A)),
         PocketPassDestination.Activities to BackgroundPair(Color(0xFF4A2A28), Color(0xFF2A2220)),

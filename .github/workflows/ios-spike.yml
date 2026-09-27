@@ -14,7 +14,6 @@ concurrency:
 jobs:
   shared:
     name: Shared code (Linux)
-    # Actions minutes are only free on the public mirror; the private repo would bill them.
     if: github.repository == 'simply0001/81319031983190'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -123,8 +122,6 @@ jobs:
       - name: Generate the Xcode project
         working-directory: ios-spike/iosApp
         run: xcodegen generate
-      # No signing on CI: the IPA is unsigned, and a sideloading tool (Sideloadly,
-      # AltStore) re-signs it with the user's own Apple ID during install.
       - name: Build for a device, unsigned
         working-directory: ios-spike/iosApp
         run: |

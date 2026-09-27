@@ -64,7 +64,7 @@ class BoardsUiTest {
             CompositionLocalProvider(LocalControllerFocus provides focus) {
                 PocketPassTheme(state.themeMode) {
                     Box(Modifier.fillMaxSize()) {
-                    if(phone) PhoneSurface { PhoneRoot(it, state, ::send, null, PocketPassExtensions.None) }
+                    if(phone) PhoneSurface { PhoneRoot(it, state, ::send, null) }
                     else Box(Modifier.aspectRatio(1240f/1080f, matchHeightConstraintsFirst = true)) {
                         BottomDisplayContent(state, ::send)
                     }
@@ -376,8 +376,6 @@ class BoardsUiTest {
         val nav = compose.onNodeWithTag("boards_navigation").fetchSemanticsNode().boundsInRoot
         assertTrue("Boards navigation overlaps its header", nav.top >= header.bottom)
         compose.onNodeWithTag("boards_code_section").performSemanticsAction(SemanticsActions.OnClick) { it() }
-        // Drag within the visible viewport: performScrollTo's distances don't
-        // account for DesignSurface's graphics-layer scale in this preview.
         repeat(4) {
             if(!compose.onNodeWithTag("boards_code").isDisplayed()) {
                 compose.onNodeWithTag("boards_scroll").performTouchInput { swipeUp(startY = height * .55f, endY = height * .12f) }

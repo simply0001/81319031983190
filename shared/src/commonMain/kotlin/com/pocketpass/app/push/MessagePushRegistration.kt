@@ -14,7 +14,6 @@ interface MessagePushBindingStore {
     var binding: String?
 }
 
-/** Serializes registration with logout, and rejects results from a previous account. */
 class MessagePushRegistration(
     private val api: MessagePushRegistrationApi,
     private val store: MessagePushBindingStore,
@@ -48,7 +47,6 @@ class MessagePushRegistration(
     }
 
     suspend fun signOut() {
-        // Invalidate taps and any response already in flight before awaiting the network.
         updateAccount(null, false)
         mutex.withLock { api.unregister(store.installation) }
     }

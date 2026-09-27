@@ -21,11 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,7 @@ import com.pocketpass.app.domain.model.FriendRequestNotificationStatus
 import com.pocketpass.app.domain.model.NotificationKind
 import com.pocketpass.app.domain.model.PocketPassNotification
 import com.pocketpass.app.domain.model.UserProfile
+import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
@@ -90,6 +92,13 @@ private const val UNREAD_BADGE_WIDTH = 76f
 private const val UNREAD_BADGE_HEIGHT = 34f
 private const val NOTIFICATION_FOCUS_LAYER = 10
 private const val CLEAR_ALL_FOCUS_TAG = "clear_all_notifications"
+
+private fun String?.isNullOrDrawerTarget(): Boolean =
+    this == null ||
+        this == CLEAR_ALL_FOCUS_TAG ||
+        startsWith("notification_") ||
+        startsWith("accept_friend_request_") ||
+        startsWith("decline_friend_request_")
 
 @Composable
 private fun Modifier.notificationTextScroll(text: String): Modifier {
@@ -161,14 +170,14 @@ fun NotificationDrawer(
     if (dismissed.value) return
 
     val focus = LocalControllerFocus.current
+    val onHome by rememberUpdatedState(state.rootDestination == PocketPassDestination.Home)
     LaunchedEffect(visible) {
         if (visible) {
             val first = state.notifications.firstOrNull()?.let { "notification_${it.id.value}" }
             focus?.focus(first ?: CLEAR_ALL_FOCUS_TAG, reveal = false)
+        } else if (focus != null && onHome && focus.focusId.isNullOrDrawerTarget()) {
+            focus.focus("notifications", reveal = false)
         }
-    }
-    DisposableEffect(focus) {
-        onDispose { focus?.focus("notifications", reveal = false) }
     }
 
     Box(

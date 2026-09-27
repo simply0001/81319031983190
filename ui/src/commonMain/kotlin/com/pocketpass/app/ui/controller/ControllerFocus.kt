@@ -243,10 +243,8 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
     private val lastFocusByDisplay = mutableMapOf<FocusDisplay, String>()
     var keyboardSubmit: (() -> Unit)? = null
     var keyboardBackspace: (() -> Unit)? = null
-    /** Set while the keyboard shows a page B should leave before closing anything. */
     var keyboardEscape: (() -> Unit)? = null
     var transientBack: (() -> Unit)? = null
-    /** Canvas-only analog movement; x/y are normalized stick travel multiplied by elapsed seconds. */
     var boardCanvasPan: ((Float, Float) -> Unit)? = null
     var keyboardLayer: Int? by mutableStateOf(null)
 
@@ -497,8 +495,6 @@ fun Modifier.controllerTarget(
         }
         onDispose { focus.unregister(id) }
     }
-    // Navigation links can change when a tab opens a different page. Updating
-    // them must not dispose the still-visible tab and clear its current focus.
     SideEffect {
         focus.updateNeighbors(id, neighbors)
         focus.updateBadgeBounds(id, badgeBounds)
@@ -652,8 +648,6 @@ fun ControllerFocusHighlight(focus: ControllerFocus, display: FocusDisplay? = Fo
             pendingHide?.cancel()
             pendingHide = null
             if (next == null && previous != null && !hidden && !swapped && animate) {
-                // Overlay targets are removed before the Activities card takes focus. Keep
-                // the last drawn ring through that brief gap so its return can slide.
                 pendingHide = launch {
                     delay(RING_GAP_LIMIT_NANOS / 1_000_000L)
                     presence.update(null, swapped = false, animate = true)
@@ -686,8 +680,6 @@ fun ControllerFocusHighlight(focus: ControllerFocus, display: FocusDisplay? = Fo
                     radiusShift.snapTo(0f)
                 }
                 is RingMotion.Slide -> {
-                    // The destination viewport must not cut off a ring still arriving
-                    // from navigation outside it. Preserve this during rapid moves.
                     crossingViewport = previous?.viewport !== next?.viewport ||
                         (crossingViewport && edges.value != Rect.Zero)
                     val shift = motion.shift
@@ -794,7 +786,6 @@ private fun DrawScope.drawHighlight(
 
 internal const val HIGHLIGHT_MASK_SCALE = 0.25f
 
-/** A local panel can dismiss before navigation changes the page underneath it. */
 @Composable
 fun ControllerBackHandler(enabled: Boolean, onBack: () -> Unit) {
     val focus = LocalControllerFocus.current

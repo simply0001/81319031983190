@@ -20,7 +20,6 @@ import com.pocketpass.app.data.local.clearAllPocketPassTables
 import com.pocketpass.app.data.pretendo.KtorPretendoMiiSource
 import com.pocketpass.app.data.repository.FixtureData
 import com.pocketpass.app.data.repository.FixtureRepositoryBundle
-import com.pocketpass.app.data.repository.PendingOperationScheduler
 import com.pocketpass.app.data.repository.ProductionRepositoryBundle
 import com.pocketpass.app.data.repository.RealtimePresenceRepository
 import com.pocketpass.app.data.repository.RoomAchievementsRepository
@@ -92,6 +91,7 @@ import com.pocketpass.app.nearby.NearbyReceiptVerdict
 import com.pocketpass.app.nearby.NearbyReceiptVerdictBus
 import com.pocketpass.app.nearby.postEncounterNotification
 import com.pocketpass.app.sync.IosNetworkMonitor
+import com.pocketpass.app.sync.OutboxDrainScheduler
 import com.pocketpass.app.sync.OutboxProcessor
 import com.pocketpass.app.sync.RealtimeRuntime
 import com.pocketpass.app.widget.IosWidgetSnapshotSink
@@ -134,11 +134,6 @@ import com.pocketpass.app.data.repository.RoomPuzzleRepository
 import com.pocketpass.app.feature.PuzzleStateHolder
 import com.pocketpass.app.puzzle.IosFilePuzzleArtworkStore
 
-/**
- * The iOS composition root. With backend coordinates generated into
- * IosBuildConfig it runs the same production graph as Android (Supabase,
- * Room, realtime); without them it stays in the fixture demo mode.
- */
 class IosAppContainer(
     val applicationScope: CoroutineScope =
         CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -397,7 +392,8 @@ class IosAppContainer(
         sink = IosWidgetSnapshotSink(),
     )
 
-    private val appForeground = MutableStateFlow(true)
+    private val foregroundState = MutableStateFlow(true)
+    override val appForeground: StateFlow<Boolean> get() = foregroundState
     private val networkMonitor = IosNetworkMonitor()
 
     private val messagePush = backend?.takeIf { messagePushSupported }?.let { components ->
@@ -405,7 +401,7 @@ class IosAppContainer(
             client = components.client,
             settings = settingsRepository,
             session = repositories.session.sessionState,
-            foreground = appForeground,
+            foreground = foregroundState,
             network = networkMonitor.state,
             scope = applicationScope,
             openConversation = { pendingConversation.value = ConversationId(it) },
@@ -425,7 +421,7 @@ class IosAppContainer(
             profileRemote = components.remote,
             soundEffects = soundEffects,
             settingsRepository = settingsRepository,
-            appForeground = appForeground,
+            appForeground = foregroundState,
             networkState = networkMonitor.state,
             observeSelfTyping = { messages.observeSelfTyping(it) },
             onAppUpdateSignal = {},
@@ -441,7 +437,7 @@ class IosAppContainer(
         registerForegroundObservers()
         messagePush?.start()
         applicationScope.launch {
-            appForeground.collect { foreground -> stepRewards.setForeground(foreground) }
+            foregroundState.collect { foreground -> stepRewards.setForeground(foreground) }
         }
         if (components == null) {
             miiEditor.activateAccount(FixtureData.CurrentUserId.value)
@@ -466,7 +462,7 @@ class IosAppContainer(
                 }
             }
             applicationScope.launch {
-                appForeground.collectLatest { foreground ->
+                foregroundState.collectLatest { foreground ->
                     if (!foreground) return@collectLatest
                     activeAccountId.value?.let { accountId ->
                         runCatching { components.bundle.outboxProcessor.drain(accountId) }
@@ -493,7 +489,7 @@ class IosAppContainer(
             ?: return RepositoryResult.Failure(
                 RepositoryFailure(
                     kind = RepositoryFailureKind.Unauthorized,
-                    message = "Sign in again to delete this Mii.",
+                    message = "Sign in again to delete this Piip.",
                     retryable = false,
                 ),
             )
@@ -605,7 +601,6 @@ class IosAppContainer(
             ?: NearbyReceiptVerdict.Unknown
     }
 
-    /** One best-effort reconcile pass for BGTaskScheduler refreshes. */
     internal suspend fun performBackgroundSync(): Boolean {
         val components = backend ?: return true
         val accountId = activeAccountId.value ?: return true
@@ -619,7 +614,7 @@ class IosAppContainer(
                 healthy = false
             }
         }
-        attempt { repositories.sync.synchronize(accountId) }
+        attempt { if (repositories.sync.synchronize(accountId) is RepositoryResult.Failure) healthy = false }
         attempt { components.bundle.outboxProcessor.drain(accountId) }
         attempt { miiPublishCallback?.drain(accountId.value) }
         attempt { widgetPublisher.publishNow() }
@@ -668,12 +663,12 @@ class IosAppContainer(
             name = UIApplicationDidBecomeActiveNotification,
             `object` = null,
             queue = null,
-        ) { _ -> appForeground.value = true }
+        ) { _ -> foregroundState.value = true }
         center.addObserverForName(
             name = UIApplicationWillResignActiveNotification,
             `object` = null,
             queue = null,
-        ) { _ -> appForeground.value = false }
+        ) { _ -> foregroundState.value = false }
     }
 
     private fun createBackendComponents(): IosBackendComponents {
@@ -698,13 +693,9 @@ class IosAppContainer(
         val database = buildPocketPassDatabase(iosDatabasePath())
         val remote = SupabaseProductionRemoteDataSources(client)
 
-        // The scheduler is needed to create the bundle whose processor it
-        // drains, so the reference is bound just after creation.
         var outboxProcessor: OutboxProcessor? = null
-        val scheduler = PendingOperationScheduler { accountId ->
-            applicationScope.launch {
-                runCatching { outboxProcessor?.drain(accountId) }
-            }
+        val scheduler = OutboxDrainScheduler(applicationScope) { accountId ->
+            outboxProcessor?.drain(accountId)
         }
         val nearbyProofOutboxStore = NearbyProofOutboxStore(
             outboxDao = database.outboxDao(),
@@ -903,7 +894,6 @@ private fun iosDatabasePath(): String {
     return (directory / "pocketpass.db").toString()
 }
 
-/** Clock and battery for the status pills, refreshed every few seconds. */
 class IosStatusFeed : StatusFeed {
     private val clockFormatter = NSDateFormatter().apply { dateFormat = "HH:mm" }
 

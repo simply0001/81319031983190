@@ -154,8 +154,6 @@ fun BoardsContent(metrics: DesignMetrics, state: PocketPassUiState, dispatch: (P
         MotionLayer(Modifier.weight(1f).fillMaxWidth().testTag("boards_page"), entrance = entrance) {
         CompositionLocalProvider(LocalControllerFocusViewport provides viewport) {
         Column(Modifier.fillMaxSize().clipToBounds().controllerFocusViewport(viewport).verticalScroll(rememberScrollState())
-            // Keep the initial breathing room inside the scroll, as in Settings.
-            // Scrolled notes then reach the navigation edge without a blank band.
             .testTag("boards_scroll").padding(horizontal = metrics.dp(50f))
             .padding(top = metrics.dp(38f), bottom = metrics.dp(16f)),
             verticalArrangement = Arrangement.spacedBy(metrics.dp(24f))) {
@@ -274,8 +272,6 @@ private fun BoardDirectory(m: DesignMetrics, s: BoardsUiState, send: (BoardActio
     val motion = platformAnimationsEnabled()
     MotionLayer(Modifier.fillMaxWidth().animateContentSize(tween(if(motion) 320 else 0, easing = FastOutSlowInEasing)),
         entrance = EntranceMotion.BoardOpen, replayKey = s.explore, transformOrigin = TransformOrigin(.5f, 0f)) {
-    // pocketFrame draws its stroke outside the control's measured bounds.
-    // Keep those outsets inside animateContentSize's clipping boundary.
     Column(Modifier.fillMaxWidth().padding(m.dp(8f)), verticalArrangement = Arrangement.spacedBy(m.dp(24f))) {
     if(s.explore) {
         var search by remember { mutableStateOf(s.search) }
@@ -392,8 +388,6 @@ private fun BoardFeed(m: DesignMetrics, state: PocketPassUiState, send: (BoardAc
             periodsOpen = false
             controllerFocus?.focus("board_sort_popular")
         }
-        // Keep the gap inside the reveal, and avoid animating the rules a second
-        // time while the compact About panel itself is changing height.
         Column(Modifier.fillMaxWidth()) {
         BoardReveal(m, !compact || showRules, Modifier.testTag("board_about_reveal")) {
         BoardCard(m) {
@@ -417,7 +411,7 @@ private fun BoardFeed(m: DesignMetrics, state: PocketPassUiState, send: (BoardAc
         }
         Spacer(Modifier.height(m.dp(16f)))
         }
-        if(b.archived) BoardLabel(m, "This board is archived. You can still read its notes.")
+        if(b.archived) BoardLabel(m, "This board is archived. Its notes stay readable.")
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(m.dp(20f))) {
             if(compact) {
                 BoardAboutButton(m, showRules, Modifier.weight(1f)) { showRules = !showRules }
@@ -426,8 +420,6 @@ private fun BoardFeed(m: DesignMetrics, state: PocketPassUiState, send: (BoardAc
             else if(compact && !b.archived && b.role == null) BoardButton(m, if(b.joinRequested) "Join requested" else "Join board", "board_join_compact", true, !b.joinRequested && !s.busy) { send(BoardAction.Mutate("join", boardArgs("board_id" to b.id.boardValue()))) }
         }
         }
-        // Keep both rows in one item: the feed's spacedBy gap must not appear
-        // abruptly when the period row enters or disappear when it leaves.
         Column(Modifier.fillMaxWidth()) {
             BoardTabs(m, BoardSort.entries.map { sort ->
                 BoardTab(if(sort == BoardSort.Activity) "Recent activity" else sort.label, "board_sort_${sort.wire}", s.sort == sort,
@@ -444,7 +436,6 @@ private fun BoardFeed(m: DesignMetrics, state: PocketPassUiState, send: (BoardAc
             BoardReveal(m, s.sort == BoardSort.Popular && periodsOpen, topGap = 16f) {
                 LaunchedEffect(focusWeekRequested, s.sort, periodsOpen) {
                     if(focusWeekRequested && s.sort == BoardSort.Popular && periodsOpen) {
-                        // Let the revealed row register and lay out its targets first.
                         withFrameNanos { }
                         controllerFocus?.focus("board_period_week")
                         focusWeekRequested = false
@@ -590,8 +581,6 @@ private fun BoardPostCard(m: DesignMetrics, post: BoardPost, state: PocketPassUi
         }
         BoardDivider(m)
         Column(Modifier.fillMaxWidth()) {
-            // Reserve border gutters vertically, then animate the extra action's
-            // width. Yeah and Replies keep their places on the same row.
             Row(Modifier.fillMaxWidth().heightIn(min = m.dp(114f)), verticalAlignment = Alignment.CenterVertically) {
                 if(!post.removed) BoardButton(m, "Yeah · ${post.yeahCount}", "yeah_${post.id}", post.yeah,
                     s.board?.canPost == true && !s.busy, modifier = Modifier.weight(1f), compact = true, confirmSound = true) {

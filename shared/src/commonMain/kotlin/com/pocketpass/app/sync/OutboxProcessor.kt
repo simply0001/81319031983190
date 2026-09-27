@@ -1,11 +1,14 @@
 package com.pocketpass.app.sync
 
 import com.pocketpass.app.data.local.dao.OutboxDao
+import com.pocketpass.app.data.local.entity.PendingOperationEntity
 import com.pocketpass.app.domain.model.UserId
 import kotlin.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 import kotlin.random.Random
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 data class OutboxDrainSummary(
     val acknowledged: Int,
@@ -13,9 +16,13 @@ data class OutboxDrainSummary(
     val permanentFailures: Int,
     val staleCompletions: Int,
     val reachedBatchLimit: Boolean,
+    val nextAttemptAtEpochMillis: Long?,
 ) {
     val needsRetry: Boolean
         get() = retryableFailures > 0 || reachedBatchLimit
+
+    val hasRemainingWork: Boolean
+        get() = nextAttemptAtEpochMillis != null
 }
 
 data class OutboxRetryPolicy(
@@ -47,9 +54,11 @@ class OutboxProcessor(
     private val clock: Clock = Clock.System,
     private val retryPolicy: OutboxRetryPolicy = OutboxRetryPolicy(),
     private val leaseDurationMillis: Long = 2L * 60L * 1_000L,
+    private val finishedRetentionMillis: Long = 24L * 60L * 60L * 1_000L,
 ) {
     init {
         require(leaseDurationMillis > 0) { "Outbox lease must be positive" }
+        require(finishedRetentionMillis >= 0) { "Outbox retention cannot be negative" }
     }
 
     suspend fun drain(
@@ -80,6 +89,13 @@ class OutboxProcessor(
             val result = try {
                 executor.execute(operation)
             } catch (cancelled: CancellationException) {
+                withContext(NonCancellable) {
+                    outboxDao.releaseClaim(
+                        operationId = operation.operationId,
+                        leaseToken = leaseToken,
+                        nextAttemptAtEpochMillis = clock.now().toEpochMilliseconds(),
+                    )
+                }
                 throw cancelled
             } catch (error: Throwable) {
                 OutboxExecutionResult.RetryableFailure(
@@ -88,63 +104,57 @@ class OutboxProcessor(
                 )
             }
 
-            when (result) {
-                OutboxExecutionResult.Acknowledged -> {
-                    if (
-                        outboxDao.markSucceeded(
-                            operationId = operation.operationId,
-                            leaseToken = leaseToken,
-                            completedAtEpochMillis = clock.now().toEpochMilliseconds(),
-                        )
-                    ) {
-                        acknowledged += 1
-                    } else {
-                        staleCompletions += 1
-                    }
-                }
-
-                is OutboxExecutionResult.RetryableFailure -> {
-                    val nextAttemptAt = clock.now().toEpochMilliseconds() +
-                        retryPolicy.delayMillis(operation.attemptCount)
-                    if (
-                        outboxDao.markRetryable(
-                            operationId = operation.operationId,
-                            leaseToken = leaseToken,
-                            nextAttemptAtEpochMillis = nextAttemptAt,
-                            errorCode = result.code,
-                            errorMessage = result.message,
-                        )
-                    ) {
-                        retryableFailures += 1
-                    } else {
-                        staleCompletions += 1
-                    }
-                }
-
-                is OutboxExecutionResult.PermanentFailure -> {
-                    if (
-                        outboxDao.markPermanentlyFailed(
-                            operationId = operation.operationId,
-                            leaseToken = leaseToken,
-                            completedAtEpochMillis = clock.now().toEpochMilliseconds(),
-                            errorCode = result.code,
-                            errorMessage = result.message,
-                        )
-                    ) {
-                        permanentFailures += 1
-                    } else {
-                        staleCompletions += 1
-                    }
-                }
+            val recorded = withContext(NonCancellable) {
+                record(operation, leaseToken, result)
+            }
+            when {
+                !recorded -> staleCompletions += 1
+                result == OutboxExecutionResult.Acknowledged -> acknowledged += 1
+                result is OutboxExecutionResult.RetryableFailure -> retryableFailures += 1
+                result is OutboxExecutionResult.PermanentFailure -> permanentFailures += 1
             }
         }
 
+        outboxDao.deleteFinishedBefore(
+            accountId = accountId.value,
+            completedBeforeEpochMillis = clock.now().toEpochMilliseconds() - finishedRetentionMillis,
+        )
         return OutboxDrainSummary(
             acknowledged = acknowledged,
             retryableFailures = retryableFailures,
             permanentFailures = permanentFailures,
             staleCompletions = staleCompletions,
             reachedBatchLimit = claimedCount == maximumOperations,
+            nextAttemptAtEpochMillis = outboxDao.nextAttemptAt(accountId.value),
+        )
+    }
+
+    private suspend fun record(
+        operation: PendingOperationEntity,
+        leaseToken: String,
+        result: OutboxExecutionResult,
+    ): Boolean = when (result) {
+        OutboxExecutionResult.Acknowledged -> outboxDao.markSucceeded(
+            operationId = operation.operationId,
+            leaseToken = leaseToken,
+            completedAtEpochMillis = clock.now().toEpochMilliseconds(),
+        )
+
+        is OutboxExecutionResult.RetryableFailure -> outboxDao.markRetryable(
+            operationId = operation.operationId,
+            leaseToken = leaseToken,
+            nextAttemptAtEpochMillis = clock.now().toEpochMilliseconds() +
+                retryPolicy.delayMillis(operation.attemptCount),
+            errorCode = result.code,
+            errorMessage = result.message,
+        )
+
+        is OutboxExecutionResult.PermanentFailure -> outboxDao.markPermanentlyFailed(
+            operationId = operation.operationId,
+            leaseToken = leaseToken,
+            completedAtEpochMillis = clock.now().toEpochMilliseconds(),
+            errorCode = result.code,
+            errorMessage = result.message,
         )
     }
 

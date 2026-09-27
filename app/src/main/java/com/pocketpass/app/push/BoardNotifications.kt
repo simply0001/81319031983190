@@ -37,7 +37,6 @@ object BoardNotifications {
             .putExtra(MessageNotifications.EXTRA_ACCOUNT,payload.recipientId).putExtra(EXTRA_BOARD,target.boardId).putExtra(EXTRA_THREAD,target.threadId)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pending = PendingIntent.getActivity(context,0,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        // Never put private text, artwork, board names, or spoilers on the lock screen.
         val notification = NotificationCompat.Builder(context,CHANNEL_ID).setSmallIcon(R.drawable.ic_message_notification)
             .setContentTitle("PocketPass Boards").setContentText("There is new activity in your boards.")
             .setContentIntent(pending).setCategory(NotificationCompat.CATEGORY_SOCIAL).setPriority(NotificationCompat.PRIORITY_HIGH)

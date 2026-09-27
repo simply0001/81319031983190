@@ -17,12 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * The step-reward feature above the platform pedometer: decides whether
- * tracking is on, keeps today's count and the tokens the server confirmed
- * for it, and reports the count whenever it is worth more than has been
- * paid. The server owns the payout; this only tells it what the device saw.
- */
 class StepRewardsTracker(
     private val settingsRepository: SettingsRepository,
     settings: StateFlow<LocalSettings>,
@@ -75,8 +69,6 @@ class StepRewardsTracker(
             settingsRepository.setStepRewardsEnabled(enabled)
             if (!enabled) return@launch
             source.refreshPermission()
-            // The sensor may already be granted while the preferred health
-            // source still needs consent, so let the source choose the prompt.
             source.requestPermission()
         }
     }
@@ -103,8 +95,6 @@ class StepRewardsTracker(
 
     override suspend fun sampleAndClaim(): Boolean {
         if (mutableState.value.status != StepRewardsStatus.Tracking) return true
-        // A counter that cannot be read right now (the app is in the
-        // background) is not a failure; the next reading catches up.
         val sample = source.sample() ?: return true
         return accept(sample)
     }
@@ -132,7 +122,6 @@ class StepRewardsTracker(
         mutableState.update { it.copy(localDay = null, stepsToday = 0, tokensToday = 0, claimError = null) }
     }
 
-    /** Records a reading and reports it when it is worth more than the server has paid. */
     private suspend fun accept(sample: StepSample): Boolean = lock.withLock {
         val account = activeAccountId.value ?: return@withLock true
         if (mutableState.value.status != StepRewardsStatus.Tracking) return@withLock true
@@ -174,8 +163,6 @@ class StepRewardsTracker(
             }
 
             is RepositoryResult.Failure -> {
-                // A rejected day (clock or time-zone mismatch) will not be
-                // accepted on retry, so stop asking until the count grows.
                 if (!result.error.retryable) settledTarget = target
                 mutableState.update {
                     it.copy(claimError = result.error.message ?: "Steps could not be reported")

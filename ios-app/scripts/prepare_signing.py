@@ -81,7 +81,6 @@ def complete(directory, certificate_path):
         b"PocketPass Apple Distribution", key, cert, None,
         serialization.BestAvailableEncryption(password),
     )
-    # The P12 and password stay local until the owner selects the signing service.
     fd = os.open(result, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "wb") as output:
         output.write(bundle)

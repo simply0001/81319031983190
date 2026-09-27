@@ -9,10 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import platform.Foundation.NSUserDefaults
 
-/**
- * iOS counterpart of the Android DataStore settings: every value lives in
- * NSUserDefaults under a pocketpass-prefixed key.
- */
 class UserDefaultsSettingsRepository(
     private val defaults: NSUserDefaults = NSUserDefaults.standardUserDefaults,
 ) : SettingsRepository {

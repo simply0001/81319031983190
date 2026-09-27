@@ -1,17 +1,10 @@
 package com.pocketpass.app.nearby
 
-/**
- * A P-256 key pair in the wire encodings the whole system speaks: the public
- * key as X.509 SubjectPublicKeyInfo DER (what HELLOs carry and the server
- * verifies against), the private key as PKCS#8 DER (never leaves the device).
- */
 class NearbyKeyPair(
     val publicKeyDer: ByteArray,
     val privateKeyDer: ByteArray,
 )
 
-// The platform primitives behind NearbyCrypto. Both actuals must be
-// byte-compatible: NearbyCryptoTest runs the same vectors on every target.
 internal expect object NearbyCryptoPrimitives {
     fun randomBytes(size: Int): ByteArray
     fun sha256(value: ByteArray): ByteArray

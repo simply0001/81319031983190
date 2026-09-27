@@ -13,22 +13,6 @@ sealed interface MiiRenderStatus {
     ) : MiiRenderStatus
 }
 
-enum class MiiRenderPart(
-    val wireValue: Int,
-) {
-    Head(0),
-    Face(1),
-    Body(2),
-}
-
-enum class MiiBodyUpdate(
-    val wireValue: Int,
-) {
-    None(0),
-    Clothing(1),
-    RepositionCamera(2),
-}
-
 enum class MiiRenderCamera(
     val wireValue: String,
 ) {

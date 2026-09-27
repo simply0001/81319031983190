@@ -25,7 +25,6 @@ import kotlinx.serialization.json.put
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.NSUUID
 
-/** Swift owns Firebase and permission UI; Kotlin owns the authenticated device binding. */
 object IosMessagePushBridge {
     var handler: ((String) -> Unit)? = null
     internal val state = MutableStateFlow(IosPushToken())
@@ -85,14 +84,12 @@ class IosMessagePushManager(
                 IosMessagePushBridge.handler?.invoke(command)
                 if (state.visible || !state.enabled) IosMessagePushBridge.handler?.invoke("clear")
                 if (state.account == null || !state.connected) return@collectLatest
-                // A cold notification tap can use the saved binding before permission/token refresh.
                 val allowed = state.token.allowed ?: return@collectLatest
                 while (true) {
                     val success = try {
                         withTimeout(15_000) { registration.synchronize(state.token.token, allowed) }
                         true
                     } catch (cancelled: CancellationException) {
-                        // A timeout is retryable; cancellation from an account/token change is not.
                         if (cancelled !is kotlinx.coroutines.TimeoutCancellationException) throw cancelled
                         false
                     } catch (_: Exception) {
@@ -126,7 +123,6 @@ class IosMessagePushManager(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            // Local binding is already gone. Session revocation also cascades server registrations.
         }
     }
 

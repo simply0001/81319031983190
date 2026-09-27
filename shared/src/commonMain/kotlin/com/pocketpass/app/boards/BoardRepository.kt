@@ -108,7 +108,7 @@ interface BoardRepository {
 
 class RoomBoardRepository(private val api: BoardApi, private val dao: BoardDao) : BoardRepository {
     override suspend fun uploadBranding(accountId: String, boardId: String, kind: String, bytes: ByteArray, operationId: String): JsonObject =
-        api.uploadBranding(accountId, boardId, kind, bytes, operationId).also { invalidate() }
+        api.uploadBranding(accountId, boardId, kind, bytes, operationId)
     override val invalidations = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val draftMutex = Mutex()
     private val syncMutex = Mutex()
@@ -117,7 +117,6 @@ class RoomBoardRepository(private val api: BoardApi, private val dao: BoardDao) 
     override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String): JsonObject =
         api.mutate(accountId, operation, args, operationId).also {
             args.text("board_id")?.let { dao.invalidateBoard(accountId, it) }
-            invalidate()
         }
     override fun observeDrafts(accountId: String): Flow<List<LocalBoardDraft>> = dao.observeDrafts(accountId).map { rows -> rows.map { it.decode() } }
     override suspend fun drafts(accountId: String): List<LocalBoardDraft> = dao.drafts(accountId).map { it.decode() }
@@ -143,8 +142,6 @@ class RoomBoardRepository(private val api: BoardApi, private val dao: BoardDao) 
             "revision_id" to snapshot.revisionId.boardValue(), "base_id" to snapshot.cloudBaseId?.boardValue(), "payload" to snapshot.content.boardEncode(),
         ), snapshot.revisionId) } catch(e: BoardFailure) {
             if(e.code != "BOARD_DRAFT_BASE_EXPIRED") throw e
-            // An old revision may have passed retention while this device was
-            // offline. Preserve it as an independent cloud draft on the next sync.
             return@withLock draftMutex.withLock {
                 dao.draft(accountId,draftId)?.decode()?.copy(cloudDraftId = newBoardId(), cloudBaseId = null,
                     revisionId = newBoardId(), cloudSynced = false, recovered = true)?.also { save(accountId,it) }
@@ -152,8 +149,6 @@ class RoomBoardRepository(private val api: BoardApi, private val dao: BoardDao) 
         }
         draftMutex.withLock {
             val latest = dao.draft(accountId, draftId)?.decode() ?: return@withLock null
-            // A local edit made during the upload remains the current draft, based
-            // on the acknowledged revision. Never replace it with the sent text.
             val updated = if (latest.revisionId == snapshot.revisionId) latest.copy(cloudSynced = true)
                 else latest.copy(cloudBaseId = snapshot.revisionId)
             save(accountId, updated)
@@ -189,8 +184,6 @@ class RoomBoardRepository(private val api: BoardApi, private val dao: BoardDao) 
 
     override suspend fun discardDraft(accountId: String, draft: LocalBoardDraft) = syncMutex.withLock {
         require(draft.pendingPublishId == null) { "Retry the pending publish first" }
-        // Retire the acknowledged cloud head as well when this device has newer
-        // unsynced edits, otherwise it would reappear at the next recovery.
         (if (draft.cloudSynced) draft.revisionId else draft.cloudBaseId)?.let {
             api.mutate(accountId, "discard_draft", boardArgs("revision_id" to it.boardValue()), newBoardId())
         }
@@ -214,11 +207,8 @@ class RoomBoardRepository(private val api: BoardApi, private val dao: BoardDao) 
         try {
             val result = api.mutate(accountId, if(pending.content.brandingKind != null) "draw_branding" else "publish", requireNotNull(pending.pendingPublishArgs), requireNotNull(pending.pendingPublishId))
             draftMutex.withLock { dao.deleteDraft(accountId, draftId) }
-            invalidate()
             result
         } catch (e: BoardFailure) {
-            // A definite server rejection rolls back the transaction, so editing
-            // is safe. Network uncertainty must keep the original operation ID.
             if (!e.retryable) draftMutex.withLock { save(accountId, pending.copy(pendingPublishId = null, pendingPublishArgs = null)) }
             throw e
         }

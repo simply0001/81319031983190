@@ -148,8 +148,7 @@ class MainActivity : ComponentActivity() {
     ) { granted ->
         (application as PocketPassApplication).container.stepSource.onSensorPermissionResult()
         val permission = StepRewardsPermissionPolicy.requiredPermission()
-        if (!granted && permission != null && !shouldShowRequestPermissionRationale(permission)) {
-            // Denied for good: only the app's settings page can grant it now.
+        if (!granted && !shouldShowRequestPermissionRationale(permission)) {
             stepSettingsLauncher.launch(
                 Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -585,12 +584,11 @@ class MainActivity : ComponentActivity() {
             healthStepsPermissionLauncher.launch(setOf(HealthConnectStepReader.READ_STEPS))
             return
         }
-        val permission = StepRewardsPermissionPolicy.requiredPermission()
-        if (permission == null || StepRewardsPermissionPolicy.isGranted(this)) {
+        if (StepRewardsPermissionPolicy.isGranted(this)) {
             viewModel.onStepRewardsPermissionResult()
             return
         }
-        stepPermissionLauncher.launch(permission)
+        stepPermissionLauncher.launch(StepRewardsPermissionPolicy.requiredPermission())
     }
 
     private fun beginNearbyPermissionRequest() {

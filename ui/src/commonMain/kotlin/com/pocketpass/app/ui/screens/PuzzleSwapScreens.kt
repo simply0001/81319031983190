@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -63,7 +62,6 @@ import com.pocketpass.app.ui.components.puzzleBoardLayout
 import com.pocketpass.app.ui.components.rememberPocketAssetBytes
 import com.pocketpass.app.ui.components.toPath
 import com.pocketpass.app.ui.controller.FocusDirection
-import com.pocketpass.app.ui.controller.LocalControllerFocus
 import com.pocketpass.app.ui.controller.controllerFocusBarrier
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.designBounds
@@ -322,8 +320,7 @@ internal fun PuzzleInfoDialog(
     dispatch: (PocketPassEvent) -> Unit,
     showScrim: Boolean = true,
 ) {
-    val focus = LocalControllerFocus.current
-    LaunchedEffect(Unit) { focus?.focus("puzzle_info_close", reveal = false) }
+    DialogFocusHandoff("puzzle_info_close")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(
@@ -423,9 +420,11 @@ private fun PuzzleArrowButton(
         .anchoredBounds(metrics, x, 460f, 120f, 120f, anchor, DesignAnchor.Center)
         .alpha(if (enabled) 1f else 0.35f)
         .testTag(tag)
+        .controllerTarget(tag, layer = PUZZLE_GAME_LAYER, neighbors = mapOf(neighbor)) {
+            if (enabled) onClick()
+        }
     if (enabled) {
         modifier = modifier
-            .controllerTarget(tag, layer = PUZZLE_GAME_LAYER, neighbors = mapOf(neighbor), onActivate = onClick)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -469,12 +468,7 @@ internal fun PuzzleBuyPieceConfirmDialog(
     dispatch: (PocketPassEvent) -> Unit,
     showScrim: Boolean = true,
 ) {
-    val focus = LocalControllerFocus.current
-    val returnTarget = remember { focus?.focusedTarget(null) }
-    DisposableEffect(focus) {
-        onDispose { returnTarget?.let { focus?.restoreFocus(it) } }
-    }
-    LaunchedEffect(Unit) { focus?.focus("puzzle_buy_cancel", reveal = false) }
+    DialogFocusHandoff("puzzle_buy_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(

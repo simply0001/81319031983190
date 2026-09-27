@@ -5,12 +5,6 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * Where the widgets read their data from: a JSON snapshot plus a copy of the
- * active Mii portrait under the app's private files directory. The widget
- * receivers only ever read this, so a periodic system update can re-render
- * without touching the app container.
- */
 object WidgetSnapshotStore {
     internal fun directory(context: Context): File = File(context.filesDir, "widgets")
 
@@ -31,11 +25,9 @@ object WidgetSnapshotStore {
             val portrait = portraitFile(context)
             val source = portraitSourcePath?.let(::File)?.takeIf { it.isFile }
             if (source != null) {
-                if (!portrait.isFile || portrait.lastModified() < source.lastModified()) {
-                    val temporary = File(directory, "${portrait.name}.tmp")
-                    source.copyTo(temporary, overwrite = true)
-                    temporary.renameTo(portrait)
-                }
+                val temporary = File(directory, "${portrait.name}.tmp")
+                source.copyTo(temporary, overwrite = true)
+                temporary.renameTo(portrait)
             } else {
                 portrait.delete()
             }

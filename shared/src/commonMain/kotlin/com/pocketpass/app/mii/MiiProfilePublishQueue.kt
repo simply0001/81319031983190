@@ -56,7 +56,6 @@ fun MiiEditorSaveRequest.toQueueEntry(queueId: String): MiiProfilePublishQueueEn
         slot = slot.coerceToMiiSlot(),
     )
 
-// Later revisions of the same slot supersede queued ones.
 fun List<MiiProfilePublishQueueEntry>.withoutSuperseded(
     entry: MiiProfilePublishQueueEntry,
 ): List<MiiProfilePublishQueueEntry> = filterNot { queued ->
@@ -154,7 +153,7 @@ class QueuedMiiEditorSaveCallback(
         const val MISSING_LOCAL_PORTRAIT_MESSAGE =
             "The queued Mii portrait is no longer available."
         const val SYNC_FORBIDDEN_MESSAGE =
-            "Your Mii was saved locally but this account cannot sync it."
+            "Your Piip was saved locally but this account cannot sync it."
     }
 }
 

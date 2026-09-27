@@ -2,9 +2,6 @@ package com.pocketpass.app.nearby
 
 import kotlin.io.encoding.Base64
 
-// Matches android.util.Base64 with URL_SAFE or NO_PADDING or NO_WRAP, and java.util.UUID's
-// big-endian sixteen-byte layout with the lowercase hex-and-dash rendering: values written by
-// the Android client keep decoding after the multiplatform port.
 object NearbyEncoding {
     fun encode(bytes: ByteArray): String = URL_SAFE_NO_PADDING.encode(bytes)
 

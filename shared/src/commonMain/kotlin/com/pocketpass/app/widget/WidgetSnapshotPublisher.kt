@@ -30,12 +30,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
-/**
- * Folds the feature-holder states into a [WidgetSnapshot] and hands changes to
- * the platform [WidgetSnapshotSink]. Rapid bursts (a sync landing) are
- * debounced, and identical content is not republished; the timestamp is
- * stamped at publish time so it never defeats the equality check.
- */
 class WidgetSnapshotPublisher(
     private val scope: CoroutineScope,
     private val activeAccountId: StateFlow<UserId?>,
@@ -56,7 +50,6 @@ class WidgetSnapshotPublisher(
     private val startOfLocalDay: (Long) -> Long = ::startOfLocalDayEpochMillis,
     private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
 ) {
-    /** Snapshot content plus where the live portrait file is, before timestamping. */
     data class Pending(
         val content: WidgetSnapshot,
         val portraitSourcePath: String?,
@@ -92,7 +85,6 @@ class WidgetSnapshotPublisher(
         job = null
     }
 
-    /** Publishes the current state immediately (app launch, background refresh). */
     suspend fun publishNow() {
         publish(current())
     }
@@ -230,7 +222,6 @@ class WidgetSnapshotPublisher(
 
     companion object {
         const val DEFAULT_DEBOUNCE_MILLIS = 500L
-        // Mirrors the phone home hero's placeholder greeting.
         const val DEFAULT_BIO = "Hello! Nice to meet you!"
 
         fun recentPeople(encounters: List<NearbyEncounter>): List<WidgetPerson> =

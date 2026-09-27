@@ -47,7 +47,7 @@ class MessagePrivacyUiTest {
                         when(screen) {
                             "new" -> PhoneNewGroupPage(metrics, state, dispatch)
                             "add" -> PhoneGroupInfoSheet(metrics, state, dispatch)
-                            else -> PhoneRoot(metrics, state, dispatch, null, PocketPassExtensions.None)
+                            else -> PhoneRoot(metrics, state, dispatch, null)
                         }
                     }
                 } else Box(Modifier.aspectRatio(1240f / 1080f, matchHeightConstraintsFirst = true)) {

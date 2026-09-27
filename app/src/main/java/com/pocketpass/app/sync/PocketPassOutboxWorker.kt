@@ -17,10 +17,6 @@ object OutboxWorkerRuntime {
         this.runner = runner
     }
 
-    fun clear() {
-        runner = null
-    }
-
     internal fun currentRunner(): OutboxWorkRunner? = runner
 }
 
@@ -34,11 +30,22 @@ class PocketPassOutboxWorker(
         val runner = OutboxWorkerRuntime.currentRunner()
             ?: return Result.failure()
 
+        val accountId = UserId(rawAccountId)
         return runCatching {
-            runner.run(UserId(rawAccountId))
+            runner.run(accountId)
         }.fold(
             onSuccess = { summary ->
-                if (summary.needsRetry) Result.retry() else Result.success()
+                if (summary.needsRetry) {
+                    Result.retry()
+                } else {
+                    summary.nextAttemptAtEpochMillis?.let { nextAttemptAt ->
+                        OutboxWorkCoordinator(applicationContext).enqueueFollowUp(
+                            accountId = accountId,
+                            delayMillis = nextAttemptAt - System.currentTimeMillis(),
+                        )
+                    }
+                    Result.success()
+                }
             },
             onFailure = { error ->
                 if (error is IllegalArgumentException) Result.failure() else Result.retry()

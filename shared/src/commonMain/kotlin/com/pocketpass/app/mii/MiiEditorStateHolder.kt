@@ -168,7 +168,7 @@ class MiiEditorStateHolder(
                         ownedHatTypes = mutableState.value.ownedHatTypes,
                         rendererStatus = MiiRendererStatus.Loading,
                         saveState = MiiSaveState.Error(
-                            message = "Your saved Mii could not be opened. You can create it again.",
+                            message = "Your saved Piip could not be opened. You can create it again.",
                             locallyPersisted = false,
                         ),
                     )
@@ -226,8 +226,6 @@ class MiiEditorStateHolder(
     override fun wearHat(hatType: Int) {
         val current = mutableState.value
         val profile = activeProfile ?: return
-        // The shop verifies entitlement before calling this. Its owned-hat flow can
-        // arrive just after the purchase becomes wearable in the shop state.
         if (
             !current.isInitialized || current.mode != MiiEditorMode.Inactive ||
             pendingSave != null || hatType !in 0..10
@@ -369,7 +367,6 @@ class MiiEditorStateHolder(
             is MiiEditorEvent.SelectCategory -> selectCategory(event.category)
             is MiiEditorEvent.SelectTraitField -> selectTraitField(event.field)
             is MiiEditorEvent.SelectTrait -> selectTrait(event.field, event.index)
-            is MiiEditorEvent.SelectColorField -> selectColorField(event.field)
             is MiiEditorEvent.SelectColor -> selectColor(event.field, event.index)
             is MiiEditorEvent.SetToggle -> setToggle(event.field, event.enabled)
             is MiiEditorEvent.SetTraitPage -> setTraitPage(event.page)
@@ -384,7 +381,6 @@ class MiiEditorStateHolder(
                 it.copy(activeAdjustment = null)
             }
 
-            MiiEditorEvent.ResetDraft -> resetDraft()
             MiiEditorEvent.Continue -> continueEditor()
             MiiEditorEvent.Save -> save()
             MiiEditorEvent.RequestCancel -> requestCancel()
@@ -522,14 +518,6 @@ class MiiEditorStateHolder(
         )
     }
 
-    private fun selectColorField(field: MiiColorField) {
-        val current = mutableState.value
-        if (!current.acceptsEditorInput) return
-        if (MiiEditorCatalog.color(current.selectedCategory, field) == null) return
-        mutableState.update { it.copy(activeColorField = field, colorPaletteField = null) }
-        persistDraftSoon()
-    }
-
     private fun selectColor(field: MiiColorField, index: Int) {
         val current = mutableState.value
         if (!current.acceptsEditorInput) return
@@ -598,15 +586,6 @@ class MiiEditorStateHolder(
                 value.coerceIn(descriptor.minimum, descriptor.maximum),
             ),
             activeAdjustment = field,
-        )
-    }
-
-    private fun resetDraft() {
-        val current = mutableState.value
-        if (!current.acceptsEditorInput) return
-        updateDraft(
-            appearance = current.saved ?: MiiAppearance(),
-            activeAdjustment = null,
         )
     }
 
@@ -896,13 +875,13 @@ class MiiEditorStateHolder(
         mutableState.update {
             it.copy(
                 rendererStatus = MiiRendererStatus.Error(
-                    message.ifBlank { "The Mii preview could not be loaded." },
+                    message.ifBlank { "The Piip preview could not be loaded." },
                 ),
                 saveState = if (pending == null) {
                     it.saveState
                 } else {
                     MiiSaveState.Error(
-                        message = "The Mii preview could not be saved.",
+                        message = "The Piip preview could not be saved.",
                         locallyPersisted = false,
                     )
                 },
@@ -952,7 +931,7 @@ class MiiEditorStateHolder(
                 mutableState.update {
                     it.copy(
                         saveState = MiiSaveState.Error(
-                            message = "Your Mii could not be saved on this device.",
+                            message = "Your Piip could not be saved on this device.",
                             locallyPersisted = false,
                         ),
                     )
@@ -988,7 +967,7 @@ class MiiEditorStateHolder(
                     ),
                 )
             }.getOrElse {
-                MiiEditorSaveResult.Rejected("Your Mii was saved locally but could not be synced.")
+                MiiEditorSaveResult.Rejected("Your Piip was saved locally but could not be synced.")
             }
             if (!isCurrent(pending, generation)) return@launch
             pendingSave = null
@@ -1031,7 +1010,7 @@ class MiiEditorStateHolder(
         mutableState.update {
             it.copy(
                 saveState = MiiSaveState.Error(
-                    message = message.ifBlank { "Your Mii preview could not be saved." },
+                    message = message.ifBlank { "Your Piip preview could not be saved." },
                     locallyPersisted = false,
                 ),
             )

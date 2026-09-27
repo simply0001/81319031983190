@@ -9,15 +9,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
 
+internal const val BOARDS_POLL_MILLIS = 120_000L
+internal const val BOARDS_SETTINGS_POLL_MILLIS = 600_000L
+private val screensWithoutBackgroundRefresh = setOf(BoardsScreen.Chooser, BoardsScreen.Chats, BoardsScreen.Compose, BoardsScreen.Propose)
+
 class BoardsStateHolder(
     private val repository: BoardRepository?,
     private val account: StateFlow<UserId?>,
     private val scope: CoroutineScope,
+    private val active: StateFlow<Boolean>,
 ) {
     private val mutable = MutableStateFlow(BoardsUiState())
     val state = mutable.asStateFlow()
@@ -25,6 +31,10 @@ class BoardsStateHolder(
     private var readJob: Job? = null
     private var previewJob: Job? = null
     private var readGeneration = 0L
+    private var readInFlight = false
+    private var pendingRefresh = false
+    private var stale = true
+    private var settingsStale = false
     private var loadedPage: String? = null
     private var mutationJob: Job? = null
     private var failedMutation: BoardAction.Mutate? = null
@@ -38,34 +48,80 @@ class BoardsStateHolder(
                 mutable.value = BoardsUiState()
                 loadedPage = null
                 readGeneration++
+                readInFlight = false; pendingRefresh = false; stale = true; settingsStale = false
                 pendingImage = null; failedMutation = null
                 if (user == null || repository == null) return@collectLatest
                 repository.clearContentCache(user.value)
                 launch { repository.observeDrafts(user.value).collect { drafts ->
                     mutable.update { s -> s.copy(drafts = drafts, draft = s.draft?.let { current -> drafts.firstOrNull { it.id == current.id && (it.revisionId == current.revisionId || it.content == current.content) } ?: current }) }
                 } }
+                launch { repository.invalidations.conflate().collect { requestBackgroundRefresh() } }
                 refreshSettings(user.value)
-                if (mutable.value.enabled && mutable.value.screen == BoardsScreen.Directory) refresh()
-                launch { repository.invalidations.collect {
-                    // Revalidate with the server before replacing the visible page.
-                    // Access failures still purge private content in fail().
-                    delay(150)
-                    if (!mutable.value.busy) refresh()
-                } }
-                while (true) {
-                    delay(30_000)
-                    refreshSettings(user.value)
-                    if (mutable.value.enabled) {
-                        // Sync only drafts. A reconnect must never publish a note.
-                        try {
-                            repository.drafts(user.value).filter { !it.cloudSynced && it.pendingPublishId == null }
-                                .forEach { repository.syncDraft(user.value, it.id) }
-                        } catch (e: CancellationException) { throw e } catch (_: Exception) { }
-                    }
-                    if (mutable.value.screen !in listOf(BoardsScreen.Chooser, BoardsScreen.Chats, BoardsScreen.Compose) && !mutable.value.busy) refresh()
+                active.collectLatest { isActive ->
+                    if (isActive) pollWhileActive(user.value, repository) else markStaleWhileInactive()
                 }
             }
         }
+    }
+
+    private suspend fun pollWhileActive(user: String, repo: BoardRepository) {
+        if (settingsStale) {
+            settingsStale = false
+            refreshSettings(user)
+        }
+        if (stale) {
+            stale = false
+            requestBackgroundRefresh()
+        }
+        var sinceSettings = 0L
+        while (true) {
+            delay(BOARDS_POLL_MILLIS)
+            sinceSettings += BOARDS_POLL_MILLIS
+            if (settingsStale || sinceSettings >= BOARDS_SETTINGS_POLL_MILLIS) {
+                settingsStale = false
+                sinceSettings = 0L
+                refreshSettings(user)
+            }
+            if (!mutable.value.enabled) continue
+            syncUnsentDrafts(user, repo)
+            requestBackgroundRefresh()
+        }
+    }
+
+    private suspend fun markStaleWhileInactive() {
+        delay(BOARDS_POLL_MILLIS)
+        stale = true
+        delay(BOARDS_SETTINGS_POLL_MILLIS - BOARDS_POLL_MILLIS)
+        settingsStale = true
+    }
+
+    private suspend fun syncUnsentDrafts(user: String, repo: BoardRepository) {
+        try {
+            repo.drafts(user).filter { !it.cloudSynced && it.pendingPublishId == null }
+                .forEach { repo.syncDraft(user, it.id) }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+    }
+
+    private fun requestBackgroundRefresh() {
+        if (!active.value) {
+            stale = true
+            return
+        }
+        pendingRefresh = true
+        drainPendingRefresh()
+    }
+
+    private fun drainPendingRefresh() {
+        if (!pendingRefresh) return
+        if (!active.value) {
+            pendingRefresh = false
+            stale = true
+            return
+        }
+        val current = mutable.value
+        if (current.busy || readInFlight) return
+        pendingRefresh = false
+        if (current.enabled && current.screen !in screensWithoutBackgroundRefresh) refresh()
     }
 
     private suspend fun refreshSettings(user: String) {
@@ -81,14 +137,15 @@ class BoardsStateHolder(
                 directoryFocusId = if(enabled) s.directoryFocusId else null,
                 directoryLatest = if(enabled) s.directoryLatest else null,
                 pinnedPostId = if(enabled) s.pinnedPostId else null) }
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { /* First-party chat remains usable during an outage. */ }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            if (account.value?.value == user) settingsStale = true
+        }
     }
 
     fun dispatch(action: BoardAction) {
         when (action) {
             is BoardAction.OpenDestination -> openDestination(action.boardId, action.threadId, action.review)
             is BoardAction.OpenNotice -> openNotice(action.notice)
-            BoardAction.OpenChooser -> dispatch(BoardAction.Directory())
             BoardAction.OpenChats -> {
                 previewJob?.cancel()
                 readJob?.cancel()
@@ -128,7 +185,6 @@ class BoardsStateHolder(
             BoardAction.More -> refresh(more = true)
             BoardAction.Refresh -> { pendingImage?.let { importBranding(it.kind); return }; failedMutation?.let { dispatch(it); return }; refresh() }
             BoardAction.Back -> back()
-            BoardAction.ClearError -> mutable.update { it.copy(error = null, info = null) }
             is BoardAction.Compose -> {
                 val b = state.value.board ?: return
                 val draft = LocalBoardDraft(boardId = b.id, content = BoardDraftContent(threadId = state.value.thread?.id, replyTo = action.replyTo))
@@ -154,7 +210,7 @@ class BoardsStateHolder(
                     mutable.update { it.copy(board = b) }
                 }
             }
-            is BoardAction.DiscardDraft -> read { user, repo -> repo.discardDraft(user, action.draft) }
+            is BoardAction.DiscardDraft -> discardDraft(action.draft)
             is BoardAction.Text -> editDraft { it.copy(body = action.text.take(if (it.threadId == null) 1000 else 500)) }
             is BoardAction.Spoiler -> editDraft { it.copy(spoiler = action.enabled) }
             is BoardAction.Tool -> mutable.update { it.copy(pen = action.pen ?: it.pen, ink = action.color ?: it.ink, penSize = action.size ?: it.penSize) }
@@ -221,8 +277,6 @@ class BoardsStateHolder(
             cursor = null, posts = emptyList(), pinnedPostId = null, noticeReturnToInbox = true,
             members = emptyList(), management = null, inviteMemberIds = emptySet(), inviteMembersLoaded = false,
             openReportsFromInbox = report, error = null) }
-        // Keep read markers independent of page loads: their invalidations can refresh
-        // the page, but cannot interrupt opening the destination or each other.
         val openedThreadId = post?.id
         scope.launch {
             try {
@@ -248,22 +302,29 @@ class BoardsStateHolder(
                     pendingImage = upload
                     repo.uploadBranding(user, upload.board, upload.kind, upload.bytes, upload.id)
                     pendingImage = null
-                    mutable.update { it.copy(info = "Board artwork saved", assets = emptyMap()) }
+                    mutable.update { it.copy(info = "Board artwork saved") }
                 }
             } catch(e: CancellationException) { throw e }
             catch(e: Exception) { if(e is BoardFailure && !e.retryable) pendingImage = null; fail(e) }
-            finally { mutable.update { it.copy(busy = false) } }
+            finally { finishMutation(user) }
             if (pendingImage == null && mutable.value.error == null) refresh()
+            drainPendingRefresh()
         }
     }
 
     private suspend fun loadArtwork(user: String, repo: BoardRepository, boards: List<Board>) {
-        val assets = mutableMapOf<String, ByteArray>()
-        boards.flatMap { listOfNotNull(it.iconAssetId, it.coverAssetId) }.distinct().forEach { id ->
-            val value = repo.query(user, "asset", boardArgs("asset_id" to id.boardValue())).jsonObject
-            value.text("data")?.let { assets[id] = Base64.Mime.decode(it) }
+        val cached = mutable.value.assets
+        val fetched = mutableMapOf<String, ByteArray>()
+        boards.flatMap { listOfNotNull(it.iconAssetId, it.coverAssetId) }.distinct().filterNot { it in cached }.forEach { id ->
+            try {
+                val value = repo.query(user, "asset", boardArgs("asset_id" to id.boardValue())).jsonObject
+                value.text("data")?.let { fetched[id] = Base64.Mime.decode(it) }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { }
         }
-        mutable.update { it.copy(assets = assets) }
+        mutable.update { s ->
+            val referenced = (s.boards + listOfNotNull(s.board)).flatMap { listOfNotNull(it.iconAssetId, it.coverAssetId) }.toSet()
+            s.copy(assets = (s.assets + fetched).filterKeys { it in referenced })
+        }
     }
 
     private fun drawingChange(change: (BoardDrawingHistory) -> BoardDrawingHistory) {
@@ -289,7 +350,7 @@ class BoardsStateHolder(
             delay(900)
             try { repo.syncDraft(user, draft.id) }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { /* Local saves stay intact; retry syncing on next edit/open. */ }
+            catch (_: Exception) { }
         }
     }
 
@@ -301,14 +362,37 @@ class BoardsStateHolder(
         draftSync?.cancel()
         mutable.update { it.copy(busy = true, error = null) }
         mutationJob = scope.launch {
-            try {
+            val result = try {
                 repo.saveLocal(user, draft)
-                val result = repo.publish(user, draft.id)
-                mutable.update { it.copy(draft = null, busy = false, info = "Your note is posted") }
-                openDestination(draft.boardId, result.text("thread_id"))
+                val published = repo.publish(user, draft.id)
+                mutable.update { it.copy(draft = null, info = "Your note is posted") }
+                published
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { fail(e); mutable.update { it.copy(busy = false, draft = repo.drafts(user).firstOrNull { it.id == draft.id } ?: draft) } }
+            catch (e: Exception) {
+                fail(e)
+                val stored = repo.drafts(user).firstOrNull { it.id == draft.id } ?: draft
+                mutable.update { it.copy(draft = stored) }
+                null
+            } finally { finishMutation(user) }
+            result?.let { openDestination(draft.boardId, it.text("thread_id")) }
+            drainPendingRefresh()
         }
+    }
+    private fun discardDraft(draft: LocalBoardDraft) {
+        if (mutable.value.busy) return
+        val user = account.value?.value ?: return
+        val repo = repository ?: return
+        mutable.update { it.copy(busy = true, error = null) }
+        mutationJob = scope.launch {
+            try { repo.discardDraft(user, draft) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { fail(e) }
+            finally { finishMutation(user) }
+            drainPendingRefresh()
+        }
+    }
+    private fun finishMutation(user: String) {
+        if (account.value?.value == user) mutable.update { it.copy(busy = false) }
     }
     private fun mutate(action: BoardAction.Mutate) {
         if (mutable.value.busy) return
@@ -319,7 +403,7 @@ class BoardsStateHolder(
             action.args.text("board_id").orEmpty(), action.args.text("user_id") ?: action.args.text("friend_code").orEmpty()) else null
         mutable.update { it.copy(busy = true, error = null, info = null, inviteStatus = inviteStatus ?: it.inviteStatus) }
         mutationJob = scope.launch {
-            try {
+            val result = try {
                 val args = if (action.operation == "invite" && action.args.text("friend_code") != null) {
                     val code = requireNotNull(action.args.text("friend_code"))
                     val recipient = repo.query(user, "friend_code", boardArgs("code" to code.boardValue()))
@@ -327,39 +411,46 @@ class BoardsStateHolder(
                         ?: throw BoardFailure("No PocketPass user is available with that friend code.", false)
                     JsonObject(request.args - "friend_code" + ("user_id" to recipient.boardValue()))
                 } else request.args
-                val result = repo.mutate(user, request.operation, args, request.operationId)
+                val response = repo.mutate(user, request.operation, args, request.operationId)
                 failedMutation = null
-                mutable.update { it.copy(busy = false, inviteStatus = inviteStatus?.copy(sending = false) ?: it.inviteStatus,
-                    inviteCode = result.text("code") ?: it.inviteCode, info = when(action.operation) {
+                mutable.update { it.copy(inviteStatus = inviteStatus?.copy(sending = false) ?: it.inviteStatus,
+                    inviteCode = response.text("code") ?: it.inviteCode, info = when(action.operation) {
                     "propose" -> "Your board request is ready for staff review"
-                    "report" -> "Report sent. Case ${result.text("case_id")}"
+                    "report" -> "Report sent. Case ${response.text("case_id")}"
                     "invite" -> "Invitation sent"
                     "appeal" -> "Appeal sent to the board moderators"
                     else -> "Saved"
                 }) }
-                when (action.operation) {
-                    "push_preference" -> refreshSettings(user)
-                    "leave" -> dispatch(BoardAction.Directory())
-                    "join_code", "accept_invitation" -> result.text("board_id")?.let { if(result.text("status") == "joined") openBoard(it) else refresh() }
-                    "propose" -> dispatch(BoardAction.Directory())
-                    else -> refresh()
-                }
+                response
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 failedMutation = request.takeIf { e !is BoardFailure || e.retryable }
                 fail(e)
-                mutable.update { it.copy(busy = false,
+                mutable.update { it.copy(
                     inviteStatus = inviteStatus?.copy(sending = false, error = it.error ?: "Could not send invitation. Try again.") ?: it.inviteStatus) }
+                null
+            } finally { finishMutation(user) }
+            if (result != null) when (action.operation) {
+                "push_preference" -> refreshSettings(user)
+                "leave" -> dispatch(BoardAction.Directory())
+                "join_code", "accept_invitation" -> result.text("board_id")?.takeIf { result.text("status") == "joined" }?.let(::openBoard) ?: refresh()
+                "propose" -> dispatch(BoardAction.Directory())
+                else -> refresh()
             }
+            drainPendingRefresh()
         }
     }
 
     fun refresh(more: Boolean = false) {
+        pendingRefresh = false
         val snapshot = state.value
         val pageKey = "${snapshot.screen}:${snapshot.board?.id}:${snapshot.thread?.id}:${snapshot.explore}:${snapshot.search}:${snapshot.sort}:${snapshot.period}"
         val refreshCount = if (!more && loadedPage == pageKey) snapshot.posts.size else 0
         read(showLoading = loadedPage != pageKey) { user, repo ->
-            if (!snapshot.enabled) refreshSettings(user)
+            if (!snapshot.enabled) {
+                refreshSettings(user)
+                if (!mutable.value.enabled && snapshot.screen != BoardsScreen.Drafts) return@read
+            }
             when (snapshot.screen) {
                 BoardsScreen.Directory -> {
                     val page = repo.query(user, "directory", boardArgs("scope" to (if(snapshot.explore) "explore" else "joined").boardValue(), "search" to snapshot.search.boardValue(), "cursor" to snapshot.cursor.takeIf { more })).jsonObject
@@ -470,12 +561,19 @@ class BoardsStateHolder(
         val repo = repository ?: return
         val generation = ++readGeneration
         readJob?.cancel()
+        readInFlight = true
         mutable.update { it.copy(loading = showLoading, error = null) }
         readJob = scope.launch {
             try { block(user, repo) }
             catch(e: CancellationException) { throw e }
             catch(e: Exception) { fail(e) }
-            finally { if(generation == readGeneration && account.value?.value == user) mutable.update { it.copy(loading = false) } }
+            finally {
+                if(generation == readGeneration && account.value?.value == user) {
+                    readInFlight = false
+                    mutable.update { it.copy(loading = false) }
+                    drainPendingRefresh()
+                }
+            }
         }
     }
 
@@ -495,8 +593,6 @@ class BoardsStateHolder(
                 state.value.screen == BoardsScreen.Directory && state.value.directoryFocusId == id
             try {
                 delay(150)
-                // A normal feed read enforces audience/blocks/spoilers and does
-                // not acknowledge notifications or join the community.
                 val page = repo.query(user, "feed", boardArgs("board_id" to id.boardValue(),
                     "sort" to "newest".boardValue(), "limit" to JsonPrimitive(1))).jsonObject
                 val latest = page["items"]?.jsonArray?.firstOrNull()?.boardDecode<BoardPost>()

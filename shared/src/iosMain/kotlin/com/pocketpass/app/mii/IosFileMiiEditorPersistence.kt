@@ -27,10 +27,6 @@ fun iosDocumentsPath(): String =
         .firstOrNull() as? String
         ?: ""
 
-/**
- * iOS counterpart of the Android FileMiiEditorPersistence: one JSON file per account
- * (named by the SHA-256 of the account key) under Documents/mii_editor.
- */
 class IosFileMiiEditorPersistence(
     baseDirectory: String = iosDocumentsPath(),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -88,7 +84,6 @@ class IosFileMiiEditorPersistence(
         directory / "${accountKey.encodeUtf8().sha256().hex()}.json"
 }
 
-/** Where freshly rendered Mii portraits are written on iOS. */
 fun iosPortraitsDirectory(): String = "${iosDocumentsPath()}/mii/portraits"
 
 fun iosDeletePortraitFile(path: String) {

@@ -199,6 +199,11 @@ class RoomRepositoryReconciler(
                 }
                 database.conversationDao().deleteExcept(accountId.value, retainedIds)
                 database.messageDao().deleteExceptConversations(accountId.value, retainedIds)
+                database.syncCursorDao().deleteWithPrefixExcept(
+                    accountId = accountId.value,
+                    streamPrefix = MESSAGE_CURSOR_STREAM_PREFIX,
+                    retainedStreams = conversations.map { messageCursorStream(it.id) },
+                )
             }
         }
     }

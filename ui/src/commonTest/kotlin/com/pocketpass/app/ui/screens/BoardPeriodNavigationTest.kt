@@ -23,8 +23,6 @@ class BoardPeriodNavigationTest {
                 neighbors = boardPeriodNeighbors(period)) {}
         }
 
-        // During the reveal, the sort row is closer than the next period. Include
-        // the settled layout and key repeat, which uses a different geometry path.
         for(top in listOf(1f, 20f, 100f)) {
             BoardPeriod.entries.forEachIndexed { index, period ->
                 val left = 8f + index * 94f

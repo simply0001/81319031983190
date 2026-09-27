@@ -24,7 +24,6 @@ object CountryCatalog {
 
     fun flagEmoji(code: String): String = buildString {
         code.uppercase().forEach { letter ->
-            // Regional indicator symbols live above the BMP, so append the surrogate pair.
             val offset = 0x1F1E6 + (letter - 'A') - 0x10000
             append(((offset shr 10) + 0xD800).toChar())
             append(((offset and 0x3FF) + 0xDC00).toChar())

@@ -43,7 +43,6 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
@@ -135,7 +134,7 @@ private fun PhoneSettingsList(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .testTag("settings_scroll")
-            .padding(top = metrics.dp(insets.top + 40f), bottom = metrics.dp(60f)),
+            .padding(top = metrics.dp(insets.top + 40f), bottom = metrics.dp(60f + LocalPhoneTabBarClearance.current)),
     ) {
         if (titled) {
             PhoneSectionHeader(metrics, "Settings", pocketPalette.textPrimary)
@@ -246,13 +245,12 @@ fun PhoneRoutePage(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val current = state.routes.lastOrNull()
     val shown = remember { mutableStateOf(current) }
     if (current != null && current !is PocketPassRoute.Root) shown.value = current
     when (val route = shown.value) {
-        is PocketPassRoute.MessageDetail -> Box(Modifier.fillMaxSize()) { PhoneThread(metrics, state, dispatch, extensions) }
+        is PocketPassRoute.MessageDetail -> Box(Modifier.fillMaxSize()) { PhoneThread(metrics, state, dispatch) }
         is PocketPassRoute.NewGroup -> Box(Modifier.fillMaxSize()) { PhoneNewGroupPage(metrics, state, dispatch) }
         null, is PocketPassRoute.Root -> Unit
         else -> PhoneDeck(metrics) { PhoneSettingsSubpage(metrics, route, state, dispatch) }

@@ -19,11 +19,6 @@ import platform.Network.nw_path_uses_interface_type
 import platform.darwin.DISPATCH_QUEUE_PRIORITY_LOW
 import platform.darwin.dispatch_get_global_queue
 
-/**
- * NWPathMonitor feeding the realtime gate: availability plus a coarse
- * interface fingerprint standing in for Android's network handle, so a
- * wifi-to-cellular hop bumps the generation and rebuilds the channels.
- */
 class IosNetworkMonitor {
     private val mutableState = MutableStateFlow(
         RealtimeNetworkState(available = true, networkHandle = null, generation = 0L),

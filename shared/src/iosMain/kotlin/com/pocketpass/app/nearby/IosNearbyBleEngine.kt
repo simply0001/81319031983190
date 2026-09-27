@@ -52,15 +52,6 @@ import platform.darwin.dispatch_queue_create
 import platform.darwin.dispatch_time
 import platform.posix.memcpy
 
-/**
- * CoreBluetooth transport for the shared street-pass handshake. The exchange
- * itself is identical to Android's; the differences are all in discovery:
- * iOS may only advertise the bare service UUID (no nonce), so this side reads
- * Android's nonce-carrying service data when scanning, treats a bare UUID as
- * another iPhone, and Android always initiates toward bare advertisements.
- * One serial dispatch queue carries every CoreBluetooth callback, which is
- * what makes the per-link machine calls safe.
- */
 class IosNearbyBleEngine(
     private val credentialPool: NearbyCredentialPool,
     private val accountId: UserId,
@@ -127,8 +118,6 @@ class IosNearbyBleEngine(
         var subscribedCentral: CBCentral? = null,
         var attPayloadBytes: Int = NearbyBleFraming.DEFAULT_ATT_PAYLOAD_BYTES,
     )
-
-    // ---- Central: find Android peers by nonce, iPhone peers by bare UUID ----
 
     private val centralDelegate = object : NSObject(), CBCentralManagerDelegateProtocol {
         override fun centralManagerDidUpdateState(central: CBCentralManager) {
@@ -311,8 +300,6 @@ class IosNearbyBleEngine(
         }
     }
 
-    // ---- Peripheral: advertise the bare UUID, serve the transfer characteristic ----
-
     private val peripheralManagerDelegate = object :
         NSObject(), CBPeripheralManagerDelegateProtocol {
         override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
@@ -483,10 +470,6 @@ class IosNearbyBleEngine(
         }
     }
 
-    // Same race as on Android: the proof is ready while the final encrypted
-    // confirmation may still be in flight. CoreBluetooth only reports an
-    // indication as queued, never as delivered, so the peripheral also gives
-    // the last one a moment to land before disconnecting.
     private fun closeAfterDrain(link: Link) {
         link.closeWhenDrained = true
         if (!link.sending && link.outbound.isEmpty()) {
@@ -574,8 +557,6 @@ class IosNearbyBleEngine(
                     if (accepted) {
                         link.outbound.removeFirstOrNull()
                     } else {
-                        // The shared transmit queue is full; resume from
-                        // peripheralManagerIsReadyToUpdateSubscribers.
                         link.sending = true
                         return
                     }

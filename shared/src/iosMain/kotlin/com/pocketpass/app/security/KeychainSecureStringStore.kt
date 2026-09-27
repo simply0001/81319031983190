@@ -41,8 +41,6 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 import platform.posix.memcpy
 
-// The Keychain is the iOS counterpart of the Android Keystore-encrypted
-// preferences: items are hardware-encrypted at rest and survive app updates.
 class KeychainSecureStringStore(
     private val service: String = DEFAULT_SERVICE,
 ) : SecureStringStore {
@@ -105,8 +103,6 @@ class KeychainSecureStringStore(
         }
     }
 
-    // Bridges Kotlin values to CFTypeRefs for the duration of the block; the
-    // CFType-callback dictionary retains what it needs, so releasing here is safe.
     private inline fun <T> bridging(vararg values: Any?, block: (List<CFTypeRef?>) -> T): T {
         val refs = values.map { CFBridgingRetain(it) }
         return try {

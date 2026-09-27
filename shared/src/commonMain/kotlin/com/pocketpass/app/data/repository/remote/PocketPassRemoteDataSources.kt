@@ -152,6 +152,12 @@ interface MessageRemoteDataSource {
         conversationId: ConversationId,
     ): RepositoryResult<List<Message>>
 
+    suspend fun fetchMessageChanges(
+        accountId: UserId,
+        conversationId: ConversationId,
+        changedAfter: Instant,
+    ): RepositoryResult<List<Message>> = fetchMessages(accountId, conversationId)
+
     suspend fun sendMessage(
         command: SendMessageCommand,
     ): RepositoryResult<Message>

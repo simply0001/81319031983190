@@ -15,10 +15,6 @@ import io.ktor.http.isSuccess
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.io.encoding.Base64
 
-/**
- * Multiplatform port of OkHttpPretendoMiiSource; the engine comes from
- * whatever ktor client artifact the consuming source set ships.
- */
 class KtorPretendoMiiSource(
     versionName: String,
     platform: String,
@@ -84,7 +80,7 @@ class KtorPretendoMiiSource(
         const val PRETENDO_ACCOUNT_BASE_URL = "https://account.pretendo.cc/v1/api/"
         const val PRETENDO_WII_U_CLIENT_ID = "a2efa818a34fa16b8afbc8a74eba3eda"
         const val PRETENDO_WII_U_CLIENT_SECRET = "c91cdb5658bd4954ade78533a339cf9a"
-        const val UNREADABLE = "Pretendo returned Mii data PocketPass can't read"
+        const val UNREADABLE = "Pretendo returned Piip data PocketPass can't read"
         const val UNREACHABLE = "Pretendo Network isn't reachable right now"
         const val REFUSED = "Pretendo Network refused the request"
     }

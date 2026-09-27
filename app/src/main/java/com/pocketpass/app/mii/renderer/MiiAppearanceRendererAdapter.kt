@@ -6,19 +6,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.pocketpass.app.mii.MiiAppearance
 import com.pocketpass.app.mii.MiiEditorCamera
 import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.mii.MiiEditorEvent
 import com.pocketpass.app.mii.MiiRendererCommand
 import com.pocketpass.app.mii.MiiRendererSaveArtifact
-import com.pocketpass.app.mii.toNativeRendererFields
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @Composable
@@ -97,22 +95,19 @@ private fun BindMiiEditorRenderer(
                             }
                         }
                     }.onFailure { error ->
+                        if (error is CancellationException) throw error
                         when (command) {
                             is MiiRendererCommand.CaptureForSave -> {
                                 editorController.dispatch(
                                     MiiEditorEvent.RendererSaveFailed(
                                         requestId = command.requestId,
-                                        message = "Your Mii portrait could not be rendered.",
+                                        message = "Your Piip portrait could not be rendered.",
                                     ),
                                 )
                             }
 
                             else -> editorController.dispatch(
-                                MiiEditorEvent.RendererError(
-                                    error.message
-                                        ?.takeIf(String::isNotBlank)
-                                        ?: "The Mii preview could not be updated.",
-                                ),
+                                MiiEditorEvent.RendererError("The Piip preview could not be updated."),
                             )
                         }
                     }

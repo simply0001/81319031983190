@@ -16,6 +16,8 @@ import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import platform.Foundation.NSUUID
@@ -96,22 +98,19 @@ private fun BindMiiEditorRenderer(
                             }
                         }
                     }.onFailure { error ->
+                        currentCoroutineContext().ensureActive()
                         when (command) {
                             is MiiRendererCommand.CaptureForSave -> {
                                 editorController.dispatch(
                                     MiiEditorEvent.RendererSaveFailed(
                                         requestId = command.requestId,
-                                        message = "Your Mii portrait could not be rendered.",
+                                        message = "Your Piip portrait could not be rendered.",
                                     ),
                                 )
                             }
 
                             else -> editorController.dispatch(
-                                MiiEditorEvent.RendererError(
-                                    error.message
-                                        ?.takeIf(String::isNotBlank)
-                                        ?: "The Mii preview could not be updated.",
-                                ),
+                                MiiEditorEvent.RendererError("The Piip preview could not be updated."),
                             )
                         }
                     }

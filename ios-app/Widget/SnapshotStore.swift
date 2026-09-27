@@ -1,8 +1,6 @@
 import Foundation
 import UIKit
 
-/// Mirrors `WidgetSnapshot` in shared/src/commonMain/.../widget/WidgetSnapshot.kt.
-/// Field names are the wire contract; keep them in sync.
 struct WidgetSnapshot: Codable, Equatable {
     var version: Int = 1
     var signedIn: Bool
@@ -22,9 +20,6 @@ struct WidgetSnapshot: Codable, Equatable {
 enum SnapshotStore {
     static let defaultGroupIdentifier = "group.xyz.pocketpass"
 
-    /// The app group the signing tool actually granted, read from the embedded
-    /// provisioning profile (same discovery as the Kotlin sink), so that a
-    /// rewritten identifier keeps app and widget on the same container.
     static func groupIdentifier() -> String {
         guard
             let path = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision"),

@@ -64,8 +64,6 @@ sealed interface SyncState {
         val failure: RepositoryFailure,
         val nextRetryAt: Instant?,
     ) : SyncState
-
-    data class Paused(val reason: String) : SyncState
 }
 
 sealed interface PendingState {

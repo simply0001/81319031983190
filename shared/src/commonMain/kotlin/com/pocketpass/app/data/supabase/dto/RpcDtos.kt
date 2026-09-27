@@ -83,14 +83,6 @@ data class SetUserBlockRpc(
 )
 
 @Serializable
-data class GetOrCreateDirectConversationRpc(
-    @SerialName("p_other_user_id")
-    val otherUserId: String,
-    @SerialName("p_client_operation_id")
-    val clientOperationId: String,
-)
-
-@Serializable
 data class SendMessageRpc(
     @SerialName("p_message_id")
     val messageId: String,
@@ -174,20 +166,4 @@ data class RenameGroupConversationRpc(
     val title: String,
     @SerialName("p_client_operation_id")
     val clientOperationId: String,
-)
-
-@Serializable
-data class RecordInteractionEventRpc(
-    @SerialName("p_event_id")
-    val eventId: String,
-    @SerialName("p_subject_user_id")
-    val subjectUserId: String? = null,
-    @SerialName("p_event_type")
-    val eventType: String,
-    @SerialName("p_client_operation_id")
-    val clientOperationId: String,
-    @SerialName("p_payload")
-    val payload: JsonObject,
-    @SerialName("p_occurred_at")
-    val occurredAt: String,
 )

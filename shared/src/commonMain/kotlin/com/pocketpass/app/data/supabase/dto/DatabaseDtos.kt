@@ -328,16 +328,6 @@ data class FriendshipDto(
 )
 
 @Serializable
-data class UserBlockDto(
-    @SerialName("blocker_id")
-    val blockerId: String,
-    @SerialName("blocked_id")
-    val blockedId: String,
-    @SerialName("created_at")
-    val createdAt: String,
-)
-
-@Serializable
 data class ConversationDto(
     val id: String,
     val kind: String,
@@ -388,24 +378,6 @@ data class MessageDto(
     val editedAt: String? = null,
     @SerialName("deleted_at")
     val deletedAt: String? = null,
-)
-
-@Serializable
-data class InteractionEventDto(
-    val id: String,
-    @SerialName("actor_id")
-    val actorId: String,
-    @SerialName("subject_user_id")
-    val subjectUserId: String? = null,
-    @SerialName("event_type")
-    val eventType: String,
-    @SerialName("client_operation_id")
-    val clientOperationId: String,
-    val payload: JsonObject,
-    @SerialName("occurred_at")
-    val occurredAt: String,
-    @SerialName("created_at")
-    val createdAt: String,
 )
 
 fun ProfileDto.toDomain(

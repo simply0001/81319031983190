@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import com.pocketpass.ui.resources.Res
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import kotlin.math.abs
@@ -26,9 +27,10 @@ internal object MiiTraitIconCatalog {
 
     private var iconsByFamily: Map<String, List<String>>? = null
 
+    private const val RENDERED_CACHE_LIMIT = 512
+
     private val renderedCache = mutableMapOf<String, ByteArray>()
 
-    // Non-suspending fast path, valid once the icon catalog has been read.
     fun cachedIcon(
         field: MiiTraitField,
         index: Int,
@@ -54,13 +56,17 @@ internal object MiiTraitIconCatalog {
         val source = families[family]?.getOrNull(index) ?: return null
         val paletteKey = appearance.iconPaletteKey()
         val cacheKey = "$family:$index:$paletteKey:$centerContent"
-        return renderedCache.getOrPut(cacheKey) {
-            source
-                .replace("currentColor", "#39798B")
-                .replaceCssVariables(appearance)
-                .let { if (centerContent) it.withCenteredViewBox() else it }
-                .encodeToByteArray()
+        renderedCache[cacheKey]?.let { return it }
+        val rendered = source
+            .replace("currentColor", "#39798B")
+            .replaceCssVariables(appearance)
+            .let { if (centerContent) it.withCenteredViewBox() else it }
+            .encodeToByteArray()
+        if (renderedCache.size >= RENDERED_CACHE_LIMIT) {
+            renderedCache.remove(renderedCache.keys.first())
         }
+        renderedCache[cacheKey] = rendered
+        return rendered
     }
 
     @OptIn(ExperimentalResourceApi::class)
@@ -81,18 +87,13 @@ internal fun rememberMiiTraitIcon(
     appearance: MiiAppearance,
     centerContent: Boolean = false,
 ): ByteArray? {
-    val bytes by produceState(
-        MiiTraitIconCatalog.cachedIcon(field, index, appearance, centerContent),
-        field,
-        index,
-        appearance,
-        centerContent,
-    ) {
-        if (value == null) {
-            value = MiiTraitIconCatalog.icon(field, index, appearance, centerContent)
-        }
+    val cached = remember(field, index, appearance, centerContent) {
+        MiiTraitIconCatalog.cachedIcon(field, index, appearance, centerContent)
     }
-    return bytes
+    val loaded by produceState(cached, field, index, appearance, centerContent) {
+        value = cached ?: MiiTraitIconCatalog.icon(field, index, appearance, centerContent)
+    }
+    return cached ?: loaded
 }
 
 private val MiiTraitField.iconFamily: String?

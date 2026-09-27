@@ -7,6 +7,7 @@ import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
@@ -18,23 +19,12 @@ class OutboxWorkCoordinator(
     private val workManager: WorkManager = WorkManager.getInstance(context.applicationContext),
 ) {
     fun enqueue(accountId: UserId) {
-        val builder = OneTimeWorkRequestBuilder<PocketPassOutboxWorker>()
-            .setInputData(
-                Data.Builder()
-                    .putString(PocketPassOutboxWorker.KEY_ACCOUNT_ID, accountId.value)
-                    .build(),
-            )
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build(),
-            )
+        val builder = outboxRequest(accountId)
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
                 MINIMUM_BACKOFF_SECONDS,
                 TimeUnit.SECONDS,
             )
-            .addTag(tag(accountId))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
         }
@@ -47,17 +37,50 @@ class OutboxWorkCoordinator(
         )
     }
 
+    fun enqueueFollowUp(accountId: UserId, delayMillis: Long) {
+        val request = outboxRequest(accountId)
+            .setInitialDelay(
+                delayMillis.coerceAtLeast(MINIMUM_FOLLOW_UP_MILLIS),
+                TimeUnit.MILLISECONDS,
+            )
+            .build()
+        workManager.enqueueUniqueWork(
+            followUpWorkName(accountId),
+            ExistingWorkPolicy.REPLACE,
+            request,
+        )
+    }
+
     fun cancel(accountId: UserId) {
         workManager.cancelUniqueWork(uniqueWorkName(accountId))
+        workManager.cancelUniqueWork(followUpWorkName(accountId))
     }
+
+    private fun outboxRequest(accountId: UserId): OneTimeWorkRequest.Builder =
+        OneTimeWorkRequestBuilder<PocketPassOutboxWorker>()
+            .setInputData(
+                Data.Builder()
+                    .putString(PocketPassOutboxWorker.KEY_ACCOUNT_ID, accountId.value)
+                    .build(),
+            )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build(),
+            )
+            .addTag(tag(accountId))
 
     private fun uniqueWorkName(accountId: UserId): String =
         "pocketpass-outbox:${accountId.value}"
+
+    private fun followUpWorkName(accountId: UserId): String =
+        "pocketpass-outbox-follow-up:${accountId.value}"
 
     private fun tag(accountId: UserId): String =
         "pocketpass-outbox-account:${accountId.value}"
 
     private companion object {
         const val MINIMUM_BACKOFF_SECONDS = 10L
+        const val MINIMUM_FOLLOW_UP_MILLIS = 5_000L
     }
 }

@@ -15,14 +15,6 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.dateWithTimeIntervalSinceNow
 import platform.UIKit.UIApplicationDidEnterBackgroundNotification
 
-/**
- * Opportunistic background sync through BGTaskScheduler. iOS decides when
- * (and whether) refreshes actually run, based on how often the app is used;
- * each run reconciles the account and drains the outboxes.
- *
- * register() must be called before didFinishLaunching returns, and the task
- * identifier must be listed under BGTaskSchedulerPermittedIdentifiers.
- */
 class IosBackgroundRefresh(
     private val container: IosAppContainer,
 ) {
@@ -49,7 +41,6 @@ class IosBackgroundRefresh(
         val request = BGAppRefreshTaskRequest(identifier = TASK_IDENTIFIER).apply {
             earliestBeginDate = NSDate.dateWithTimeIntervalSinceNow(REFRESH_INTERVAL_SECONDS)
         }
-        // Fails on simulators and when Background App Refresh is off; both benign.
         val submitted = BGTaskScheduler.sharedScheduler.submitTaskRequest(request, null)
         if (!submitted) {
             logPlatformInfo(TAG, "Background refresh request was not accepted")

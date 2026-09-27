@@ -12,7 +12,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ShaderBrush
 
-// Only reached when supportsAnimatedPatterns() is true, i.e. on Android 13+.
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 internal actual fun GlobeShaderSurface(

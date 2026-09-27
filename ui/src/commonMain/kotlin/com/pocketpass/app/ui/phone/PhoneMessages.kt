@@ -25,15 +25,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,35 +40,28 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.pocketpass.app.domain.model.ConversationSummary
 import com.pocketpass.app.domain.model.Message
 import com.pocketpass.app.domain.state.SessionState
-import com.pocketpass.app.model.MessageComposerAction
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.AvatarCollage
 import com.pocketpass.app.ui.components.FigmaAsset
-import com.pocketpass.app.ui.components.EntranceMotion
-import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.screens.DynamicAvatar
-import com.pocketpass.app.ui.screens.MessageArrivalTracker
+import com.pocketpass.app.ui.screens.rememberMessageArrivalTracker
 import com.pocketpass.app.ui.screens.MessageBubble
 import com.pocketpass.app.ui.screens.messageColour
 import com.pocketpass.app.ui.screens.isEditable
@@ -94,7 +84,6 @@ fun PhoneMessagesTab(
     panes: WidePanes?,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val boardInsets = LocalPhoneInsets.current
     val boardBottomInset = maxOf(boardInsets.ime, boardInsets.bottom)
@@ -237,56 +226,10 @@ private fun PhoneConversationNotice(
 }
 
 @Composable
-internal fun PhoneMessagesBadge(metrics: DesignMetrics, count: String) {
-    val autoSize = remember(metrics) {
-        TextAutoSize.StepBased(
-            minFontSize = metrics.sp(48f),
-            maxFontSize = metrics.sp(331.378f),
-            stepSize = metrics.sp(1f),
-        )
-    }
-    MotionLayer(entrance = EntranceMotion.BoardOpen) {
-        Box(Modifier.requiredSize(metrics.dp(632.327f), metrics.dp(597.997f))) {
-            Box(
-                Modifier
-                    .offset(x = metrics.dp(31.379f), y = metrics.dp(34.064f))
-                    .requiredSize(metrics.dp(569.569f), metrics.dp(529.868f))
-                    .graphicsLayer { rotationZ = -7.31f },
-            ) {
-                FigmaAsset(
-                    resource = Assets.MessagesBadge,
-                    modifier = Modifier.requiredSize(metrics.dp(569.569f), metrics.dp(552.167f)),
-                )
-                Box(
-                    modifier = Modifier
-                        .offset(x = metrics.dp(142.5f), y = metrics.dp(12.4f))
-                        .requiredSize(metrics.dp(284.622f), metrics.dp(420.847f))
-                        .graphicsLayer { rotationZ = -0.4f },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val base = TextStyle(fontFamily = Rubik, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-                    BasicText(
-                        text = count,
-                        autoSize = autoSize,
-                        style = base.copy(
-                            color = pocketPalette.ink(Color(0xFF2F6CA5)),
-                            drawStyle = Stroke(width = 18f, join = androidx.compose.ui.graphics.StrokeJoin.Round),
-                        ),
-                        maxLines = 1,
-                    )
-                    BasicText(text = count, autoSize = autoSize, style = base.copy(color = Color.White), maxLines = 1)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun PhoneThread(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val insets = LocalPhoneInsets.current
     val retained = remember { mutableStateOf<Pair<ConversationSummary, List<Message>>?>(null) }
@@ -300,8 +243,7 @@ fun PhoneThread(
     }
     val messages = if (state.selectedConversation != null) state.selectedMessages else retained.value?.second.orEmpty()
     val partnerTyping = conversationId in state.typingConversationIds
-    val arrivalTracker = remember(conversationId) { MessageArrivalTracker() }
-    SideEffect { arrivalTracker.primed = true }
+    val arrivalTracker = rememberMessageArrivalTracker(conversationId, messages)
     val listState = rememberLazyListState()
     LaunchedEffect(messages.lastOrNull()?.id?.value, partnerTyping) {
         val lastIndex = messages.lastIndex + if (partnerTyping) 1 else 0
@@ -368,7 +310,7 @@ fun PhoneThread(
                 }
             }
         }
-        PhoneComposer(metrics, state, conversationId, dispatch, extensions)
+        PhoneComposer(metrics, state, conversationId, dispatch)
     }
 }
 
@@ -529,7 +471,6 @@ private fun PhoneComposer(
     state: PocketPassUiState,
     conversationId: String,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val editor = remember(conversationId, state.editingMessageId) { MessageDraftEditor(state.messageDraft) }
     editor.synchronize(state.messageDraft)
@@ -619,17 +560,12 @@ private fun PhoneComposer(
             Spacer(Modifier.width(metrics.dp(20f)))
             PhoneAttachButton(
                 metrics = metrics,
-                onClick = { dispatch(PocketPassEvent.SelectMessageAction(MessageComposerAction.Image)) },
+                onClick = { dispatch(PocketPassEvent.PickMessageImage) },
             )
         }
     }
 }
 
-/**
- * Phones get a plain attach button. The expanding action rail was designed for
- * the dual-screen composer; on a single screen the picker could not be reached
- * from it, so tapping here opens the image picker directly.
- */
 @Composable
 private fun PhoneAttachButton(
     metrics: DesignMetrics,
@@ -669,7 +605,6 @@ private fun PhoneAttachButton(
     }
 }
 
-/** Opens the strip of DS glyphs; phones have no on-screen keyboard to host an emoji layout. */
 @Composable
 private fun PhoneEmojiButton(
     metrics: DesignMetrics,
@@ -713,7 +648,6 @@ private fun PhoneEmojiButton(
     }
 }
 
-/** The 29 DS characters as a scrolling row of keys above the composer. */
 @Composable
 private fun PhoneEmojiStrip(
     metrics: DesignMetrics,

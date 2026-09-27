@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Native photo pickers return prepared image bytes, never paths supplied by board content. */
 object BoardBrandingPicker {
     class Request {
         val result = CompletableDeferred<ByteArray?>()

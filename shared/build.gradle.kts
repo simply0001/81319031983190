@@ -10,14 +10,10 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
-// Windows only: elsewhere the default keeps build output inside the workspace, where CI finds it.
 System.getenv("LOCALAPPDATA")?.let { localAppData ->
     layout.buildDirectory.set(file("$localAppData/PocketPass/gradle/shared"))
 }
 
-// iOS has no BuildConfig, so the backend coordinates arrive as generated code.
-// Locally they come from ~/.gradle/gradle.properties (same POCKETPASS_* names
-// the Android app uses); on CI from environment variables. No key = fixture mode.
 val generateIosBuildConfig = tasks.register("generateIosBuildConfig") {
     val supabaseUrl = providers.gradleProperty("POCKETPASS_SUPABASE_URL")
         .orElse(providers.environmentVariable("POCKETPASS_SUPABASE_URL"))
@@ -92,8 +88,6 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
-            // NavKeyMarker is a typealias for navigation3's NavKey on Android, and NavKey is
-            // thereby a supertype of every route, so consumers need it on their classpath too.
             api(libs.androidx.navigation3.runtime)
         }
         iosMain {

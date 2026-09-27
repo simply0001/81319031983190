@@ -15,7 +15,6 @@ fun soundEffectFor(
     PocketPassEvent.CloseConnectedApps,
     PocketPassEvent.CloseRevokeConnectedApp,
     PocketPassEvent.DismissOAuthConsent,
-    PocketPassEvent.CloseThemePicker,
     PocketPassEvent.CloseSortMenu,
     PocketPassEvent.CloseDeleteMiiSlot,
     PocketPassEvent.CloseMessageActions,
@@ -39,7 +38,6 @@ fun soundEffectFor(
     PocketPassEvent.CloseUserProfile,
     PocketPassEvent.CloseRemoveFriend,
     PocketPassEvent.CloseFriendsOverlay,
-    PocketPassEvent.CloseNewGroup,
     PocketPassEvent.CloseGroupInfo,
     PocketPassEvent.DismissConversationNotice,
     PocketPassEvent.CloseWidgetBlockPicker,
@@ -71,15 +69,12 @@ fun soundEffectFor(
     is PocketPassEvent.PinWidgetDesign,
     is PocketPassEvent.AssignWidgetDesign,
     is PocketPassEvent.DeleteWidgetDesign,
-    // Discrete actions that were silent. Keep text edits, previews, sliders and
-    // background refresh events out of this list.
     PocketPassEvent.ToggleSortMenu,
     PocketPassEvent.ToggleHomeMoodPicker,
     PocketPassEvent.ToggleNotifications,
-    PocketPassEvent.ToggleMessageActions,
     PocketPassEvent.EditSelectedMessage,
     PocketPassEvent.DeleteSelectedMessage,
-    is PocketPassEvent.SelectMessageAction,
+    PocketPassEvent.PickMessageImage,
     is PocketPassEvent.ToggleGroupMember,
     is PocketPassEvent.AddGroupMemberFriend,
     is PocketPassEvent.EditMiiSlot,
@@ -110,12 +105,9 @@ fun soundEffectFor(
     PocketPassEvent.OpenAppSettings,
     PocketPassEvent.DownloadAppUpdate,
     PocketPassEvent.InstallAppUpdate,
-    PocketPassEvent.ResetSettings,
     PocketPassEvent.SignOut,
     PocketPassEvent.RemoveProfileFriend,
     PocketPassEvent.MessageProfileFriend,
-    is PocketPassEvent.DeleteNotification,
-    PocketPassEvent.MarkAllNotificationsRead,
     PocketPassEvent.ClearAllNotifications,
     -> SoundEffect.Confirm
 
@@ -162,7 +154,6 @@ fun soundEffectFor(
         }
     }
 
-    PocketPassEvent.OpenMiiEditor,
     PocketPassEvent.OpenMiiSlots,
     PocketPassEvent.OpenConnectedApps,
     is PocketPassEvent.OpenRevokeConnectedApp,

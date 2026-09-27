@@ -14,15 +14,10 @@ internal sealed interface TrustedLink {
     data object UntrustedOrigin : TrustedLink
 }
 
-// Ktor's Url invents a scheme and host rather than failing ("https:///a" parses with host "a"), and
-// discards a whole URL over one bad escape: guard the raw string, and keep the query away from it.
 internal fun trustedLinkOrigin(rawUri: String): TrustedLink {
     if (rawUri.length > MAX_LINK_URI_LENGTH || rawUri.hasUnsafeCharacters()) {
         return TrustedLink.Malformed
     }
-    // The app-scheme callback (used where https links cannot reach the app,
-    // i.e. iOS) is accepted only as this exact origin, and is normalized to
-    // the https callback path so downstream path checks stay uniform.
     if (rawUri.startsWith(MOBILE_SCHEME_PREFIX, ignoreCase = true)) {
         val withoutFragment = rawUri.substringBefore('#')
         val origin = withoutFragment.substringBefore('?')

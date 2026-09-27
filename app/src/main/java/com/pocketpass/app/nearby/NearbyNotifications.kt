@@ -25,7 +25,6 @@ object NearbyNotifications {
     private const val ALERT_CHANNEL_ID = "pocketpass_nearby_alerts"
 
     fun createChannels(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(

@@ -27,7 +27,6 @@ private val SoundEffect.fileName: String
         SoundEffect.Confirm -> "sfx_confirm"
     }
 
-/** AVAudioPlayer-backed counterpart of the Android SoundPool player. */
 class IosSoundEffectPlayer : SoundEffectSink {
     var volume: Float = 0f
 
@@ -69,7 +68,6 @@ private val BackgroundMusicTrack.fileName: String
         BackgroundMusicTrack.Boards -> "bgm_boards"
     }
 
-/** Looping background music, mirroring the Android MediaPlayer behaviour. */
 class IosBackgroundMusicPlayer {
     private var player: AVAudioPlayer? = null
     private var activeTrack: BackgroundMusicTrack? = null

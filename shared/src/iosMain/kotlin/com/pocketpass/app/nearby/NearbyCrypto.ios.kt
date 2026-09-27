@@ -9,9 +9,6 @@ import dev.whyoleg.cryptography.algorithms.HMAC
 import dev.whyoleg.cryptography.algorithms.SHA256
 import dev.whyoleg.cryptography.random.CryptographyRandom
 
-// CryptoKit/Security-framework backed twins of the Android JCA primitives;
-// the DER encodings and DER ECDSA signature format keep the two
-// implementations wire-compatible.
 internal actual object NearbyCryptoPrimitives {
     private val provider = CryptographyProvider.Default
     private val ecdsa = provider.get(ECDSA)
@@ -75,7 +72,6 @@ internal actual object NearbyCryptoPrimitives {
             .decodeFromByteArrayBlocking(AES.Key.Format.RAW, key)
             .cipher()
             .encryptBlocking(plaintext, aad)
-        // The library prepends the generated IV to ciphertext||tag.
         return NearbyEncryptedPacket(
             iv = combined.copyOfRange(0, NearbyCrypto.GCM_IV_BYTES),
             ciphertext = combined.copyOfRange(NearbyCrypto.GCM_IV_BYTES, combined.size),

@@ -10,7 +10,6 @@ import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.ui.controller.ControllerFocus
 
-/** The left stick pans zoomed Boards paper independently of the selected drawing tool. */
 class BoardCanvasJoystickHandler(
     private val state: () -> PocketPassUiState,
     private val focus: ControllerFocus,

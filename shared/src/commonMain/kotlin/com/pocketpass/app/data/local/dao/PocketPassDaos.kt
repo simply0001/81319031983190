@@ -56,6 +56,9 @@ interface ProfileDao {
     @Query("SELECT senderId FROM messages WHERE accountId = :accountId AND conversationId = :conversationId UNION SELECT userId FROM conversation_members WHERE accountId = :accountId AND conversationId = :conversationId")
     suspend fun messageAuthorIds(accountId: String, conversationId: String): List<String>
 
+    @Query("SELECT senderId FROM messages WHERE accountId = :accountId UNION SELECT userId FROM conversation_members WHERE accountId = :accountId")
+    suspend fun allMessageAuthorIds(accountId: String): List<String>
+
     @Query("UPDATE profiles SET chatBubbleColour = :colour, chatColourOperationId = NULL, chatColourError = NULL WHERE userId = :userId AND chatColourOperationId = :operationId")
     suspend fun acknowledgeChatColour(userId: String, operationId: String, colour: String)
 
@@ -88,9 +91,6 @@ interface FriendDao {
 
     @Upsert
     suspend fun upsertAll(friends: List<FriendEntity>)
-
-    @Query("DELETE FROM friends WHERE ownerId = :ownerId")
-    suspend fun deleteForOwner(ownerId: String)
 }
 
 @Dao
@@ -100,9 +100,6 @@ interface FriendCodeDao {
 
     @Upsert
     suspend fun upsert(friendCode: FriendCodeEntity)
-
-    @Query("DELETE FROM friend_codes WHERE accountId = :accountId")
-    suspend fun delete(accountId: String)
 }
 
 @Dao
@@ -411,6 +408,19 @@ interface MessageDao {
 
     @Query(
         """
+        SELECT EXISTS(
+            SELECT 1 FROM messages
+            WHERE accountId = :accountId AND conversationId = :conversationId
+        )
+        """,
+    )
+    suspend fun hasMessages(
+        accountId: String,
+        conversationId: String,
+    ): Boolean
+
+    @Query(
+        """
         SELECT * FROM messages
         WHERE accountId = :accountId AND conversationId = :conversationId
           AND deletedAtEpochMillis IS NULL
@@ -509,9 +519,6 @@ interface ShopDao {
 
     @Query("DELETE FROM shop_items")
     suspend fun deleteAllItems()
-
-    @Query("DELETE FROM token_balances WHERE accountId = :accountId")
-    suspend fun deleteBalance(accountId: String)
 
     @Query(
         """
@@ -882,12 +889,6 @@ interface NearbyEncounterDao {
         accountId: String,
         nowEpochMillis: Long,
     )
-
-    @Query("DELETE FROM nearby_credentials WHERE accountId = :accountId")
-    suspend fun deleteCredentialsForAccount(accountId: String)
-
-    @Query("DELETE FROM nearby_encounters WHERE accountId = :accountId")
-    suspend fun deleteEncountersForAccount(accountId: String)
 }
 
 sealed interface OutboxEnqueueResult {
@@ -906,15 +907,6 @@ sealed interface OutboxEnqueueResult {
 
 @Dao
 abstract class OutboxDao {
-    @Query(
-        """
-        SELECT * FROM pending_operations
-        WHERE accountId = :accountId
-        ORDER BY createdAtEpochMillis ASC, operationId ASC
-        """,
-    )
-    abstract fun observeForAccount(accountId: String): Flow<List<PendingOperationEntity>>
-
     @Query(
         """
         SELECT COUNT(*) FROM pending_operations
@@ -1318,6 +1310,96 @@ abstract class OutboxDao {
         }
         return true
     }
+
+    @Query(
+        """
+        UPDATE pending_operations
+        SET state = 'PENDING',
+            nextAttemptAtEpochMillis = :nextAttemptAtEpochMillis,
+            leaseUntilEpochMillis = NULL,
+            leaseToken = NULL
+        WHERE operationId = :operationId
+          AND state = 'IN_FLIGHT'
+          AND leaseToken = :leaseToken
+        """,
+    )
+    protected abstract suspend fun releaseLease(
+        operationId: String,
+        leaseToken: String,
+        nextAttemptAtEpochMillis: Long,
+    ): Int
+
+    @Query(
+        """
+        UPDATE messages
+        SET deliveryState = 'QUEUED'
+        WHERE accountId = :accountId
+          AND messageId = :messageId
+          AND deliveryState = 'SENDING'
+        """,
+    )
+    protected abstract suspend fun markMessageQueued(
+        accountId: String,
+        messageId: String,
+    )
+
+    @Transaction
+    open suspend fun releaseClaim(
+        operationId: String,
+        leaseToken: String,
+        nextAttemptAtEpochMillis: Long,
+    ): Boolean {
+        val operation = get(operationId) ?: return false
+        if (
+            releaseLease(
+                operationId = operationId,
+                leaseToken = leaseToken,
+                nextAttemptAtEpochMillis = nextAttemptAtEpochMillis,
+            ) != 1
+        ) {
+            return false
+        }
+        if (operation.kind == LocalOperationKinds.SEND_MESSAGE) {
+            markMessageQueued(operation.accountId, operation.aggregateId)
+        }
+        return true
+    }
+
+    @Query(
+        """
+        SELECT MIN(
+            CASE
+                WHEN state = 'IN_FLIGHT'
+                    THEN MAX(nextAttemptAtEpochMillis, COALESCE(leaseUntilEpochMillis, 0))
+                ELSE nextAttemptAtEpochMillis
+            END
+        )
+        FROM pending_operations
+        WHERE accountId = :accountId
+          AND state IN ('PENDING', 'IN_FLIGHT', 'RETRYABLE')
+          AND (kind <> 'SET_CHAT_COLOUR' OR NOT EXISTS (
+            SELECT 1 FROM pending_operations earlier
+            WHERE earlier.accountId = pending_operations.accountId AND earlier.kind = 'SET_CHAT_COLOUR'
+              AND earlier.state IN ('PENDING', 'IN_FLIGHT', 'RETRYABLE')
+              AND (earlier.createdAtEpochMillis < pending_operations.createdAtEpochMillis
+                OR (earlier.createdAtEpochMillis = pending_operations.createdAtEpochMillis AND earlier.operationId < pending_operations.operationId))
+          ))
+        """,
+    )
+    abstract suspend fun nextAttemptAt(accountId: String): Long?
+
+    @Query(
+        """
+        DELETE FROM pending_operations
+        WHERE accountId = :accountId
+          AND state IN ('SUCCEEDED', 'FAILED_PERMANENT')
+          AND completedAtEpochMillis < :completedBeforeEpochMillis
+        """,
+    )
+    abstract suspend fun deleteFinishedBefore(
+        accountId: String,
+        completedBeforeEpochMillis: Long,
+    ): Int
 }
 
 @Dao
@@ -1333,4 +1415,21 @@ interface SyncCursorDao {
 
     @Upsert
     suspend fun upsert(cursor: SyncCursorEntity)
+
+    @Query("DELETE FROM sync_cursors WHERE accountId = :accountId AND stream = :stream")
+    suspend fun delete(accountId: String, stream: String)
+
+    @Query(
+        """
+        DELETE FROM sync_cursors
+        WHERE accountId = :accountId
+          AND substr(stream, 1, length(:streamPrefix)) = :streamPrefix
+          AND stream NOT IN (:retainedStreams)
+        """,
+    )
+    suspend fun deleteWithPrefixExcept(
+        accountId: String,
+        streamPrefix: String,
+        retainedStreams: List<String>,
+    )
 }

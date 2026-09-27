@@ -470,15 +470,9 @@ class SupabaseProductionRemoteDataSources(
     override suspend fun updateProfile(
         command: UpdateProfileCommand,
     ): RepositoryResult<UserProfile> = remoteResult {
-        val patch = ProfilePatchDto(
-            bio = command.profile.bio,
-            avatarPath = avatarPath(command.profile.avatar),
-            age = command.profile.age,
-            countryCode = command.profile.countryCode,
-        )
         client
             .from(PROFILES_TABLE)
-            .update(patch) {
+            .update(BioPatchDto(bio = command.profile.bio)) {
                 select()
                 filter { eq("user_id", command.accountId.value) }
             }
@@ -887,8 +881,6 @@ class SupabaseProductionRemoteDataSources(
 
     private fun encodePathSegment(value: String): String = value.encodeURLParameter()
 
-    // Ktor's Url invents a scheme and host rather than failing, so the https prefix and the
-    // authority are checked on the raw string before the parse is trusted.
     private fun httpsOnly(value: String?): String? {
         val trimmed = value?.trim().orEmpty()
         if (trimmed.isEmpty()) return null
@@ -943,7 +935,6 @@ class SupabaseProductionRemoteDataSources(
                 }
             }
             .decodeList<FriendshipDto>()
-        // Pending requests ride along so a sent request survives the next sync.
         val requests = client
             .from(FRIEND_REQUESTS_TABLE)
             .select {
@@ -1078,7 +1069,14 @@ class SupabaseProductionRemoteDataSources(
         val profiles = fetchProfiles(activeMembers.map(ConversationMemberDto::userId).toSet())
         val membersByConversation = activeMembers.groupBy { it.conversationId }
         val membershipByConversation = memberships.associateBy { it.conversationId }
-        val messagesByConversation = recentMessages.groupBy { it.conversationId }
+        val messagesByConversation = recentMessages.groupBy { it.conversationId } +
+            conversationsBeyondSummaryWindow(
+                lastReadAtByConversation = memberships.associate { membership ->
+                    membership.conversationId to membership.lastReadAt?.let(::parseSupabaseInstant)
+                },
+                window = recentMessages,
+                windowLimit = MAX_SUMMARY_MESSAGES.toInt(),
+            ).associateWith { conversationId -> latestVisibleMessages(conversationId) }
 
         conversations.map { conversation ->
             val isGroup = conversation.kind == GROUP_CONVERSATION_KIND
@@ -1147,6 +1145,19 @@ class SupabaseProductionRemoteDataSources(
             }
             .decodeList<T>()
     }
+
+    private suspend fun latestVisibleMessages(conversationId: String): List<MessageDto> =
+        client
+            .from(MESSAGES_TABLE)
+            .select {
+                filter {
+                    eq("conversation_id", conversationId)
+                    exact("deleted_at", null)
+                }
+                order("created_at", Order.DESCENDING)
+                limit(MAX_SUMMARY_MESSAGES_PER_CONVERSATION)
+            }
+            .decodeList<MessageDto>()
 
     override suspend fun createGroupConversation(
         command: CreateGroupConversationCommand,
@@ -1221,16 +1232,53 @@ class SupabaseProductionRemoteDataSources(
         accountId: UserId,
         conversationId: ConversationId,
     ): RepositoryResult<List<Message>> = remoteResult {
+        newestMessages(conversationId).map { it.toDomain(::authenticatedMessageMediaUrl) }
+    }
+
+    override suspend fun fetchMessageChanges(
+        accountId: UserId,
+        conversationId: ConversationId,
+        changedAfter: Instant,
+    ): RepositoryResult<List<Message>> = remoteResult {
+        val after = changedAfter.toString()
+        val changes = client
+            .from(MESSAGES_TABLE)
+            .select {
+                filter {
+                    eq("conversation_id", conversationId.value)
+                    or {
+                        gt("created_at", after)
+                        gt("edited_at", after)
+                        gt("deleted_at", after)
+                    }
+                }
+                order("created_at", Order.ASCENDING)
+                order("id", Order.ASCENDING)
+                limit(MAX_MESSAGES_PER_REFRESH)
+            }
+            .decodeList<MessageDto>()
+        val rows = if (changes.size < MAX_MESSAGES_PER_REFRESH) {
+            changes
+        } else {
+            (changes + newestMessages(conversationId))
+                .associateBy(MessageDto::id)
+                .values
+                .toList()
+        }
+        rows.map { it.toDomain(::authenticatedMessageMediaUrl) }
+    }
+
+    private suspend fun newestMessages(conversationId: ConversationId): List<MessageDto> =
         client
             .from(MESSAGES_TABLE)
             .select {
                 filter { eq("conversation_id", conversationId.value) }
-                order("created_at", Order.ASCENDING)
+                order("created_at", Order.DESCENDING)
+                order("id", Order.DESCENDING)
                 limit(MAX_MESSAGES_PER_REFRESH)
             }
             .decodeList<MessageDto>()
-            .map { it.toDomain(::authenticatedMessageMediaUrl) }
-    }
+            .asReversed()
 
     override suspend fun sendMessage(
         command: SendMessageCommand,
@@ -1440,20 +1488,6 @@ class SupabaseProductionRemoteDataSources(
     private fun authenticatedMessageMediaUrl(path: String): String =
         client.storage.from(MESSAGE_MEDIA_BUCKET).authenticatedUrl(path)
 
-    private fun avatarPath(avatar: AvatarReference?): String? = when (avatar) {
-        null, is AvatarReference.Bundled -> null
-        is AvatarReference.Remote -> {
-            val value = avatar.url
-            when {
-                AUTHENTICATED_AVATAR_MARKER in value ->
-                    value.substringAfter(AUTHENTICATED_AVATAR_MARKER).substringBefore('?')
-
-                AVATAR_PATH_PATTERN.matches(value) -> value
-                else -> null
-            }
-        }
-    }
-
     private fun NearbyEncounterDto.toDomain(accountId: UserId): NearbyEncounter =
         NearbyEncounter(
             id = EncounterId(encounterId),
@@ -1490,17 +1524,34 @@ class SupabaseProductionRemoteDataSources(
         const val USER_SHOP_ITEMS_TABLE = "user_shop_items"
         const val SUPPORTER_STATUS_TABLE = "supporter_status"
         const val AVATAR_BUCKET = "avatars"
-        const val AUTHENTICATED_AVATAR_MARKER = "/object/authenticated/avatars/"
         const val MESSAGE_MEDIA_BUCKET = "message-media"
         const val PUZZLE_PANELS_BUCKET = "puzzle-panels"
         const val MAX_SUMMARY_MESSAGES = 1_000L
+        const val MAX_SUMMARY_MESSAGES_PER_CONVERSATION = 100L
         const val MAX_MESSAGES_PER_REFRESH = 1_000L
         const val MAX_IN_FILTER_IDS = 100
         const val GROUP_CONVERSATION_KIND = "group"
         const val MAX_NOTIFICATIONS_PER_REFRESH = 1_000L
-        val AVATAR_PATH_PATTERN =
-            Regex("""^[0-9a-f-]{36}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$""")
     }
+}
+
+internal fun conversationsBeyondSummaryWindow(
+    lastReadAtByConversation: Map<String, Instant?>,
+    window: List<MessageDto>,
+    windowLimit: Int,
+): Set<String> {
+    if (window.isEmpty() || window.size < windowLimit) return emptySet()
+    val windowStart = window.minOf { parseSupabaseInstant(it.createdAt) }
+    val conversationsWithVisibleMessages = window
+        .filter { it.deletedAt == null }
+        .mapTo(hashSetOf(), MessageDto::conversationId)
+    return lastReadAtByConversation
+        .filter { (conversationId, lastReadAt) ->
+            conversationId !in conversationsWithVisibleMessages ||
+                lastReadAt == null ||
+                lastReadAt < windowStart
+        }
+        .keys
 }
 
 internal fun miiAvatarPath(
@@ -1745,13 +1796,8 @@ private data class NearbyEncounterDto(
 )
 
 @Serializable
-private data class ProfilePatchDto(
+private data class BioPatchDto(
     val bio: String,
-    @SerialName("avatar_path")
-    val avatarPath: String?,
-    val age: Int?,
-    @SerialName("country_code")
-    val countryCode: String?,
 )
 
 @Serializable

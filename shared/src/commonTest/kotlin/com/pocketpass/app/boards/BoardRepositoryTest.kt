@@ -19,7 +19,7 @@ class BoardRepositoryTest {
     @Test fun timedRefreshKeepsRevealedSpoilersAndTheFocusedReply() = runTest {
         val api = ReadingBoardApi(board, account)
         val repo = RoomBoardRepository(api, MemoryBoardDao())
-        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenDestination(board, api.root.id)); runCurrent()
         holder.dispatch(BoardAction.Reveal(holder.state.value.thread!!)); runCurrent()
@@ -27,7 +27,7 @@ class BoardRepositoryTest {
         holder.dispatch(BoardAction.Focus(holder.state.value.posts.first())); runCurrent()
         api.root = api.root.copy(body = "Updated root")
         api.notes = api.notes.map { it.copy(body = "Updated ${it.id}", yeahCount = 4) }
-        advanceTimeBy(30_001); runCurrent()
+        advanceTimeBy(BOARDS_POLL_MILLIS + 1); runCurrent()
         val state = holder.state.value
         assertEquals(setOf(api.root.id, api.notes.first().id), state.revealed)
         assertEquals(api.root, state.thread)
@@ -43,7 +43,7 @@ class BoardRepositoryTest {
     @Test fun realtimeRefreshKeepsTheLatestSelectionWhileReading() = runTest {
         val api = ReadingBoardApi(board, account)
         val repo = RoomBoardRepository(api, MemoryBoardDao())
-        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenDestination(board, api.root.id)); runCurrent()
         holder.dispatch(BoardAction.Reveal(holder.state.value.posts.first())); runCurrent()
@@ -64,7 +64,7 @@ class BoardRepositoryTest {
             pageSize = 2
             notes = List(6) { BoardPost("note_$it", board, body = "Note $it") }
         }
-        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenBoard(board)); runCurrent()
         holder.dispatch(BoardAction.More); runCurrent()
@@ -81,7 +81,7 @@ class BoardRepositoryTest {
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test fun removedSpoilersAndRevokedAccessNeverRestorePrivateContent() = runTest {
         val api = ReadingBoardApi(board, account)
-        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenBoard(board)); runCurrent()
         holder.dispatch(BoardAction.Reveal(holder.state.value.posts.first())); runCurrent()
@@ -105,7 +105,7 @@ class BoardRepositoryTest {
     @Test fun revealsSurviveReopeningTheBoardButNotAccountChangesOrDisablingBoards() = runTest {
         val api = ReadingBoardApi(board, account)
         val currentAccount = MutableStateFlow<UserId?>(UserId(account))
-        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), currentAccount, backgroundScope)
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), currentAccount, backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenBoard(board)); runCurrent()
         holder.dispatch(BoardAction.Reveal(holder.state.value.posts.first())); runCurrent()
@@ -118,7 +118,7 @@ class BoardRepositoryTest {
         assertEquals("", holder.state.value.posts.first().body)
         holder.dispatch(BoardAction.Reveal(holder.state.value.posts.first())); runCurrent()
         api.enabled = false
-        advanceTimeBy(30_001); runCurrent()
+        advanceTimeBy(BOARDS_SETTINGS_POLL_MILLIS + 1); runCurrent()
         assertTrue(holder.state.value.revealed.isEmpty())
         assertFalse(holder.state.value.enabled)
     }
@@ -147,7 +147,7 @@ class BoardRepositoryTest {
             }
             override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String) = JsonObject(emptyMap())
         }
-        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenBoard(board)); runCurrent()
         holder.dispatch(BoardAction.Manage); runCurrent()
@@ -178,7 +178,7 @@ class BoardRepositoryTest {
                 return JsonObject(emptyMap())
             }
         }
-        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.Mutate("invite", boardArgs("board_id" to board.boardValue(), "friend_code" to "12345678".boardValue())))
         runCurrent()
@@ -216,7 +216,7 @@ class BoardRepositoryTest {
                 return boardArgs("ok" to true.boardValue())
             }
         }
-        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.Inbox); runCurrent()
         holder.dispatch(BoardAction.OpenNotice(notice)); runCurrent()
@@ -255,13 +255,12 @@ class BoardRepositoryTest {
             override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String) = boardArgs("ok" to true.boardValue())
         }
         val repo = RoomBoardRepository(api, MemoryBoardDao())
-        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope)
+        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
         runCurrent()
         holder.dispatch(BoardAction.OpenBoard(board)); runCurrent()
         assertFalse(holder.state.value.loading)
         assertTrue(holder.state.value.posts.isEmpty())
 
-        // An already loaded empty feed must not replace "No notes yet" with Loading.
         pending = CompletableDeferred()
         holder.refresh(); runCurrent()
         assertFalse(holder.state.value.loading)
@@ -270,7 +269,6 @@ class BoardRepositoryTest {
         pending!!.complete(Unit); runCurrent()
         assertEquals(notes, holder.state.value.posts)
 
-        // Realtime invalidations keep content until the authenticated replacement arrives.
         pending = CompletableDeferred()
         repo.invalidate(); runCurrent(); advanceTimeBy(151); runCurrent()
         assertEquals(notes, holder.state.value.posts)
@@ -283,6 +281,77 @@ class BoardRepositoryTest {
         assertTrue(holder.state.value.posts.isEmpty())
         assertNull(holder.state.value.focused)
         assertTrue(holder.state.value.assets.isEmpty())
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun boardsStayIdleWhileInactiveAndReuseDownloadedArtwork() = runTest {
+        val community = Board(board, account, "Testing board", role = "member", iconAssetId = "icon")
+        val reads = mutableListOf<String>()
+        val api = object : BoardApi {
+            override suspend fun query(accountId: String, operation: String, args: JsonObject): JsonElement {
+                reads += operation
+                return when (operation) {
+                    "settings" -> boardArgs("enabled" to true.boardValue())
+                    "directory" -> boardArgs("items" to listOf(community).boardEncode())
+                    "invitations", "proposals" -> JsonArray(emptyList())
+                    "asset" -> boardArgs("data" to "AQID".boardValue())
+                    "feed" -> boardArgs("items" to JsonArray(emptyList()))
+                    else -> JsonObject(emptyMap())
+                }
+            }
+            override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String) = JsonObject(emptyMap())
+        }
+        val active = MutableStateFlow(false)
+        val repo = RoomBoardRepository(api, MemoryBoardDao())
+        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope, active)
+        runCurrent()
+        repo.invalidate(); runCurrent()
+        advanceTimeBy(BOARDS_SETTINGS_POLL_MILLIS + 1); runCurrent()
+        assertEquals(listOf("settings"), reads)
+
+        active.value = true; runCurrent(); advanceTimeBy(151); runCurrent()
+        assertEquals(listOf("settings", "settings", "directory", "invitations", "proposals", "asset", "feed"), reads)
+        assertEquals(setOf("icon"), holder.state.value.assets.keys)
+
+        repo.invalidate(); runCurrent(); advanceTimeBy(151); runCurrent()
+        assertEquals(2, reads.count { it == "directory" })
+        assertEquals(1, reads.count { it == "asset" })
+        assertEquals(setOf("icon"), holder.state.value.assets.keys)
+
+        active.value = false; runCurrent()
+        val idle = reads.size
+        repo.invalidate(); runCurrent()
+        advanceTimeBy(BOARDS_POLL_MILLIS * 3); runCurrent()
+        assertEquals(idle, reads.size)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun backgroundRefreshWaitsForAnOpeningBoardInsteadOfCancellingIt() = runTest {
+        val community = Board(board, account, "Testing board", role = "member")
+        val boardReady = CompletableDeferred<Unit>()
+        val api = object : BoardApi {
+            override suspend fun query(accountId: String, operation: String, args: JsonObject): JsonElement = when (operation) {
+                "settings" -> boardArgs("enabled" to true.boardValue())
+                "directory" -> boardArgs("items" to emptyList<Board>().boardEncode())
+                "invitations", "proposals" -> JsonArray(emptyList())
+                "board" -> { boardReady.await(); community.boardEncode() }
+                "feed" -> boardArgs("items" to JsonArray(emptyList()))
+                else -> JsonObject(emptyMap())
+            }
+            override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String) = boardArgs("ok" to true.boardValue())
+        }
+        val repo = RoomBoardRepository(api, MemoryBoardDao())
+        val holder = BoardsStateHolder(repo, MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
+        runCurrent()
+        holder.dispatch(BoardAction.OpenBoard(board)); runCurrent()
+        repo.invalidate(); runCurrent()
+        advanceTimeBy(BOARDS_POLL_MILLIS + 1); runCurrent()
+        assertEquals(BoardsScreen.Directory, holder.state.value.screen)
+        boardReady.complete(Unit); runCurrent()
+        assertEquals(BoardsScreen.Board, holder.state.value.screen)
+        assertEquals(community, holder.state.value.board)
+        assertFalse(holder.state.value.loading)
+        assertNull(holder.state.value.error)
     }
 
     @Test fun failedPublishKeepsExactPayloadAcrossRepositoryRestart() = runTest {

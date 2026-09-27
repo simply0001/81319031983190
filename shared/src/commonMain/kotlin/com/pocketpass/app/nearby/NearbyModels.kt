@@ -25,10 +25,7 @@ data class NearbyRuntimeState(
     val detail: String? = null,
     val activeExchangeCount: Int = 0,
     val lastEncounterAt: Instant? = null,
-) {
-    val isOperational: Boolean
-        get() = status == NearbyRuntimeStatus.Running
-}
+)
 
 data class NearbyCredential(
     val token: ByteArray,

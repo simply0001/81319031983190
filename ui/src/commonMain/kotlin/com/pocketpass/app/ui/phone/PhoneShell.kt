@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,13 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.model.FriendsOverlay
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.ProfileViewerSource
@@ -63,7 +62,6 @@ fun PhoneRoot(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
     miiEditorController: MiiEditorController?,
-    extensions: PocketPassExtensions,
 ) {
     val savedCanonical by rememberUpdatedState(state.miiEditor.savedCanonicalBase64)
     val renderSurface = LocalMiiRenderSurface.current
@@ -86,7 +84,7 @@ fun PhoneRoot(
             state.nearbyPermissionUi.visible -> PhoneNearbyPermissionScreen(metrics, state.nearbyPermissionUi) {
                 dispatch(PocketPassEvent.RequestNearbyPermissions)
             }
-            else -> PhoneShell(metrics, state, dispatch, extensions)
+            else -> PhoneShell(metrics, state, dispatch)
         }
     }
 }
@@ -96,7 +94,6 @@ private fun PhoneShell(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val insets = LocalPhoneInsets.current
     val layout = phoneLayout(metrics.designWidth - insets.start - insets.end, metrics.designHeight)
@@ -105,8 +102,8 @@ private fun PhoneShell(
         if(state.rootDestination == PocketPassDestination.Messages) BoardBackdrop(metrics)
         else PhoneBackdrop(metrics, backdrop.top, backdrop.bottom)
         when (layout) {
-            PhoneLayout.Compact -> PhoneCompactShell(metrics, state, dispatch, extensions)
-            PhoneLayout.Wide -> PhoneWideShell(metrics, state, dispatch, extensions)
+            PhoneLayout.Compact -> PhoneCompactShell(metrics, state, dispatch)
+            PhoneLayout.Wide -> PhoneWideShell(metrics, state, dispatch)
         }
         PhoneDialogs(metrics, state, dispatch)
     }
@@ -133,16 +130,18 @@ private fun PhoneCompactShell(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val insets = LocalPhoneInsets.current
     val destination = state.rootDestination
     val backdrop = phoneBackdrop(state, pocketPalette)
-    Column(Modifier.fillMaxSize()) {
+    val showsTabBar = destination != PocketPassDestination.Messages
+    val tabBarClearance = if (showsTabBar) PHONE_TAB_BAR_HEIGHT + insets.bottom else 0f
+    val aboveTabBar = remember(metrics, tabBarClearance) { AboveTabBarShape(metrics, tabBarClearance) }
+    Box(Modifier.fillMaxSize()) {
         Box(
             Modifier
-                .weight(1f)
-                .fillMaxWidth()
+                .fillMaxSize()
+                .then(if (showsTabBar) Modifier.clip(aboveTabBar) else Modifier)
                 .padding(start = metrics.dp(insets.start), end = metrics.dp(insets.end)),
             contentAlignment = Alignment.TopCenter,
         ) {
@@ -157,18 +156,25 @@ private fun PhoneCompactShell(
                         entrance = destination.entrance(),
                         delayMillis = 55,
                     ) {
-                        PhoneTab(metrics, null, state, dispatch, extensions)
+                        CompositionLocalProvider(LocalPhoneTabBarClearance provides tabBarClearance) {
+                            PhoneTab(metrics, null, state, dispatch)
+                        }
                     }
                 }
             }
-            if(destination != PocketPassDestination.Messages) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
+            if(showsTabBar) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
         }
-        if(destination != PocketPassDestination.Messages) {
-            PhoneTabBar(metrics, destination, onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) })
+        if(showsTabBar) {
+            PhoneTabBar(
+                metrics,
+                destination,
+                onSelect = { dispatch(PocketPassEvent.SelectDestination(it)) },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
     PhonePageLayer(metrics, backdrop, visible = state.routes.lastOrNull().let { it != null && it !is PocketPassRoute.Root }, fromEnd = true) {
-        PhoneRoutePage(metrics, state, dispatch, extensions)
+        PhoneRoutePage(metrics, state, dispatch)
     }
     PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
         PhoneGamePage(metrics, state, dispatch)
@@ -186,7 +192,6 @@ private fun PhoneWideShell(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val insets = LocalPhoneInsets.current
     val destination = state.rootDestination
@@ -216,7 +221,7 @@ private fun PhoneWideShell(
                         delayMillis = 55,
                     ) {
                         CompositionLocalProvider(LocalBoardNavigationRail provides (destination == PocketPassDestination.Messages && state.boardsVisible)) {
-                            PhoneTab(metrics, panes, state, dispatch, extensions)
+                            PhoneTab(metrics, panes, state, dispatch)
                         }
                     }
                 }
@@ -234,7 +239,7 @@ private fun PhoneWideShell(
                     if (shownMessagesPage.value is PocketPassRoute.NewGroup) {
                         PhoneNewGroupPage(metrics, state, dispatch)
                     } else {
-                        PhoneThread(metrics, state, dispatch, extensions)
+                        PhoneThread(metrics, state, dispatch)
                     }
                 }
             }
@@ -251,20 +256,18 @@ private fun PhoneTab(
     panes: WidePanes?,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     when (state.rootDestination) {
-        PocketPassDestination.Home -> PhoneHomeTab(metrics, panes, state, dispatch, extensions)
+        PocketPassDestination.Home -> PhoneHomeTab(metrics, panes, state, dispatch)
         PocketPassDestination.Friends -> PhoneFriendsTab(metrics, panes, state, dispatch)
-        PocketPassDestination.Messages -> PhoneMessagesTab(metrics, panes, state, dispatch, extensions)
-        PocketPassDestination.Activities -> PhoneActivitiesTab(metrics, panes, state, dispatch, extensions)
+        PocketPassDestination.Messages -> PhoneMessagesTab(metrics, panes, state, dispatch)
+        PocketPassDestination.Activities -> PhoneActivitiesTab(metrics, panes, state, dispatch)
         PocketPassDestination.Settings -> PhoneSettingsTab(metrics, panes, state, dispatch)
     }
 }
 
 private fun PocketPassDestination.entrance(): EntranceMotion = when (this) {
     PocketPassDestination.Home, PocketPassDestination.Friends -> EntranceMotion.PanelRise
-    // Boards owns its page entrance; don't bounce the entire shell as well.
     PocketPassDestination.Messages -> EntranceMotion.None
     PocketPassDestination.Activities, PocketPassDestination.Settings -> EntranceMotion.None
 }

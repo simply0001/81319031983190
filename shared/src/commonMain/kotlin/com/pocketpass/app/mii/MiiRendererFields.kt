@@ -1,7 +1,5 @@
 package com.pocketpass.app.mii
 
-// The renderer's field vocabulary; shared so the Android and iOS render adapters
-// cannot drift apart.
 fun MiiAppearance.toNativeRendererFields(): Map<String, Int> {
     val appearance = normalized()
     return linkedMapOf(

@@ -4,7 +4,6 @@ import PocketPassUi
 import UIKit
 import UserNotifications
 
-/// Firebase transport only. Session validation and navigation stay in shared Kotlin.
 final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificationCenterDelegate {
     private var enabled = false
     private var permissionAllowed = false
@@ -15,7 +14,6 @@ final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificatio
     private var token = ""
 
     func configure() {
-        // Fixture/sideload builds can omit Firebase; App Store preflight requires it.
         guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
               let options = FirebaseOptions(contentsOfFile: path),
               options.bundleID == Bundle.main.bundleIdentifier else { return }
@@ -53,7 +51,6 @@ final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificatio
             UIApplication.shared.unregisterForRemoteNotifications()
             clearMessages()
             publish(allowed: false)
-            // Also remove a persisted SDK token on the first signed-out launch.
             if wasEnabled || !hasResetToken { resetToken() }
         case "clear": clearMessages()
         default: break
@@ -121,14 +118,11 @@ final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificatio
 
     func registered(deviceToken: Data) {
         guard enabled, permissionAllowed else { return }
-        // Swizzling is disabled. Firebase determines sandbox/production from the signed profile.
         Messaging.messaging().apnsToken = deviceToken
         refreshToken()
     }
 
     func registrationFailed() {
-        // APNs registration is retried when the app becomes active. Do not treat network
-        // failure as a permission revocation and remove a still-valid server binding.
     }
 
     private func refreshToken() {
@@ -160,7 +154,6 @@ final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificatio
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         DispatchQueue.main.async { [weak self] in
-            // Re-read through token() so a callback from a deleted token cannot be rebound.
             self?.refreshPermission()
         }
     }
@@ -184,7 +177,6 @@ final class MessageNotifications: NSObject, MessagingDelegate, UNUserNotificatio
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        // Shared realtime already updates visible conversations. Preserve Nearby's local alerts.
         completionHandler(notification.request.content.userInfo["type"] as? String == "message"
             ? [] : [.banner, .sound])
     }

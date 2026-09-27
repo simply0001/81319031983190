@@ -8,7 +8,6 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
-/** Account scoped cache, never used to bypass online content authorization. */
 @Entity(tableName = "board_records", primaryKeys = ["accountId", "kind", "recordId"], indices = [Index(value = ["accountId", "boardId"])])
 data class BoardRecordEntity(val accountId: String, val kind: String, val recordId: String, val boardId: String, val payload: String)
 

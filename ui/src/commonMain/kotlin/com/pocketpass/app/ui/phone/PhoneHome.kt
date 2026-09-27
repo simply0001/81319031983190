@@ -55,7 +55,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.pocketpass.app.model.HomeMood
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.ProfileViewerSource
 import com.pocketpass.app.ui.Assets
@@ -95,7 +94,6 @@ fun PhoneHomeTab(
     panes: WidePanes?,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val people = remember(state.recentInteractions, state.recentInteractionsSort) {
         state.recentInteractions.toPhonePeople(state.recentInteractionsSort)
@@ -196,7 +194,7 @@ internal fun PhonePeopleGrid(
             start = metrics.dp(PHONE_CONTENT_MARGIN),
             end = metrics.dp(PHONE_CONTENT_MARGIN),
             top = metrics.dp(topInset + if (hero != null) 32f else 40f),
-            bottom = metrics.dp(60f),
+            bottom = metrics.dp(60f + LocalPhoneTabBarClearance.current),
         ),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(metrics.dp(40f)),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(metrics.dp(40f)),

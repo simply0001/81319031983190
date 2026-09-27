@@ -10,13 +10,6 @@ enum class NearbyLinkRole {
     Peripheral,
 }
 
-/**
- * The transport-independent half of one street-pass exchange: hello and
- * signature exchange, session-key agreement, encrypted confirmation, proof.
- * Each BLE link owns one session; the transport feeds reassembled packets in
- * and carries the returned packets out. Callers must not interleave calls to
- * one session from different threads.
- */
 class NearbyHandshakeSession(
     private val role: NearbyLinkRole,
     private val invitationNonce: Long,
@@ -122,7 +115,6 @@ class NearbyHandshakeSession(
         sessionKey = null
     }
 
-    /** The attached pass while its token has not been sent to anyone yet. */
     fun unexposedCredential(): NearbyCredential? = if (localHelloSent) null else credential
 
     @OptIn(ExperimentalUuidApi::class)

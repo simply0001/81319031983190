@@ -7,10 +7,6 @@ import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.steps.DailyStepReward
 
 interface StepRewardsRemoteDataSource {
-    /**
-     * Reports the steps counted so far in [localDay]; the server keeps the
-     * highest count it has seen for that day and pays the difference.
-     */
     suspend fun reportDailySteps(
         accountId: UserId,
         localDay: String,

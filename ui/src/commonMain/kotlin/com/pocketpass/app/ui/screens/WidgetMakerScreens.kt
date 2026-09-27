@@ -8,13 +8,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -84,7 +82,6 @@ import com.pocketpass.app.ui.controller.controllerFocusViewport
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.designBounds
 import com.pocketpass.app.ui.theme.pocketPalette
-import com.pocketpass.app.ui.widget.glyph
 import com.pocketpass.app.ui.widget.settingsGlyph
 import com.pocketpass.app.ui.widget.widgetGlyph
 import com.pocketpass.app.widget.WidgetBlock
@@ -455,7 +452,6 @@ internal fun WidgetPreviewPanel(
             y = WIDGET_PREVIEW_PADDING,
             width = width,
             height = height,
-            dense = false,
         )
     }
 }
@@ -498,7 +494,6 @@ internal fun WidgetDesignRow(
             y = 30f + (160f - previewHeight) / 2f,
             width = previewWidth,
             height = previewHeight,
-            dense = true,
         )
         Text(
             text = design.name,
@@ -825,7 +820,6 @@ internal fun WidgetPreview(
     y: Float,
     width: Float,
     height: Float,
-    dense: Boolean,
 ) {
     val theme = design.theme()
     val now = remember { Clock.System.now().toEpochMilliseconds() }
@@ -1309,8 +1303,7 @@ internal fun WidgetDeleteDialog(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val palette = pocketPalette
-    val focus = LocalControllerFocus.current
-    LaunchedEffect(Unit) { focus?.focus("widget_delete_cancel", reveal = false) }
+    DialogFocusHandoff("widget_delete_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(0f, tween(300, easing = FastOutSlowInEasing))

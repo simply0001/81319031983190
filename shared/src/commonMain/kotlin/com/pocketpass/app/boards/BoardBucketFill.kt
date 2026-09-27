@@ -11,7 +11,6 @@ sealed interface BoardBucketResult {
     data object TooDetailed : BoardBucketResult
 }
 
-/** A fill is one undoable stroke made of horizontal pixel runs (start/end point pairs). */
 object BoardBucketFill {
     private const val white = 0xFFFFFF
     private const val maxRuns = 10_000
@@ -85,7 +84,6 @@ object BoardBucketFill {
         val points = stroke.points
         if (points.isEmpty()) return
         val cell = BoardPixelRaster.cellSize
-        // Give thin smooth lines a closed boundary on the coarser fill grid.
         val radius = max(stroke.size / 2f, cell * .7f)
         for (index in 0 until max(1, points.size - 1)) {
             val from = points[index]

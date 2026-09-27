@@ -24,26 +24,16 @@ import com.pocketpass.app.feature.SettingsStateHolder
 import com.pocketpass.app.feature.ShopStateHolder
 import com.pocketpass.app.feature.WorldTourStateHolder
 import com.pocketpass.app.mii.MiiEditorController
-import com.pocketpass.app.mii.MiiEditorEvent
-import com.pocketpass.app.mii.MiiEditorUiState
-import com.pocketpass.app.mii.MiiRendererCommand
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.StatusInfo
 import com.pocketpass.app.nearby.NearbyFeatureState
 import com.pocketpass.app.update.AppUpdateUiState
 import com.pocketpass.app.widget.WidgetDesignsStateHolder
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flowOf
 import com.pocketpass.app.feature.PuzzleStateHolder
 
-/**
- * Everything the PocketPass state loop needs from its host. Android's AppContainer
- * fulfils this through a thin adapter; the iOS container implements it directly.
- */
 interface PocketPassStoreContainer {
     val soundEffects: SoundEffectSink
     val miiEditor: MiiEditorController
@@ -53,6 +43,7 @@ interface PocketPassStoreContainer {
     val encounterLedSupported: Boolean
     val messagePushSupported: Boolean get() = false
     val activeAccountId: StateFlow<UserId?>
+    val appForeground: StateFlow<Boolean> get() = AlwaysForeground
     val repositories: PocketPassRepositoryGraph
     val auth: AuthStateHolder
     val accountSetup: AccountSetupStateHolder
@@ -98,23 +89,20 @@ interface PocketPassStoreContainer {
 }
 
 private val NoRequestedBoard = MutableStateFlow<com.pocketpass.app.boards.BoardDestination?>(null)
+private val AlwaysForeground: StateFlow<Boolean> = MutableStateFlow(true)
 
 interface NearbyActions {
     val state: StateFlow<NearbyFeatureState>
     fun onNearbyPreferenceChanged(enabled: Boolean)
     fun requestPermissions()
-    fun skipOnboarding()
     fun onAppOpened(openRepair: Boolean)
     fun onPermissionResult()
 }
 
-// Street-pass is not wired on this platform: the settings toggle flips the preference,
-// permission prompts never appear, and no radio runs.
 object InactiveNearby : NearbyActions {
     override val state: StateFlow<NearbyFeatureState> = MutableStateFlow(NearbyFeatureState())
     override fun onNearbyPreferenceChanged(enabled: Boolean) = Unit
     override fun requestPermissions() = Unit
-    override fun skipOnboarding() = Unit
     override fun onAppOpened(openRepair: Boolean) = Unit
     override fun onPermissionResult() = Unit
 }
@@ -126,7 +114,6 @@ interface AppUpdateActions {
     fun install()
 }
 
-// In-app updates only exist for the sideloaded Android build.
 object DisabledAppUpdate : AppUpdateActions {
     override val state: StateFlow<AppUpdateUiState> = MutableStateFlow(AppUpdateUiState())
     override fun check() = Unit
@@ -134,27 +121,10 @@ object DisabledAppUpdate : AppUpdateActions {
     override fun install() = Unit
 }
 
-object InactiveMiiEditorController : MiiEditorController {
-    override val state: StateFlow<MiiEditorUiState> = MutableStateFlow(MiiEditorUiState())
-    override val rendererCommands: SharedFlow<MiiRendererCommand> = MutableSharedFlow()
-    override fun activateAccount(accountKey: String?) = Unit
-    override fun beginEdit(slot: Int, wearHat: Int?) = Unit
-    override fun wearHat(hatType: Int) = Unit
-    override fun setActiveSlot(slot: Int) = Unit
-    override fun deleteSlot(slot: Int) = Unit
-    override fun dispatch(event: MiiEditorEvent) = Unit
-}
-
-// The status pills' data feed (clock, battery, connectivity).
 fun interface StatusFeed {
     fun status(): Flow<StatusInfo>
 }
 
-object FrozenStatusFeed : StatusFeed {
-    override fun status(): Flow<StatusInfo> = flowOf(StatusInfo())
-}
-
-// Persists the navigation stack across process recreation where the platform supports it.
 interface RouteStateStore {
     fun restore(): List<PocketPassRoute>?
     fun persist(routes: List<PocketPassRoute>)

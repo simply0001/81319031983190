@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -279,6 +278,7 @@ internal fun ConnectedAppRevokeConfirmDialog(
     val apps = state.connectedApps
     val busy = apps.revokeInProgress
     val name = apps.revokeTarget?.name ?: "this app"
+    DialogFocusHandoff("connected_app_revoke_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(
@@ -571,10 +571,4 @@ private fun scopeSummary(scopes: List<String>): String {
         .distinct()
         .map { it.replaceFirstChar { first -> first.uppercase() } }
     return if (labels.isEmpty()) "No permissions" else "Can use: " + labels.joinToString(" · ")
-}
-
-private fun joinNatural(items: List<String>): String = when (items.size) {
-    0 -> ""
-    1 -> items[0]
-    else -> items.dropLast(1).joinToString(", ") + " and " + items.last()
 }

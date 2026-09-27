@@ -18,22 +18,10 @@ import platform.Foundation.dataWithContentsOfFile
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
-/**
- * Lets the Swift side register how widgets get refreshed: WidgetKit has no
- * Objective-C surface, so `WidgetCenter.shared.reloadAllTimelines()` can only
- * be called from Swift, which the AppDelegate wires in at launch.
- */
 object IosWidgetReload {
     var handler: (() -> Unit)? = null
 }
 
-/**
- * Writes the snapshot into the App Group container the widget extension reads.
- * The group identifier is discovered from the embedded provisioning profile
- * so that a re-signing tool rewriting entitlements keeps app and widget in
- * agreement; without a container (entitlement missing) publishing is a no-op
- * and the widget keeps showing its placeholder.
- */
 class IosWidgetSnapshotSink(
     private val groupIdentifier: String = discoverAppGroupIdentifier(),
 ) : WidgetSnapshotSink {
@@ -85,11 +73,6 @@ class IosWidgetSnapshotSink(
         private const val TAG = "PocketPassWidgets"
         const val DEFAULT_GROUP_IDENTIFIER = "group.xyz.pocketpass"
 
-        /**
-         * Reads the first application-group entitlement out of the embedded
-         * provisioning profile (the entitlements plist sits in the CMS blob as
-         * plain XML), falling back to the identifier the project declares.
-         */
         fun discoverAppGroupIdentifier(): String {
             val path = NSBundle.mainBundle.pathForResource("embedded", "mobileprovision")
                 ?: return DEFAULT_GROUP_IDENTIFIER
@@ -108,7 +91,9 @@ class IosWidgetSnapshotSink(
             return discovered.ifBlank { DEFAULT_GROUP_IDENTIFIER }
         }
 
+        private const val ISO_LATIN1_STRING_ENCODING = 5uL
+
         private fun latin1(data: NSData): String? =
-            NSString.create(data = data, encoding = 5uL /* NSISOLatin1StringEncoding */)?.toString()
+            NSString.create(data = data, encoding = ISO_LATIN1_STRING_ENCODING)?.toString()
     }
 }

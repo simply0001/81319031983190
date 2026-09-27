@@ -1,105 +1,12 @@
 package com.pocketpass.app.widget
 
-sealed interface WidgetHeroModel {
-    val block: WidgetBlock
-
-    data class BigNumber(
-        override val block: WidgetBlock,
-        val value: String,
-        val caption: String,
-    ) : WidgetHeroModel
-
-    data class Profile(
-        override val block: WidgetBlock,
-        val displayName: String,
-        val bio: String,
-    ) : WidgetHeroModel
-
-    data class Faces(
-        override val block: WidgetBlock,
-        val people: List<WidgetPerson>,
-        val caption: String,
-        val emptyText: String,
-    ) : WidgetHeroModel
-
-    data class Code(
-        override val block: WidgetBlock,
-        val value: String,
-        val caption: String,
-    ) : WidgetHeroModel
-}
-
-enum class WidgetTone { Teal, Green, Red, Grey }
-
 data class WidgetTileModel(
     val block: WidgetBlock,
     val label: String,
     val value: String,
-    val tone: WidgetTone = WidgetTone.Teal,
 )
 
 object WidgetBlockValues {
-    fun hero(block: WidgetBlock, snapshot: WidgetSnapshot, nowEpochMillis: Long): WidgetHeroModel = when (block) {
-        WidgetBlock.Tokens -> WidgetHeroModel.BigNumber(block, snapshot.tokenBalance.toString(), "Tokens")
-        WidgetBlock.StepsToday -> WidgetHeroModel.BigNumber(block, snapshot.stepsToday.grouped(), "steps today")
-        WidgetBlock.EncountersToday -> WidgetHeroModel.BigNumber(
-            block,
-            snapshot.encountersToday.toString(),
-            plural(snapshot.encountersToday, "encounter", "encounters") + " today",
-        )
-        WidgetBlock.FriendsOnline -> WidgetHeroModel.BigNumber(
-            block,
-            snapshot.friendsOnline.toString(),
-            plural(snapshot.friendsOnline, "friend", "friends") + " online",
-        )
-        WidgetBlock.FriendCode -> WidgetHeroModel.Code(block, friendCode(snapshot), "Friend code")
-        WidgetBlock.Achievements -> WidgetHeroModel.BigNumber(
-            block,
-            "${snapshot.achievementsUnlocked}/${snapshot.achievementsTotal}",
-            "achievements",
-        )
-        WidgetBlock.BingoLines -> WidgetHeroModel.BigNumber(
-            block,
-            snapshot.bingoLines.toString(),
-            plural(snapshot.bingoLines, "bingo line", "bingo lines"),
-        )
-        WidgetBlock.WorldTourCountries -> WidgetHeroModel.BigNumber(
-            block,
-            snapshot.worldTourCountries.toString(),
-            plural(snapshot.worldTourCountries, "country met", "countries met"),
-        )
-        WidgetBlock.LeaderboardRank -> WidgetHeroModel.BigNumber(block, rank(snapshot), rankCaption(snapshot))
-        WidgetBlock.Profile -> WidgetHeroModel.Profile(
-            block,
-            snapshot.displayName.ifBlank { "PocketPass" },
-            snapshot.bio,
-        )
-        WidgetBlock.RecentPeople -> WidgetHeroModel.Faces(
-            block,
-            snapshot.recentPeople,
-            "Recent people",
-            "No passes yet",
-        )
-        WidgetBlock.OnlineFriends -> WidgetHeroModel.Faces(
-            block,
-            snapshot.onlineFriends,
-            "Online now",
-            "No friends online",
-        )
-        WidgetBlock.LastPass -> WidgetHeroModel.Code(
-            block,
-            lastPassValue(snapshot.lastEncounterEpochMillis, nowEpochMillis),
-            "Last pass",
-        )
-        WidgetBlock.UnreadNotifications -> WidgetHeroModel.BigNumber(
-            block,
-            snapshot.unreadNotifications.toString(),
-            "unread",
-        )
-        WidgetBlock.NearbyStatus -> WidgetHeroModel.Code(block, nearbyLabel(snapshot.nearbyStatus).first, "Nearby")
-        WidgetBlock.DisplayName -> WidgetHeroModel.Code(block, snapshot.displayName.ifBlank { "PocketPass" }, "Name")
-    }
-
     fun tile(block: WidgetBlock, snapshot: WidgetSnapshot, nowEpochMillis: Long): WidgetTileModel = when (block) {
         WidgetBlock.Tokens -> WidgetTileModel(block, "Tokens", snapshot.tokenBalance.grouped())
         WidgetBlock.StepsToday -> WidgetTileModel(block, "Steps", snapshot.stepsToday.grouped())
@@ -113,17 +20,13 @@ object WidgetBlockValues {
             block,
             "Online",
             snapshot.friendsOnline.toString(),
-            if (snapshot.friendsOnline > 0) WidgetTone.Green else WidgetTone.Grey,
         )
         WidgetBlock.UnreadNotifications -> WidgetTileModel(
             block,
             "Unread",
             snapshot.unreadNotifications.toString(),
-            if (snapshot.unreadNotifications > 0) WidgetTone.Red else WidgetTone.Grey,
         )
-        WidgetBlock.NearbyStatus -> nearbyLabel(snapshot.nearbyStatus).let { (label, tone) ->
-            WidgetTileModel(block, "Nearby", label, tone)
-        }
+        WidgetBlock.NearbyStatus -> WidgetTileModel(block, "Nearby", nearbyLabel(snapshot.nearbyStatus))
         WidgetBlock.Profile -> WidgetTileModel(block, "Profile", snapshot.displayName.ifBlank { "PocketPass" })
         WidgetBlock.DisplayName -> WidgetTileModel(block, "Name", snapshot.displayName.ifBlank { "PocketPass" })
         WidgetBlock.FriendCode -> WidgetTileModel(block, "Friend code", friendCode(snapshot))
@@ -162,14 +65,14 @@ object WidgetBlockValues {
         }
     }
 
-    fun nearbyLabel(status: String): Pair<String, WidgetTone> = when (status) {
-        "Running" -> "On" to WidgetTone.Green
-        "Starting" -> "Starting" to WidgetTone.Green
-        "BluetoothOff" -> "Bluetooth off" to WidgetTone.Grey
-        "NeedsPermissions", "NeedsOnboarding" -> "Needs setup" to WidgetTone.Grey
-        "Unsupported" -> "Unsupported" to WidgetTone.Grey
-        "Error" -> "Error" to WidgetTone.Red
-        else -> "Off" to WidgetTone.Grey
+    fun nearbyLabel(status: String): String = when (status) {
+        "Running" -> "On"
+        "Starting" -> "Starting"
+        "BluetoothOff" -> "Bluetooth off"
+        "NeedsPermissions", "NeedsOnboarding" -> "Needs setup"
+        "Unsupported" -> "Unsupported"
+        "Error" -> "Error"
+        else -> "Off"
     }
 
     fun heroNumber(block: WidgetBlock, snapshot: WidgetSnapshot, nowEpochMillis: Long): String = when (block) {
@@ -184,7 +87,7 @@ object WidgetBlockValues {
         WidgetBlock.LeaderboardRank -> rank(snapshot)
         WidgetBlock.FriendCode -> friendCode(snapshot)
         WidgetBlock.LastPass -> shortLastPass(snapshot.lastEncounterEpochMillis, nowEpochMillis)
-        WidgetBlock.NearbyStatus -> nearbyLabel(snapshot.nearbyStatus).first
+        WidgetBlock.NearbyStatus -> nearbyLabel(snapshot.nearbyStatus)
         WidgetBlock.Profile, WidgetBlock.DisplayName -> snapshot.displayName.ifBlank { "PocketPass" }
         WidgetBlock.RecentPeople -> compact(snapshot.recentPeople.size)
         WidgetBlock.OnlineFriends -> compact(snapshot.onlineFriends.size)
@@ -238,13 +141,6 @@ object WidgetBlockValues {
     }
 
     private fun rank(snapshot: WidgetSnapshot): String = snapshot.leaderboardRank?.let { "#$it" } ?: "--"
-
-    private fun rankCaption(snapshot: WidgetSnapshot): String = when (snapshot.leaderboardScope) {
-        "Global" -> "on the global board"
-        else -> "among friends"
-    }
-
-    private fun plural(count: Int, one: String, many: String): String = if (count == 1) one else many
 
     private fun Int.grouped(): String {
         val digits = toString()

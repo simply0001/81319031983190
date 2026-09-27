@@ -1,11 +1,5 @@
 package com.pocketpass.app.mii
 
-/**
- * Just enough XML for the Pretendo account API, with the same hardening the
- * old JVM DOM parser had: any DOCTYPE (and thus any external entity) makes
- * the whole document unreadable, unknown entities fail, attributes are
- * ignored.
- */
 object PretendoXml {
     fun parseMappedPid(xml: String): Long? {
         val root = parse(xml) ?: return null
@@ -80,7 +74,6 @@ object PretendoXml {
             return root
         }
 
-        // Whitespace, the <?xml?> prolog and comments; a DOCTYPE is rejected.
         private fun skipMisc() {
             while (true) {
                 while (position < source.length && source[position].isWhitespace()) position++
@@ -155,7 +148,6 @@ object PretendoXml {
             return source.substring(start, position)
         }
 
-        // Attribute values are skipped, not kept; quotes may contain '>'.
         private fun skipAttributes() {
             while (position < source.length) {
                 when (val current = source[position]) {

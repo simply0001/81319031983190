@@ -36,7 +36,6 @@ import com.pocketpass.app.ui.controller.LocalControllerFocus
 import com.pocketpass.app.ui.designBounds
 import com.pocketpass.app.ui.theme.pocketPalette
 
-/** The Thor's profile page uses the same paper, framing and controls as Boards. */
 @Composable
 internal fun BoardProfileTop(
     metrics: DesignMetrics,
@@ -194,7 +193,6 @@ private fun BoardProfileFriendActions(
     }
 }
 
-/** Shared request state treatment for the Thor's upper display and phones. */
 @Composable
 internal fun BoardProfileFriendRequestPanel(
     metrics: DesignMetrics,
@@ -212,7 +210,7 @@ internal fun BoardProfileFriendRequestPanel(
                 if (!compact) {
                     BoardLabel(
                         metrics,
-                        if (request == ProfileFriendRequestState.Failed) "The request didn't go through. You can try again."
+                        if (request == ProfileFriendRequestState.Failed) "The request didn't go through. Try again."
                         else "Send a friend request to stay in touch.",
                         32f,
                         color = pocketPalette.textSecondary,

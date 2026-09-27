@@ -57,11 +57,6 @@ class NearbyCredentialPool(
     suspend fun refill(accountId: UserId): RepositoryResult<Unit> =
         mutex.withLock { refillLocked(accountId) }
 
-    /**
-     * Returns an acquired pass when the exchange ended before its token ever
-     * left the device; a claimed pass otherwise counts as spent and the server
-     * would keep it in the account's inventory for a week.
-     */
     suspend fun release(accountId: UserId, credential: NearbyCredential) {
         mutex.withLock {
             dao.releaseCredential(

@@ -11,7 +11,6 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import com.pocketpass.app.widget.startOfLocalDayEpochMillis
 import java.time.Instant
 
-/** Read-only Health Connect access. Raw records stay on the device. */
 internal class HealthConnectStepReader(context: Context) {
     private val client = runCatching {
         if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {

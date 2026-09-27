@@ -138,7 +138,7 @@ class KeyboardInputUiTest {
                     PhoneSurface { metrics ->
                         PhoneThread(metrics, state, { event ->
                             if (event is PocketPassEvent.UpdateMessageDraft) drafts.add(event.value)
-                        }, PocketPassExtensions.None)
+                        })
                     }
                 }
             }
@@ -150,7 +150,6 @@ class KeyboardInputUiTest {
         composer.assertTextEquals("H")
         compose.runOnIdle { connection!!.setComposingText("HELLO", 1) }
         composer.assertTextEquals("HELLO")
-        // The store may emit a typing update or an older draft before the latest text arrives.
         compose.runOnIdle { state = state.copy(messageOperationError = "Fixture update") }
         composer.assertTextEquals("HELLO")
         compose.runOnIdle { state = state.copy(messageDraft = "H") }

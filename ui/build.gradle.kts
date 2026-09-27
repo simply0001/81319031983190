@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
 }
 
-// Windows only: elsewhere the default keeps build output inside the workspace, where CI finds it.
 System.getenv("LOCALAPPDATA")?.let { localAppData ->
     layout.buildDirectory.set(file("$localAppData/PocketPass/gradle/ui"))
 }
@@ -16,8 +15,6 @@ kotlin {
         compileSdk = 37
         minSdk = 30
 
-        // Without this the androidLibrary target drops composeResources from the
-        // AAR assets, and Res.readBytes crashes at runtime on Android.
         androidResources.enable = true
 
         withHostTestBuilder {}.configure {}
@@ -47,7 +44,6 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
         androidMain.dependencies {
-            // The back-gesture seam delegates to activity-compose's BackHandler.
             implementation(libs.androidx.activity.compose)
         }
     }

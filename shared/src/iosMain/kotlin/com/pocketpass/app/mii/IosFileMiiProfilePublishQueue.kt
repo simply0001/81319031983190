@@ -13,10 +13,6 @@ import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toPath
 
-/**
- * iOS counterpart of the Android FileMiiProfilePublishQueue: one JSON document
- * under Documents/mii, written through a temp file and an atomic move.
- */
 class IosFileMiiProfilePublishQueue(
     baseDirectory: String = iosDocumentsPath(),
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -84,7 +80,6 @@ class IosFileMiiProfilePublishQueue(
     }
 }
 
-/** Reads a rendered portrait back for publication; null when it is gone. */
 suspend fun iosReadPortraitFile(path: String): ByteArray? =
     withContext(Dispatchers.IO) {
         runCatching {
@@ -92,7 +87,6 @@ suspend fun iosReadPortraitFile(path: String): ByteArray? =
         }.getOrNull()
     }
 
-/** Writes a portrait restored from the server; returns its path, or null on failure. */
 @OptIn(ExperimentalUuidApi::class)
 suspend fun iosWriteRestoredPortrait(bytes: ByteArray): String? =
     withContext(Dispatchers.IO) {

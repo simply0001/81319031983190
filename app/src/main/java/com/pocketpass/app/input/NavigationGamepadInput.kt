@@ -107,8 +107,6 @@ fun handleNavigationGamepadKeyEvent(
 ): Boolean {
     if(state.rootDestination == PocketPassDestination.Messages && state.boardsVisible &&
         event.keyCode in listOf(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1)) {
-        // Ignore the Boards shell and its current page when checking for real
-        // overlays. A keyboard, message menu or profile still owns its input.
         val overlayOpen = state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home))).hasDismissableLayer()
         if(overlayOpen || focus.keyboardSubmit != null) return false
         if(event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {

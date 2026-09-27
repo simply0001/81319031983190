@@ -8,11 +8,6 @@ import com.pocketpass.app.steps.tokensForSteps
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * The server's step ledger in memory, so fixture mode pays like production:
- * the highest count per account and day wins, and each day pays at most the
- * daily cap.
- */
 class FixtureStepRewardsRemoteDataSource(
     initialBalance: Int = 0,
 ) : StepRewardsRemoteDataSource {

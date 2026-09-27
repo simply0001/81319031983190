@@ -16,11 +16,9 @@ import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 fun interface StepRewardsWorkRunner {
-    /** Reads the counter and reports it; false when the report should be retried. */
     suspend fun run(): Boolean
 }
 
-/** The container installs the runner at start-up; the worker only looks it up. */
 object StepRewardsWorkerRuntime {
     @Volatile
     private var runner: StepRewardsWorkRunner? = null
@@ -47,8 +45,6 @@ class StepRewardsWorker(
 
 object StepRewardsScheduler {
     fun schedule(context: Context) {
-        // No network constraint: the reading itself needs none, and a failed
-        // report is simply retried.
         val request = PeriodicWorkRequestBuilder<StepRewardsWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
             UNIQUE_WORK_NAME,

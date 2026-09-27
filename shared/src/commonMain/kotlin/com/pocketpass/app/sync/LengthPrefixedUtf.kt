@@ -6,10 +6,6 @@ import kotlinx.io.readByteArray
 
 internal val OUTBOX_BASE64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
 
-// Payloads written before the multiplatform port used DataOutputStream.writeUTF, so queued
-// operations decode only if these helpers keep that exact wire format: a two-byte big-endian
-// byte count followed by CESU-8-style "modified UTF-8", where each UTF-16 unit (surrogate
-// halves included) is encoded on its own and NUL becomes the two-byte form.
 internal fun Buffer.writeLengthPrefixedUtf(value: String) {
     val bytes = Buffer()
     for (character in value) {

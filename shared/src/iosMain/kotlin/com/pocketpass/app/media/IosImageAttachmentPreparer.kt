@@ -57,7 +57,7 @@ class IosImageAttachmentPreparer(
                     UIImageJPEGRepresentation(scaled, ImageAttachmentPolicy.JPEG_QUALITY / 100.0)
 
                 ImageAttachmentFormat.Png -> UIImagePNGRepresentation(scaled)
-                ImageAttachmentFormat.Gif -> null // This still-image encoder never selects GIF.
+                ImageAttachmentFormat.Gif -> null
             } ?: return@withContext ImageAttachmentPreparation.Unreadable
             val byteCount = data.length.toLong()
             if (!ImageAttachmentPolicy.fitsUploadLimit(byteCount)) continue

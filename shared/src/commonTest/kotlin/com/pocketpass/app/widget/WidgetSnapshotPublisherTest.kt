@@ -175,7 +175,6 @@ class WidgetSnapshotPublisherTest {
         notifications.value = NotificationFeatureState(error = "b")
         advanceTimeBy(150)
 
-        // Errors do not change the snapshot content, so nothing new is published.
         assertEquals(1, sink.published.size)
         assertEquals(now, sink.published.single().updatedAtEpochMillis)
         publisher.stop()

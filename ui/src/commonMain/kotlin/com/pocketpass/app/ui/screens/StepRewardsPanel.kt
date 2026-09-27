@@ -11,10 +11,6 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.components.PocketPanel
 import com.pocketpass.app.ui.theme.pocketPalette
 
-/**
- * The Step Rewards settings row, shared by the phone list and the dual-screen
- * settings stack. Shown when Health Connect or a step sensor is available.
- */
 @Composable
 internal fun StepRewardsPanel(
     metrics: DesignMetrics,
@@ -23,7 +19,6 @@ internal fun StepRewardsPanel(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val steps = state.stepRewards
-    // The subtitle runs under the toggle past ~30 characters, so keep it short.
     val subtitle = when {
         !state.stepRewardsEnabled -> "$STEPS_PER_TOKEN steps per token · $MAX_STEP_TOKENS_PER_DAY/day"
 
@@ -61,7 +56,6 @@ internal fun StepRewardsPanel(
     }
 }
 
-/** "12345" → "12,345"; the app has no locale-aware number formatter in common code. */
 internal fun formatStepCount(steps: Int): String {
     val digits = steps.coerceAtLeast(0).toString()
     return digits.reversed().chunked(3).joinToString(",").reversed()

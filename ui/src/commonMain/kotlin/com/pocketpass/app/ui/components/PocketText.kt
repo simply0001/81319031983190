@@ -6,7 +6,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Modifier
@@ -28,18 +27,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 
-// The app renders text through its own design system rather than Material, and Material 3 has no
-// stable multiplatform release; these mirror the Material Text/Icon surface the screens use so
-// they compile everywhere.
 val LocalContentColor = compositionLocalOf { Color.Black }
 
 val LocalTextStyle = compositionLocalOf(structuralEqualityPolicy()) { TextStyle.Default }
-
-@Composable
-fun ProvideTextStyle(value: TextStyle, content: @Composable () -> Unit) {
-    val merged = LocalTextStyle.current.merge(value)
-    CompositionLocalProvider(LocalTextStyle provides merged, content = content)
-}
 
 @Composable
 fun Text(

@@ -1476,8 +1476,7 @@ private fun GroupConfirmDialog(
     onConfirm: () -> Unit,
 ) {
     val palette = pocketPalette
-    val focus = LocalControllerFocus.current
-    LaunchedEffect(Unit) { focus?.focus("${tag}_cancel", reveal = false) }
+    DialogFocusHandoff("${tag}_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(0f, tween(300, easing = FastOutSlowInEasing))

@@ -25,7 +25,6 @@ concurrency:
 
 jobs:
   package:
-    # Match the existing iOS workflows' policy on paid private-repo Actions minutes.
     if: github.repository == 'simply0001/81319031983190'
     runs-on: macos-15
     timeout-minutes: 90

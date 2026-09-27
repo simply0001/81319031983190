@@ -106,7 +106,7 @@ fun PhoneDialogs(
         visible = state.removeFriendPromptVisible,
         tag = "remove_friend",
         title = "Remove this friend?",
-        body = "$friendName will be removed from your friends. You can add them again with a friend code.",
+        body = "$friendName will be removed from your friends. Add them again with their Friend Code.",
         confirmLabel = "Remove",
         confirmEnabled = !state.profileViewer.actionInProgress,
         onCancel = { dispatch(PocketPassEvent.CloseRemoveFriend) },
@@ -531,7 +531,7 @@ private fun PhonePretendoImportDialog(
         Spacer(Modifier.height(metrics.dp(if (short) 12f else 20f)))
         if (found == null) {
             Text(
-                text = import.error ?: "Type a Pretendo Network ID to copy its Mii",
+                text = import.error ?: "Type a Pretendo Network ID to copy its Piip",
                 modifier = Modifier.fillMaxWidth(),
                 color = if (import.error != null) palette.ink(Color(0xFFB31E3A)) else palette.tealSoft,
                 fontFamily = Rubik,

@@ -52,7 +52,6 @@ internal fun effectiveStepPermission(
 private fun StepPermission.isReadable(): Boolean =
     this == StepPermission.Granted || this == StepPermission.NotRequired
 
-/** Health Connect when allowed, with the existing hardware ledger as fallback. */
 class AndroidPreferredStepSource(context: Context, private val scope: CoroutineScope) : StepSource {
     private val appContext = context.applicationContext
     private val sensor = AndroidStepCounterSource(appContext, scope)
@@ -88,8 +87,6 @@ class AndroidPreferredStepSource(context: Context, private val scope: CoroutineS
     }
 
     override suspend fun sample(): StepSample? {
-        // Health Connect normally permits foreground reads only. The sensor
-        // keeps background rewards moving and the next foreground read catches up.
         val healthSample = if (foreground && healthGranted) readHealth() else null
         val sensorSample = if (sensor.permission.value.isReadable()) sensor.sample() else null
         latestHealth = healthSample ?: latestHealth

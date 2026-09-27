@@ -1,6 +1,5 @@
 package com.pocketpass.app.steps
 
-/** The provenance supplied by a Health Connect writer, not proof of movement. */
 internal enum class StepRecordingMethod { Automatic, Active, Manual, Unknown }
 
 internal data class HealthStepInterval(
@@ -12,12 +11,6 @@ internal data class HealthStepInterval(
     val hasDevice: Boolean,
 )
 
-/**
- * Only sensor/device-labelled records are eligible. Health Connect may hold
- * copies of the same steps from several apps. Overlapping intervals contribute
- * at most the highest step rate at any instant; non-overlapping walks from
- * different devices still add. This is conservative for rewards.
- */
 internal fun eligibleHealthSteps(
     records: List<HealthStepInterval>,
     dayStartMillis: Long,
@@ -31,7 +24,6 @@ internal fun eligibleHealthSteps(
         it.count > 0 && it.startMillis >= dayStartMillis &&
             it.endMillis <= nowMillis && it.endMillis > it.startMillis
     }
-    // An implausibly dense import is not a plausible walk or run.
     .filter { it.count <= (it.endMillis - it.startMillis) * MAX_STEPS_PER_MILLISECOND }
     .toList()
     .let(::stepsWithoutOverlaps)

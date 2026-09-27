@@ -3,8 +3,6 @@ package com.pocketpass.app.data.local
 import androidx.room.immediateTransaction
 import androidx.room.useWriterConnection
 
-// Room's clearAllTables is Android-only; this walks sqlite_master instead,
-// with foreign keys deferred the same way clearAllTables defers them.
 suspend fun PocketPassDatabase.clearAllPocketPassTables() {
     useWriterConnection { transactor ->
         transactor.immediateTransaction {

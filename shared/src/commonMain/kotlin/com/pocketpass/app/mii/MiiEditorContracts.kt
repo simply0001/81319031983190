@@ -54,9 +54,6 @@ data class PretendoImportState(
 
     val canLookup: Boolean
         get() = normalizedId != null && !lookingUp
-
-    val canImport: Boolean
-        get() = found != null && !lookingUp
 }
 
 data class MiiEditorUiState(
@@ -96,9 +93,6 @@ data class MiiEditorUiState(
     val currentTraitPage: Int
         get() = traitPageByCategory[selectedCategory] ?: 0
 
-    val selectedTraitIndex: Int
-        get() = draft.traitValue(activeTraitField)
-
     val selectedColorIndex: Int?
         get() = activeColorField?.let(draft::colorValue)
 
@@ -107,9 +101,6 @@ data class MiiEditorUiState(
 
     val isDirty: Boolean
         get() = saved == null || draft != saved
-
-    val setupComplete: Boolean
-        get() = saved != null
 
     val isEditorVisible: Boolean
         get() = mode == MiiEditorMode.RequiredSetup || mode == MiiEditorMode.EditExisting
@@ -135,7 +126,6 @@ sealed interface MiiEditorEvent {
         val index: Int,
     ) : MiiEditorEvent
 
-    data class SelectColorField(val field: MiiColorField) : MiiEditorEvent
     data class SelectColor(
         val field: MiiColorField,
         val index: Int,
@@ -156,7 +146,6 @@ sealed interface MiiEditorEvent {
     data object CloseAdjustment : MiiEditorEvent
     data class OpenColorPalette(val field: MiiColorField) : MiiEditorEvent
     data object CloseColorPalette : MiiEditorEvent
-    data object ResetDraft : MiiEditorEvent
     data object Continue : MiiEditorEvent
     data object Save : MiiEditorEvent
     data object RequestCancel : MiiEditorEvent

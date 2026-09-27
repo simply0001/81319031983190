@@ -23,7 +23,6 @@ if [[ -e "$archive" || -e "$export_path" ]]; then
 fi
 xcodegen generate
 
-# XcodeGen owns the plist. Supply a real boolean, then restore it after the build.
 plist_backup=$(mktemp)
 cp Sources/Info.plist "$plist_backup"
 trap 'cp "$plist_backup" Sources/Info.plist; rm -f "$plist_backup"' EXIT

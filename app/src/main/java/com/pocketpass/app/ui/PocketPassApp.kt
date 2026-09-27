@@ -11,7 +11,6 @@ import com.pocketpass.app.BuildConfig
 import com.pocketpass.app.audio.LocalSoundEffects
 import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.mii.renderer.MiiEditorRenderSurface
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.state.PocketPassViewModel
 import com.pocketpass.app.ui.controller.ControllerFocusHighlight
 import com.pocketpass.app.ui.controller.FocusDisplay
@@ -19,8 +18,6 @@ import com.pocketpass.app.ui.controller.LocalControllerFocus
 import com.pocketpass.app.ui.controller.LocalFocusDisplay
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 
-// The live Mii editor renders through the app's WebView stack; the multiplatform screens
-// only see it through LocalMiiRenderSurface.
 internal val MiiRenderSurfaceFromWebView:
     @Composable (MiiEditorController, String?, Modifier) -> Unit =
     { controller, initialCanonicalBase64, modifier ->
@@ -34,7 +31,6 @@ internal val MiiRenderSurfaceFromWebView:
 @Composable
 fun TopDisplayApp(
     viewModel: PocketPassViewModel,
-    extensions: PocketPassExtensions = PocketPassExtensions.None,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     CompositionLocalProvider(
@@ -48,7 +44,6 @@ fun TopDisplayApp(
             TopDisplayContent(
                 state = state,
                 dispatch = viewModel::dispatch,
-                extensions = extensions,
                 miiEditorController = viewModel.miiEditorController,
             )
             ControllerFocusHighlight(viewModel.controllerFocus, FocusDisplay.Top)
@@ -59,7 +54,6 @@ fun TopDisplayApp(
 @Composable
 fun BottomDisplayApp(
     viewModel: PocketPassViewModel,
-    extensions: PocketPassExtensions = PocketPassExtensions.None,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     CompositionLocalProvider(
@@ -70,7 +64,7 @@ fun BottomDisplayApp(
         LocalMiiRenderSurface provides MiiRenderSurfaceFromWebView,
     ) {
         Box(Modifier.fillMaxSize()) {
-            BottomDisplayContent(state, viewModel::dispatch, extensions)
+            BottomDisplayContent(state, viewModel::dispatch)
             ControllerFocusHighlight(viewModel.controllerFocus, FocusDisplay.Bottom)
         }
     }

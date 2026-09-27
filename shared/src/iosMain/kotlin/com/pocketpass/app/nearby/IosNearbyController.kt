@@ -32,13 +32,6 @@ import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNUserNotificationCenter
 
-/**
- * iOS counterpart of NearbyLifecycleController: watches the preference,
- * onboarding flag and account, and runs the CoreBluetooth engine while all
- * three allow it. There is no Android-style permission activity: the system
- * Bluetooth prompt appears the first time the engine starts, and a denial
- * surfaces as a repair prompt pointing at Settings.
- */
 class IosNearbyController(
     private val scope: CoroutineScope,
     private val settingsRepository: SettingsRepository,
@@ -114,16 +107,6 @@ class IosNearbyController(
             settingsRepository.setNearbyOnboardingCompleted(true)
             settingsRepository.setNearby(true)
             permissionUi.value = NearbyPermissionUiState()
-        }
-    }
-
-    override fun skipOnboarding() {
-        scope.launch {
-            settingsRepository.setNearby(false)
-            settingsRepository.setNearbyOnboardingCompleted(true)
-            permissionUi.value = NearbyPermissionUiState()
-            stopEngine()
-            runtime.value = NearbyRuntimeState(NearbyRuntimeStatus.Disabled)
         }
     }
 
@@ -232,7 +215,6 @@ class IosNearbyController(
     }
 }
 
-/** Local "you passed someone" banner for backgrounded street-pass hits. */
 @OptIn(ExperimentalUuidApi::class)
 fun postEncounterNotification() {
     val content = UNMutableNotificationContent().apply {

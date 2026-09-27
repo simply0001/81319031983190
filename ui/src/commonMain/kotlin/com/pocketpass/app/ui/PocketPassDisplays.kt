@@ -34,7 +34,6 @@ import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.mii.MiiEditorMode
 import com.pocketpass.app.model.FriendsOverlay
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.hasDismissableLayer
@@ -88,7 +87,6 @@ import com.pocketpass.app.ui.theme.resolveDarkTheme
 fun TopDisplayContent(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions = PocketPassExtensions.None,
     miiEditorController: MiiEditorController? = null,
 ) {
     PocketPassTheme(state.themeMode) {
@@ -166,7 +164,6 @@ fun TopDisplayContent(
                         destination = state.rootDestination,
                         state = state,
                         dispatch = dispatch,
-                        extensions = extensions,
                         profileViewerPresenting = profileViewerPresenting,
                         threadPresenting = threadPresenting || composerPresenting,
                     )
@@ -218,7 +215,6 @@ fun TopDisplayContent(
 fun BottomDisplayContent(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions = PocketPassExtensions.None,
 ) {
     PocketPassTheme(state.themeMode) {
         val focus = LocalControllerFocus.current
@@ -276,13 +272,12 @@ fun BottomDisplayContent(
                     BottomDestinationBackground(metrics, state.rootDestination)
                     BottomRouteStack(
                         route = currentRoute,
-                        root = { RootBottomContent(metrics, state, dispatch, extensions) },
+                        root = { RootBottomContent(metrics, state, dispatch) },
                         pushed = { route ->
                             BottomScreen(
                                 route = route,
                                 state = state,
                                 dispatch = dispatch,
-                                extensions = extensions,
                             )
                             if (route == PocketPassRoute.Social) {
                                 SocialBottomOverlays(metrics, state, dispatch)
@@ -459,13 +454,11 @@ private fun RootBottomContent(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     BottomScreen(
         route = PocketPassRoute.Root(state.rootDestination),
         state = state,
         dispatch = dispatch,
-        extensions = extensions,
     )
     if (state.rootDestination == com.pocketpass.app.model.PocketPassDestination.Activities) {
         ExitingOverlay(metrics, visible = state.shop.visible, snapshot = state, releaseFocusOnExit = true) { shown ->

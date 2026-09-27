@@ -95,7 +95,6 @@ class ShopStateHolderTest {
             .toSet()
         assertEquals(setOf("fixture-item-baseball_cap"), state.ownedItemIds)
         assertEquals(hatIds - "fixture-item-baseball_cap", state.unlockedItemIds)
-        assertEquals(Instant.fromEpochSeconds(0).plus((3_600).seconds), state.supporterUntil)
         assertEquals((0..10).toSet(), repository.observeOwnedHatTypes(FixtureData.CurrentUserId).first())
     }
 

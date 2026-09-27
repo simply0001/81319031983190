@@ -31,13 +31,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private val Context.stepLedgerDataStore by preferencesDataStore(name = "pocketpass_steps")
 
-/**
- * The hardware step counter as a [StepSource]. The sensor only reports steps
- * since boot, so every reading goes through [StepDayLedger], whose state is
- * kept in a small DataStore so days survive process restarts. The runtime
- * permission prompt belongs to the activity, which collects
- * [permissionRequests].
- */
 class AndroidStepCounterSource(
     context: Context,
     private val scope: CoroutineScope,
@@ -50,9 +43,6 @@ class AndroidStepCounterSource(
 
     private val permissionState = MutableStateFlow(readPermission())
     override val permission: StateFlow<StepPermission> = permissionState
-
-    private val permissionRequestEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val permissionRequests = permissionRequestEvents.asSharedFlow()
 
     private val liveSamples = MutableSharedFlow<StepSample>(extraBufferCapacity = 8)
     override val samples: Flow<StepSample> = liveSamples.asSharedFlow()
@@ -68,8 +58,6 @@ class AndroidStepCounterSource(
         val stepSensor = sensor ?: return null
         val manager = sensorManager ?: return null
         if (!StepRewardsPermissionPolicy.isGranted(appContext)) return null
-        // The counter reports its current value shortly after registration;
-        // in the background Android may deliver nothing, hence the timeout.
         val counter = withTimeoutOrNull(SAMPLE_TIMEOUT_MILLIS) {
             suspendCancellableCoroutine<Long> { continuation ->
                 val listener = object : SensorEventListener {
@@ -146,21 +134,18 @@ class AndroidStepCounterSource(
         manager.registerListener(next, stepSensor, SensorManager.SENSOR_DELAY_NORMAL, wanted)
     }
 
-    override fun requestPermission() {
-        permissionRequestEvents.tryEmit(Unit)
-    }
+    override fun requestPermission() = Unit
 
     override fun refreshPermission() {
         permissionState.value = readPermission()
     }
 
-    private fun readPermission(): StepPermission = when {
-        StepRewardsPermissionPolicy.requiredPermission() == null -> StepPermission.NotRequired
-        StepRewardsPermissionPolicy.isGranted(appContext) -> StepPermission.Granted
-        // Android cannot tell "never asked" from "denied" without an activity;
-        // both lead to the same prompt.
-        else -> StepPermission.NotDetermined
-    }
+    private fun readPermission(): StepPermission =
+        if (StepRewardsPermissionPolicy.isGranted(appContext)) {
+            StepPermission.Granted
+        } else {
+            StepPermission.NotDetermined
+        }
 
     private suspend fun record(counter: Long): StepSample? = ledger.withLock {
         val now = System.currentTimeMillis()

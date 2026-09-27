@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-class NearbyEncounterService : Service() {
+class NearbyEncounterService : Service(), NearbyEngineHost {
     private var engine: NearbyBleEngine? = null
     private var engineStartJob: Job? = null
     private var latestStartId = 0
@@ -58,8 +58,7 @@ class NearbyEncounterService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latestStartId = startId
-        val container = (application as PocketPassApplication).container
-        val controller = container.nearby
+        val controller = (application as PocketPassApplication).container.nearby
         val foregrounded = runCatching {
             startForegroundWithTypes(connectedDeviceType or healthTypeIfAllowed())
         }.recoverCatching {
@@ -74,6 +73,7 @@ class NearbyEncounterService : Service() {
             return START_NOT_STICKY
         }
         if (intent == null) {
+            controller.attachEngineHost(this)
             serviceScope.launch {
                 val restored = withTimeoutOrNull(RESTORE_TIMEOUT_MILLIS) {
                     runCatching { controller.restoreAfterSystemEvent() }.isSuccess
@@ -89,94 +89,109 @@ class NearbyEncounterService : Service() {
             }
             return START_STICKY
         }
-        if (intent.action == ACTION_STOP || !controller.onServiceForegrounded()) {
+        if (!controller.onServiceForegrounded()) {
             stopEncounterRuntime()
             stopSelf(startId)
             return START_NOT_STICKY
         }
-        if (engine == null && engineStartJob?.isActive != true) {
-            // Engine ownership and teardown share the service's Main thread.
-            // Suspended credential work must finish before installing an engine;
-            // cancellation on stop prevents an old startup installing one later.
-            engineStartJob = serviceScope.launch(Dispatchers.Main.immediate) {
-                var retryDelayMillis = INITIAL_RETRY_MILLIS
-                while (engine == null && controller.shouldRun()) {
-                    val accountId = container.activeAccountId.value
-                        ?: return@launch run {
-                            Log.w(TAG, "Stopping because no authenticated account is active")
-                            stopEncounterRuntime()
-                            stopSelf(latestStartId)
+        controller.attachEngineHost(this)
+        startEngineIfIdle()
+        return START_STICKY
+    }
+
+    override fun restartEngine() {
+        stopEngine()
+        startEngineIfIdle()
+    }
+
+    override fun stopEngine() {
+        engineStartJob?.cancel()
+        engineStartJob = null
+        engine?.stop()
+        engine = null
+    }
+
+    private fun startEngineIfIdle() {
+        if (engine != null || engineStartJob?.isActive == true) return
+        val container = (application as PocketPassApplication).container
+        val controller = container.nearby
+        engineStartJob = serviceScope.launch(Dispatchers.Main.immediate) {
+            var retryDelayMillis = INITIAL_RETRY_MILLIS
+            while (engine == null && controller.shouldRun()) {
+                val accountId = container.activeAccountId.value
+                    ?: return@launch run {
+                        Log.w(TAG, "Stopping because no authenticated account is active")
+                        stopEncounterRuntime()
+                        stopSelf(latestStartId)
+                    }
+                when (val refill = withContext(Dispatchers.Default) { container.nearbyCredentialPool.refill(accountId) }) {
+                    is RepositoryResult.Failure -> {
+                        Log.w(
+                            TAG,
+                            "Credential refill failed: ${refill.error.kind}",
+                        )
+                        controller.reportRuntime(
+                            NearbyRuntimeStatus.Error,
+                            refill.error.message
+                                ?: "Anonymous encounter passes are unavailable.",
+                        )
+                        delay(retryDelayMillis)
+                        retryDelayMillis = (retryDelayMillis * 2)
+                            .coerceAtMost(MAXIMUM_RETRY_MILLIS)
+                    }
+
+                    is RepositoryResult.Success -> {
+                        Log.i(TAG, "Anonymous credential pool is ready")
+                        val deviceTagSecret = withContext(Dispatchers.Default) { container.nearbyDeviceTags.secret(accountId) }
+                        if (!controller.shouldRun()) return@launch
+                        if (deviceTagSecret == null) {
+                            Log.w(TAG, "Device tag secret unavailable; own devices are not recognised")
                         }
-                    when (val refill = withContext(Dispatchers.Default) { container.nearbyCredentialPool.refill(accountId) }) {
-                        is RepositoryResult.Failure -> {
-                            Log.w(
-                                TAG,
-                                "Credential refill failed: ${refill.error.kind}",
-                            )
-                            controller.reportRuntime(
-                                NearbyRuntimeStatus.Error,
-                                refill.error.message
-                                    ?: "Anonymous encounter passes are unavailable.",
-                            )
-                            delay(retryDelayMillis)
-                            retryDelayMillis = (retryDelayMillis * 2)
-                                .coerceAtMost(MAXIMUM_RETRY_MILLIS)
-                        }
+                        engine = NearbyBleEngine(
+                            context = this@NearbyEncounterService,
+                            credentialPool = container.nearbyCredentialPool,
+                            accountId = accountId,
+                            deviceTagSecret = deviceTagSecret,
+                            onProof = { proof ->
+                                serviceScope.launch {
+                                    when (container.submitNearbyProof(accountId, proof)) {
+                                        NearbyReceiptVerdict.NotQueued -> {
+                                            Log.w(
+                                                TAG,
+                                                "Encrypted encounter receipt was not queued",
+                                            )
+                                            controller.reportRuntime(
+                                                NearbyRuntimeStatus.Error,
+                                                "The encrypted encounter receipt could not be saved.",
+                                            )
+                                        }
 
-                        is RepositoryResult.Success -> {
-                            Log.i(TAG, "Anonymous credential pool is ready")
-                            val deviceTagSecret = withContext(Dispatchers.Default) { container.nearbyDeviceTags.secret(accountId) }
-                            if (!controller.shouldRun()) return@launch
-                            if (deviceTagSecret == null) {
-                                Log.w(TAG, "Device tag secret unavailable; own devices are not recognised")
-                            }
-                            engine = NearbyBleEngine(
-                                context = this@NearbyEncounterService,
-                                credentialPool = container.nearbyCredentialPool,
-                                accountId = accountId,
-                                deviceTagSecret = deviceTagSecret,
-                                onProof = { proof ->
-                                    serviceScope.launch {
-                                        when (container.submitNearbyProof(accountId, proof)) {
-                                            NearbyReceiptVerdict.NotQueued -> {
-                                                Log.w(
-                                                    TAG,
-                                                    "Encrypted encounter receipt was not queued",
-                                                )
-                                                controller.reportRuntime(
-                                                    NearbyRuntimeStatus.Error,
-                                                    "The encrypted encounter receipt could not be saved.",
-                                                )
-                                            }
+                                        NearbyReceiptVerdict.AlreadyCountedToday -> {
+                                            Log.i(
+                                                TAG,
+                                                "Encounter already counted today; LED pulse skipped",
+                                            )
+                                        }
 
-                                            NearbyReceiptVerdict.AlreadyCountedToday -> {
-                                                Log.i(
-                                                    TAG,
-                                                    "Encounter already counted today; LED pulse skipped",
-                                                )
-                                            }
+                                        NearbyReceiptVerdict.Rejected -> {
+                                            Log.i(TAG, "Encounter receipt rejected; LED pulse skipped")
+                                        }
 
-                                            NearbyReceiptVerdict.Rejected -> {
-                                                Log.i(TAG, "Encounter receipt rejected; LED pulse skipped")
-                                            }
-
-                                            NearbyReceiptVerdict.NewEncounter,
-                                            NearbyReceiptVerdict.Unknown,
-                                            -> {
-                                                Log.i(TAG, "Encrypted encounter receipt queued")
-                                                pulseEncounterLed()
-                                            }
+                                        NearbyReceiptVerdict.NewEncounter,
+                                        NearbyReceiptVerdict.Unknown,
+                                        -> {
+                                            Log.i(TAG, "Encrypted encounter receipt queued")
+                                            pulseEncounterLed()
                                         }
                                     }
-                                },
-                                onState = controller::reportRuntime,
-                            ).also(NearbyBleEngine::start)
-                        }
+                                }
+                            },
+                            onState = controller::reportRuntime,
+                        ).also(NearbyBleEngine::start)
                     }
                 }
             }
         }
-        return START_STICKY
     }
 
     private suspend fun pulseEncounterLed() {
@@ -207,10 +222,8 @@ class NearbyEncounterService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun stopEncounterRuntime() {
-        engineStartJob?.cancel()
-        engineStartJob = null
-        engine?.stop()
-        engine = null
+        (application as PocketPassApplication).container.nearby.detachEngineHost(this)
+        stopEngine()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     }
 
@@ -220,6 +233,5 @@ class NearbyEncounterService : Service() {
         private const val INITIAL_RETRY_MILLIS = 30_000L
         private const val MAXIMUM_RETRY_MILLIS = 15L * 60L * 1_000L
         const val ACTION_START = "com.pocketpass.app.nearby.START"
-        const val ACTION_STOP = "com.pocketpass.app.nearby.STOP"
     }
 }

@@ -12,10 +12,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -62,7 +59,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -92,10 +88,7 @@ import com.pocketpass.app.model.ActivityVariant
 import com.pocketpass.app.model.HomeMood
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
-import com.pocketpass.app.model.PocketPassExtensionTarget
 import com.pocketpass.app.model.PocketPassUiState
-import com.pocketpass.app.model.ProfileFriendRequestState
 import com.pocketpass.app.model.ProfileViewerSource
 import com.pocketpass.app.model.ProfileViewerUiState
 import com.pocketpass.app.ui.Assets
@@ -124,9 +117,6 @@ import com.pocketpass.app.ui.theme.pocketPalette
 import com.pocketpass.app.ui.displayCountryName
 import com.pocketpass.app.ui.fileExists
 import okio.Path.Companion.toPath
-import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Instant
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlinx.coroutines.delay
@@ -136,19 +126,18 @@ fun TopScreen(
     destination: PocketPassDestination = state.rootDestination,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
     profileViewerPresenting: Boolean = false,
     threadPresenting: Boolean = false,
 ) {
     when (destination) {
         PocketPassDestination.Home ->
-            HomeTop(state, dispatch, extensions, profileViewerPresenting)
+            HomeTop(state, dispatch, profileViewerPresenting)
         PocketPassDestination.Activities -> ActivitiesTop(state, dispatch)
         PocketPassDestination.Messages -> if (state.boardsVisible) {
             if (!threadPresenting) BoardsTop(state)
         } else MessagesTop(state, threadPresenting)
         PocketPassDestination.Friends -> FriendsTop(state, profileViewerPresenting)
-        PocketPassDestination.Settings -> SettingsTop(state)
+        PocketPassDestination.Settings -> SettingsTop()
     }
 }
 
@@ -530,8 +519,7 @@ fun TopMessageThread(
     val partnerTyping = conversation != null &&
         conversation.id.value in state.typingConversationIds
     val threadId = (conversation ?: retained)?.id?.value
-    val arrivalTracker = remember(threadId) { MessageArrivalTracker() }
-    SideEffect { arrivalTracker.primed = true }
+    val arrivalTracker = rememberMessageArrivalTracker(threadId, messages)
     val listState = rememberLazyListState()
     LaunchedEffect(messages.lastOrNull()?.id?.value, partnerTyping) {
         val lastIndex = messages.lastIndex + if (partnerTyping) 1 else 0
@@ -638,15 +626,30 @@ fun TopMessageThread(
     }
 }
 
-internal class MessageArrivalTracker {
-    private val seen = HashSet<String>()
-    var primed = false
+@Composable
+internal fun rememberMessageArrivalTracker(
+    threadId: String?,
+    messages: List<Message>,
+): MessageArrivalTracker {
+    val tracker = remember(threadId) { MessageArrivalTracker() }
+    tracker.observe(messages)
+    return tracker
+}
 
-    fun markSeen(id: String): Boolean {
-        val fresh = primed && id !in seen
-        seen.add(id)
-        return fresh
+internal class MessageArrivalTracker {
+    private val known = HashSet<String>()
+    private val arrivals = HashSet<String>()
+
+    fun observe(messages: List<Message>) {
+        if (messages.isEmpty()) return
+        val lastKnown = messages.indexOfLast { it.id.value in known }
+        messages.forEachIndexed { index, message ->
+            val id = message.id.value
+            if (known.add(id) && lastKnown >= 0 && index > lastKnown) arrivals.add(id)
+        }
     }
+
+    fun markSeen(id: String): Boolean = arrivals.remove(id)
 }
 
 @Composable
@@ -839,431 +842,6 @@ private fun ProfileUnavailableHero(
     )
 }
 
-@Composable
-private fun ProfileViewerCard(
-    metrics: DesignMetrics,
-    state: ProfileViewerUiState,
-    palette: ProfileViewerPalette,
-    dispatch: (PocketPassEvent) -> Unit,
-) {
-    val shape = RoundedCornerShape(metrics.dp(82f))
-    Box(
-        modifier = Modifier
-            .designBounds(
-                metrics,
-                PROFILE_VIEWER_X,
-                PROFILE_VIEWER_Y,
-                PROFILE_VIEWER_WIDTH,
-                PROFILE_VIEWER_HEIGHT,
-            )
-            .clip(shape)
-            .pocketFrame(
-                Brush.verticalGradient(
-                    colorStops = arrayOf(
-                        0f to pocketPalette.surface,
-                        0.62f to pocketPalette.surface,
-                        1f to palette.surfaceBottom,
-                    ),
-                ),
-                metrics.dp(14f),
-                Brush.verticalGradient(
-                        listOf(
-                            palette.borderHighlight,
-                            palette.border,
-                            palette.borderDark,
-                        ),
-                    ),
-                shape,
-            )
-            .testTag("profile_viewer_card"),
-    ) {
-        Box(
-            modifier = Modifier
-                .designBounds(metrics, 22f, 22f, 1356f, 736f)
-                .border(
-                    metrics.dp(4f),
-                    Color.White.copy(alpha = if (pocketPalette.isDark) 0.12f else 0.72f),
-                    RoundedCornerShape(metrics.dp(64f)),
-                ),
-        )
-        ProfileViewerCloseButton(
-            metrics = metrics,
-            palette = palette,
-            onClick = { dispatch(PocketPassEvent.CloseUserProfile) },
-        )
-        if (state.unavailable || state.profile == null) {
-            ProfileUnavailableContent(metrics, palette)
-        } else {
-            ProfileViewerContent(
-                metrics = metrics,
-                state = state,
-                palette = palette,
-                dispatch = dispatch,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileViewerContent(
-    metrics: DesignMetrics,
-    state: ProfileViewerUiState,
-    palette: ProfileViewerPalette,
-    dispatch: (PocketPassEvent) -> Unit,
-) {
-    val profile = requireNotNull(state.profile)
-    val displayName = profile.displayName.trim().ifBlank { "PocketPass User" }
-    val location = profile.locationLabel
-        ?.trim()
-        ?.ifBlank { null }
-        ?: profile.countryCode
-            ?.trim()
-            ?.ifBlank { null }
-            ?.let(::countryLabel)
-    val lastSeenAt = profile.lastSeenAt
-    val status = when {
-        state.isOnline -> "Online now"
-        lastSeenAt != null -> "Last seen ${lastSeenAt.profileRelativeTime()}"
-        else -> "Offline"
-    }
-    Box(
-        modifier = Modifier
-            .designBounds(metrics, 70f, 135f, 500f, 500f)
-            .clip(RoundedCornerShape(metrics.dp(74f)))
-            .background(
-                Brush.verticalGradient(
-                    listOf(pocketPalette.surface, palette.surfaceBottom.copy(alpha = 0.78f)),
-                ),
-            )
-            .pocketBorder(
-                metrics.dp(16f),
-                palette.border.copy(alpha = 0.30f),
-                RoundedCornerShape(metrics.dp(74f)),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = displayName.firstOrNull()?.uppercase() ?: "?",
-            color = palette.primaryText,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.Black,
-            fontSize = metrics.sp(190f),
-            maxLines = 1,
-        )
-        ProfileViewerAvatar(
-            avatar = profile.avatar,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-    if (state.isOnline) {
-        Box(
-            modifier = Modifier
-                .designBounds(metrics, 465f, 118f, 116f, 116f)
-                .clip(CircleShape)
-                .pocketFrame(pocketPalette.surface, metrics.dp(8f), palette.border, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .requiredSize(metrics.dp(72f))
-                    .clip(CircleShape)
-                    .background(Color(0xFF38C96B)),
-            )
-        }
-    }
-    val headerNameAutoSize = remember(metrics) {
-        TextAutoSize.StepBased(
-            minFontSize = metrics.sp(52f),
-            maxFontSize = metrics.sp(82f),
-            stepSize = metrics.sp(1f),
-        )
-    }
-    Box(
-        modifier = Modifier.designBounds(metrics, 630f, 92f, 610f, 116f),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        BasicText(
-            text = displayName,
-            autoSize = headerNameAutoSize,
-            style = TextStyle(
-                fontFamily = Rubik,
-                fontWeight = FontWeight.Black,
-                color = palette.primaryText,
-            ),
-            maxLines = 1,
-        )
-    }
-    Text(
-        text = status,
-        modifier = Modifier.designBounds(metrics, 632f, 205f, 600f, 62f),
-        color = if (state.isOnline) pocketPalette.ink(Color(0xFF2B9B57)) else palette.accentText,
-        fontFamily = Rubik,
-        fontWeight = FontWeight.Bold,
-        fontSize = metrics.sp(38f),
-        maxLines = 1,
-    )
-    profile.bio.trim().ifBlank { null }?.let { bio ->
-        Text(
-            text = bio,
-            modifier = Modifier.designBounds(metrics, 630f, 292f, 650f, 170f),
-            color = palette.primaryText,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(46f),
-            maxLines = 3,
-        )
-    }
-    var metadataX = 630f
-    profile.age?.let { age ->
-        ProfileMetadataChip(
-            metrics = metrics,
-            x = metadataX,
-            width = 220f,
-            label = "$age years",
-            palette = palette,
-        )
-        metadataX += 240f
-    }
-    location?.let { label ->
-        ProfileMetadataChip(
-            metrics = metrics,
-            x = metadataX,
-            width = if (profile.age == null) 650f else 410f,
-            label = label,
-            palette = palette,
-        )
-    }
-    ProfileFriendRequestButton(
-        metrics = metrics,
-        state = state,
-        palette = palette,
-        onClick = { dispatch(PocketPassEvent.SendProfileFriendRequest) },
-    )
-}
-
-@Composable
-private fun ProfileMetadataChip(
-    metrics: DesignMetrics,
-    x: Float,
-    width: Float,
-    label: String,
-    palette: ProfileViewerPalette,
-) {
-    val shape = RoundedCornerShape(metrics.dp(38f))
-    Box(
-        modifier = Modifier
-            .designBounds(metrics, x, 490f, width, 76f)
-            .clip(shape)
-            .background(palette.surfaceBottom.copy(alpha = 0.78f))
-            .pocketBorder(metrics.dp(5f), palette.border.copy(alpha = 0.62f), shape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = palette.primaryText,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.Bold,
-            fontSize = metrics.sp(34f),
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun ProfileFriendRequestButton(
-    metrics: DesignMetrics,
-    state: ProfileViewerUiState,
-    palette: ProfileViewerPalette,
-    onClick: () -> Unit,
-) {
-    if (
-        state.source !in setOf(ProfileViewerSource.RecentInteraction, ProfileViewerSource.Board) ||
-        state.friendRequestState == ProfileFriendRequestState.Hidden
-    ) {
-        return
-    }
-    val label = when (state.friendRequestState) {
-        ProfileFriendRequestState.Hidden -> return
-        ProfileFriendRequestState.Available -> "Send Friend Request"
-        ProfileFriendRequestState.Sending -> "Sending…"
-        ProfileFriendRequestState.Pending -> "Request pending"
-        ProfileFriendRequestState.Friends -> "Friends"
-        ProfileFriendRequestState.Unavailable ->
-            if (state.profile?.blockInvites == true) "Friend requests off" else "Unavailable"
-        ProfileFriendRequestState.Failed -> "Try Again"
-    }
-    val enabled =
-        state.friendRequestState == ProfileFriendRequestState.Available ||
-            state.friendRequestState == ProfileFriendRequestState.Failed
-    val interaction = remember(state.selectedUserId) { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed && enabled) 0.98f else 1f,
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = 800f),
-        label = "Profile request press",
-    )
-    val shape = RoundedCornerShape(metrics.dp(48f))
-    Box(
-        modifier = Modifier
-            .designBounds(metrics, 630f, 595f, 650f, 104f)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(shape)
-            .background(
-                if (enabled) {
-                    Brush.verticalGradient(
-                        listOf(
-                            palette.borderHighlight,
-                            palette.border,
-                            palette.borderDark,
-                        ),
-                    )
-                } else {
-                    Brush.verticalGradient(
-                        listOf(
-                            palette.border.copy(alpha = 0.48f),
-                            palette.borderDark.copy(alpha = 0.58f),
-                        ),
-                    )
-                },
-            )
-            .pocketBorder(metrics.dp(6f), Color.White.copy(alpha = 0.76f), shape)
-            .testTag("profile_friend_request")
-            .then(
-                if (enabled) {
-                    Modifier.controllerTarget("profile_friend_request", layer = 10, cornerRadius = 48f) { onClick() }
-                } else {
-                    Modifier
-                },
-            )
-            .clickable(
-                enabled = enabled,
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = Color.White,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.Black,
-            fontSize = metrics.sp(42f),
-            maxLines = 1,
-        )
-    }
-    state.friendRequestError?.let { error ->
-        Text(
-            text = error,
-            modifier = Modifier.designBounds(metrics, 630f, 706f, 650f, 46f),
-            color = pocketPalette.ink(Color(0xFF9C2D35)),
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(27f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun ProfileUnavailableContent(
-    metrics: DesignMetrics,
-    palette: ProfileViewerPalette,
-) {
-    Text(
-        text = "Profile unavailable",
-        modifier = Modifier.designBounds(metrics, 250f, 270f, 900f, 120f),
-        color = palette.primaryText,
-        fontFamily = Rubik,
-        fontWeight = FontWeight.Black,
-        fontSize = metrics.sp(88f),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-    )
-    Text(
-        text = "This PocketPass profile can’t be shown right now.",
-        modifier = Modifier.designBounds(metrics, 300f, 415f, 800f, 100f),
-        color = palette.accentText,
-        fontFamily = Rubik,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = metrics.sp(42f),
-        textAlign = TextAlign.Center,
-        maxLines = 2,
-    )
-}
-
-@Composable
-private fun ProfileViewerCloseButton(
-    metrics: DesignMetrics,
-    palette: ProfileViewerPalette,
-    onClick: () -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .designBounds(metrics, 1260f, 48f, 92f, 92f)
-            .clip(CircleShape)
-            .pocketFrame(pocketPalette.surface, metrics.dp(8f), palette.border, CircleShape)
-            .testTag("profile_viewer_close")
-            .controllerTarget("profile_viewer_close", layer = 10) { onClick() }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            ),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val inset = 27f
-            drawLine(
-                color = palette.primaryText,
-                start = Offset(inset, inset),
-                end = Offset(size.width - inset, size.height - inset),
-                strokeWidth = 10f,
-                cap = StrokeCap.Round,
-            )
-            drawLine(
-                color = palette.primaryText,
-                start = Offset(size.width - inset, inset),
-                end = Offset(inset, size.height - inset),
-                strokeWidth = 10f,
-                cap = StrokeCap.Round,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileViewerAvatar(
-    avatar: AvatarReference?,
-    modifier: Modifier,
-) {
-    val model = when (avatar) {
-        is AvatarReference.Remote -> avatar.url
-        is AvatarReference.Bundled -> when (avatar.key) {
-            "home_avatar_petah" -> Assets.HomeAvatarPetah
-            "home_avatar_matt" -> Assets.HomeAvatarMatt
-            "friends_avatar_matt" -> Assets.FriendsAvatarMatt
-            "messages_avatar_spob" -> Assets.MessagesAvatarSpob
-            "messages_avatar_sans" -> Assets.MessagesAvatarSans
-            else -> null
-        }
-
-        null -> null
-    }
-    if (model != null) {
-        AsyncImage(
-            model = model,
-            contentDescription = null,
-            modifier = modifier,
-            contentScale = ContentScale.Crop,
-        )
-    }
-}
-
 internal data class ProfileViewerPalette(
     val borderHighlight: Color,
     val border: Color,
@@ -1296,22 +874,10 @@ internal fun ProfileViewerSource?.profilePalette(
         )
     }
 
-private fun Instant.profileRelativeTime(): String {
-    val elapsed = (Clock.System.now() - this).coerceAtLeast(Duration.ZERO)
-    return when {
-        elapsed.inWholeMinutes < 1L -> "just now"
-        elapsed.inWholeMinutes < 60L -> "${elapsed.inWholeMinutes}m ago"
-        elapsed.inWholeHours < 24L -> "${elapsed.inWholeHours}h ago"
-        elapsed.inWholeDays < 30L -> "${elapsed.inWholeDays}d ago"
-        else -> "${elapsed.inWholeDays / 30L}mo ago"
-    }
-}
-
 @Composable
 private fun HomeTop(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
     profileViewerPresenting: Boolean,
 ) {
     val profile = state.profile
@@ -1849,7 +1415,6 @@ private fun ActivitiesTop(
                 },
         )
 
-        // One divider between two counters, two between three.
         val dividerBrush = Brush.verticalGradient(
             listOf(Color.White.copy(alpha = if (pocketPalette.isDark) 0.28f else 1f), Color.Transparent),
         )
@@ -1863,8 +1428,6 @@ private fun ActivitiesTop(
             )
         }
         if (compact) {
-            // Three columns on the first page only; the shuffled page keeps
-            // its two, so the steps column travels with the first page.
             divider(630.5f) { 1f - swapProgress.value }
             divider(1270.5f) { 1f - swapProgress.value }
             divider(956.49f) { swapProgress.value }
@@ -2303,10 +1866,6 @@ internal const val HOME_MOOD_SWAP_COMPRESS_MILLIS = 110
 internal val HOME_MOOD_OPTION_X = floatArrayOf(889f, 1011.5f, 1134f, 1256.5f, 1379f, 1501.5f)
 internal val HOME_MOOD_SELECTED_COLOR = Color(0xFFA4F4BA)
 internal val HOME_MOOD_SELECTED_OUTLINE_COLOR = Color(0xFF2CA765)
-private const val PROFILE_VIEWER_X = 260f
-private const val PROFILE_VIEWER_Y = 150f
-private const val PROFILE_VIEWER_WIDTH = 1400f
-private const val PROFILE_VIEWER_HEIGHT = 780f
 private const val PROFILE_VIEWER_CLOSED_OFFSET = 36f
 
 private const val ACTIVITIES_SWAP_DISTANCE = 1080f
@@ -2364,7 +1923,7 @@ private fun FriendsTop(state: PocketPassUiState, profileViewerPresenting: Boolea
 }
 
 @Composable
-private fun SettingsTop(state: PocketPassUiState) {
+private fun SettingsTop() {
     val gearRotation = rememberGearRotation()
     val gearOrigin = remember {
         TransformOrigin(

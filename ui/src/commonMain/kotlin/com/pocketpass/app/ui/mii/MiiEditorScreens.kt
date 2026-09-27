@@ -76,6 +76,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -86,6 +87,8 @@ import com.pocketpass.app.mii.MiiCategory
 import com.pocketpass.app.mii.MiiColorField
 import com.pocketpass.app.mii.MiiEditorEvent
 import com.pocketpass.app.mii.MiiEditorUiState
+import com.pocketpass.app.mii.MiiRendererStatus
+import com.pocketpass.app.mii.MiiSaveState
 import com.pocketpass.app.mii.MiiToggleField
 import com.pocketpass.app.mii.MiiTraitField
 import com.pocketpass.app.mii.toggleValue
@@ -213,8 +216,15 @@ fun MiiEditorTopScreen(
                 glyph = !saveOnly,
                 onClick = { onEvent(if (saveOnly) MiiEditorEvent.Save else MiiEditorEvent.Continue) },
             )
+            state.editorNotice()?.let { message -> EditorNotice(metrics, message) }
         }
     }
+}
+
+private fun MiiEditorUiState.editorNotice(): String? {
+    if (!isEditorVisible) return null
+    return (saveState as? MiiSaveState.Error)?.message
+        ?: (rendererStatus as? MiiRendererStatus.Error)?.message
 }
 
 @Composable
@@ -484,7 +494,7 @@ private fun DiscardChangesPrompt(
             maxLines = 1,
         )
         Text(
-            text = "Your Mii will go back to how it was last saved.",
+            text = "Your Piip goes back to its last save.",
             modifier = Modifier.designBounds(metrics, 90f, 148f, 900f, 96f),
             color = Color(0x8F575757),
             fontFamily = Rubik,
@@ -570,7 +580,7 @@ private fun MiiEditorBackground(metrics: DesignMetrics) {
                 ),
         )
         FigmaAsset(
-            resource = PocketAsset("files/figma/mii_editor_bottom_pattern.png"),
+            resource = PocketAsset("files/figma/pattern_home_bottom.svg"),
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
             alpha = 0.19f,
@@ -2015,6 +2025,54 @@ private fun ContinuePanel(
 
 private const val CONTINUE_LABEL_X = 180.22f
 private const val CONTINUE_LABEL_END_PADDING = 103.78f
+
+@Composable
+private fun EditorNotice(
+    metrics: DesignMetrics,
+    message: String,
+) {
+    val style = TextStyle(
+        color = EditorNoticeRed,
+        fontFamily = Rubik,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = metrics.sp(44f),
+    )
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val textWidth = remember(message, density) {
+        textMeasurer.measure(message, style).size.width.toFloat()
+    }
+    val width = (textWidth + EDITOR_NOTICE_PADDING * 2f).coerceAtMost(EDITOR_NOTICE_MAX_WIDTH)
+    FigmaPillSurface(
+        metrics = metrics,
+        modifier = Modifier
+            .anchoredBounds(
+                metrics,
+                x = (TOP_DESIGN_WIDTH - width) / 2f,
+                y = 38.81f,
+                width = width,
+                height = 132f,
+                horizontal = DesignAnchor.Center,
+                vertical = DesignAnchor.Start,
+            )
+            .zIndex(2f)
+            .testTag("mii_editor_notice")
+            .blockMiiRendererGestures(),
+        shape = RoundedCornerShape(metrics.dp(66f)),
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = metrics.dp(EDITOR_NOTICE_PADDING)),
+            style = style,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private val EditorNoticeRed = Color(0xFFB31E3A)
+private const val EDITOR_NOTICE_PADDING = 56f
+private const val EDITOR_NOTICE_MAX_WIDTH = 952f
 
 private fun Modifier.blockMiiRendererGestures(): Modifier = pointerInput(Unit) {
     awaitEachGesture {

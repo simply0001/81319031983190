@@ -67,6 +67,7 @@ class SupabaseRealtimeGateway(
             var typingJob: Job? = null
             try {
                 channel.subscribe(blockUntilSubscribed = true)
+                trySend(ConversationRealtimeEvent.Subscribed)
                 channel.track(
                     PresenceStateDto(
                         userId = safeUserId,

@@ -1,9 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-/// Swift copy of the design tokens in
-/// ui/src/commonMain/kotlin/com/pocketpass/app/ui/theme/PocketPalette.kt
-/// (LightPalette / DarkPalette). When those change, change these.
 struct PocketPalette {
     let surface: Color
     let surfaceLower: Color
@@ -14,7 +11,6 @@ struct PocketPalette {
     let textPrimary: Color
     let textMuted: Color
     let shadowAlpha: Double
-    /// Home backdrop, bottom screen: top colour is held for the first third.
     let backdropTop: Color
     let backdropBottom: Color
 
@@ -68,8 +64,6 @@ extension Color {
     }
 }
 
-/// Rubik, bundled with the extension; falls back to the system font when the
-/// face is unavailable so the widget never renders empty text.
 enum PocketFont {
     static func rubik(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         if UIFont.familyNames.contains(where: { $0.caseInsensitiveCompare("Rubik") == .orderedSame }) {
@@ -80,8 +74,6 @@ enum PocketFont {
 }
 
 extension View {
-    /// The card surface: pocketFrame stroke on the Home backdrop gradient,
-    /// with pocketShadow's soft drop shadow.
     func pocketCard(_ palette: PocketPalette) -> some View {
         self.modifier(PocketCardBackground(palette: palette))
     }
@@ -151,7 +143,6 @@ struct PortraitFrame: View {
     let size: CGFloat
 
     var body: some View {
-        // Border proportion follows PhoneAvatarFrame: 22 / 449 of the diameter.
         let border = size * 22 / 449
         ZStack {
             Circle()

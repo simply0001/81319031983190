@@ -1087,7 +1087,6 @@ data class MessagesFeatureState(
     val previewConversationId: ConversationId? = null,
     val previewMessages: List<Message> = emptyList(),
     val currentDraft: String = "",
-    val actionRailExpanded: Boolean = false,
     val isSending: Boolean = false,
     val operationError: String? = null,
     val typingConversationIds: Set<ConversationId> = emptySet(),
@@ -1103,13 +1102,7 @@ data class MessagesFeatureState(
     val selectedMembersById: Map<UserId, ConversationMember> = emptyMap(),
     val isGroupOwner: Boolean = false,
     val canAddGroupMembers: Boolean = false,
-) {
-    val unreadConversationCount: Int
-        get() = (conversations as? LoadState.Data)
-            ?.value
-            ?.count { it.unreadCount > 0 }
-            ?: 0
-}
+)
 
 private data class EditSession(
     val conversationId: ConversationId,
@@ -1167,7 +1160,6 @@ class MessagesStateHolder(
         LoadState.Data(emptyList()),
     )
     private val drafts = MutableStateFlow<Map<ConversationId, String>>(emptyMap())
-    private val actionRailExpanded = MutableStateFlow(false)
     private val sending = MutableStateFlow(false)
     private val operationError = MutableStateFlow<String?>(null)
     private val mutation = MutableStateFlow(MessageMutationUi())
@@ -1192,8 +1184,7 @@ class MessagesStateHolder(
         messages,
         selectedConversationId,
         drafts,
-        actionRailExpanded,
-    ) { conversationState, messageState, selectedId, conversationDrafts, railExpanded ->
+    ) { conversationState, messageState, selectedId, conversationDrafts ->
         val conversationRows = (conversationState as? LoadState.Data)?.value.orEmpty()
         MessagesFeatureState(
             conversations = conversationState,
@@ -1203,7 +1194,6 @@ class MessagesStateHolder(
             selectedConversation = conversationRows.firstOrNull { it.id == selectedId },
             messages = messageState,
             currentDraft = selectedId?.let { conversationDrafts[it] }.orEmpty(),
-            actionRailExpanded = railExpanded,
         )
     }
 
@@ -1276,7 +1266,6 @@ class MessagesStateHolder(
                 preview.value = ConversationPreview()
                 messages.value = LoadState.Data(emptyList())
                 drafts.value = emptyMap()
-                actionRailExpanded.value = false
                 sending.value = false
                 operationError.value = null
                 mutation.value = MessageMutationUi()
@@ -1390,7 +1379,6 @@ class MessagesStateHolder(
 
     fun openGroupInfo() {
         if (selectedGroup() == null) return
-        actionRailExpanded.value = false
         groupUi.update { it.copy(infoOpen = true, error = null) }
     }
 
@@ -1549,7 +1537,6 @@ class MessagesStateHolder(
         openConversation(conversationId)
     }
 
-    /** A highlighted row can be read upstairs without opening it or marking it read. */
     fun previewConversation(conversationId: ConversationId?) {
         val account = activeAccountId.value
         val id = conversationId?.takeIf { account != null && conversationRows().any { row -> row.id == it } }
@@ -1567,7 +1554,7 @@ class MessagesStateHolder(
                     }
                 }
             } catch(e: CancellationException) { throw e }
-            catch(_: Exception) { /* Keep the already available conversation summary. */ }
+            catch(_: Exception) { }
         }
     }
 
@@ -1576,7 +1563,6 @@ class MessagesStateHolder(
         val account = activeAccountId.value ?: return
         selectedConversationId.value = conversationId
         selectedConversationObserved = conversationRows().any { it.id == conversationId }
-        actionRailExpanded.value = false
         operationError.value = null
         mutation.value = MessageMutationUi()
         groupUi.update { it.copy(infoOpen = false, error = null, notice = null) }
@@ -1600,7 +1586,6 @@ class MessagesStateHolder(
         selectedConversationObserved = false
         messageObservation?.cancel()
         messages.value = LoadState.Data(emptyList())
-        actionRailExpanded.value = false
         sending.value = false
         operationError.value = null
         mutation.value = MessageMutationUi()
@@ -1612,7 +1597,6 @@ class MessagesStateHolder(
         val account = activeAccountId.value ?: return
         val target = visibleMessages().firstOrNull { it.id == messageId } ?: return
         if (!target.isEditableBy(account)) return
-        actionRailExpanded.value = false
         mutation.update { it.copy(sheetMessageId = messageId) }
     }
 
@@ -1702,17 +1686,6 @@ class MessagesStateHolder(
         typingIn.value = null
     }
 
-    fun toggleActionRail() {
-        if (selectedConversationId.value == null) return
-        actionRailExpanded.update(Boolean::not)
-    }
-
-    fun closeActionRail(): Boolean {
-        if (!actionRailExpanded.value) return false
-        actionRailExpanded.value = false
-        return true
-    }
-
     fun sendDraft() {
         if (sending.value) return
         val account = activeAccountId.value ?: return
@@ -1778,7 +1751,6 @@ class MessagesStateHolder(
 
     fun requestImageAttachment() {
         if (selectedConversationId.value == null) return
-        actionRailExpanded.value = false
         scope.launch { imageAttachmentRequests.emit(Unit) }
     }
 
@@ -1837,7 +1809,6 @@ class MessagesStateHolder(
                 message.id == messageId && message.pendingState is PendingState.Failed
             }
             ?: return
-        actionRailExpanded.value = false
         val attachment = failed.attachment
         val localPath = attachment?.localPath
         if (attachment != null && localPath != null) {
@@ -1886,7 +1857,6 @@ data class ShopFeatureState(
     val refreshError: String? = null,
     val ownedItemIds: Set<String> = emptySet(),
     val unlockedItemIds: Set<String> = emptySet(),
-    val supporterUntil: Instant? = null,
     val purchasingItemIds: Set<String> = emptySet(),
     val purchaseError: String? = null,
 )
@@ -1894,7 +1864,6 @@ data class ShopFeatureState(
 private data class ShopEntitlements(
     val owned: List<OwnedShopItem> = emptyList(),
     val hatTypes: Set<Int> = emptySet(),
-    val supporterUntil: Instant? = null,
 )
 
 private data class LocalShopState(
@@ -1935,9 +1904,8 @@ class ShopStateHolder(
         combine(
             shopRepository.observeOwnedItems(id),
             shopRepository.observeOwnedHatTypes(id),
-            shopRepository.observeSupporterUntil(id),
-        ) { owned, hatTypes, supporterUntil ->
-            ShopEntitlements(owned = owned, hatTypes = hatTypes, supporterUntil = supporterUntil)
+        ) { owned, hatTypes ->
+            ShopEntitlements(owned = owned, hatTypes = hatTypes)
         }
     }
 
@@ -1963,7 +1931,6 @@ class ShopStateHolder(
             refreshError = local.refreshError,
             ownedItemIds = confirmed,
             unlockedItemIds = unlocked,
-            supporterUntil = entitlements.supporterUntil,
             purchasingItemIds = (local.purchasing + pending) - confirmed,
             purchaseError = local.purchaseError,
         )
@@ -2548,7 +2515,6 @@ class ActivitiesStateHolder(
     initialVariant: ActivityVariant = ActivityVariant.Default,
 ) {
     private val mutableVariant = MutableStateFlow(initialVariant)
-    val variant: StateFlow<ActivityVariant> = mutableVariant
     val state: StateFlow<ActivitiesFeatureState> = combine(
         mutableVariant,
         accountId.switchAccount<LoadState<ActivitySnapshot?>>(
@@ -2605,11 +2571,7 @@ class SettingsStateHolder(
         initialValue = LocalSettings(),
     )
 
-    suspend fun setNearby(enabled: Boolean) = repository.setNearby(enabled)
     suspend fun setBoardsVisible(visible: Boolean) = repository.setBoardsVisible(visible)
-
-    suspend fun setNearbyOnboardingCompleted(completed: Boolean) =
-        repository.setNearbyOnboardingCompleted(completed)
 
     suspend fun setSoundLevel(level: Float) = repository.setSoundLevel(level)
 
@@ -2635,9 +2597,6 @@ class SettingsStateHolder(
 
     suspend fun setMessageAlertsEnabled(enabled: Boolean) =
         repository.setMessageAlertsEnabled(enabled)
-
-    suspend fun setStepRewardsEnabled(enabled: Boolean) =
-        repository.setStepRewardsEnabled(enabled)
 
     suspend fun setRecentInteractionsSort(sort: RecentInteractionsSort) =
         repository.setRecentInteractionsSort(sort)

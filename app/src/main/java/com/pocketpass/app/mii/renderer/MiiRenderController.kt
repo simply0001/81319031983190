@@ -2,8 +2,6 @@ package com.pocketpass.app.mii.renderer
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.os.Looper
@@ -51,8 +49,7 @@ class MiiRenderController private constructor(
     val status: StateFlow<MiiRenderStatus> = mutableStatus.asStateFlow()
 
     @Volatile
-    var canonicalBase64: String = DEFAULT_MII_BASE64
-        private set
+    private var canonicalBase64: String = DEFAULT_MII_BASE64
 
     private var activeWebView: WebView? = null
     private var lastOrbit: Pair<Float, Float>? = null
@@ -128,13 +125,13 @@ class MiiRenderController private constructor(
             ?: DEFAULT_MII_BASE64
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             mutableStatus.value = MiiRenderStatus.Error(
-                "This Android WebView cannot run the Mii renderer safely.",
+                "This Android WebView cannot run the Piip renderer safely.",
             )
             return
         }
 
         activeWebView?.let(::removeMessageListener)
-        failPending(MiiRendererException("Mii render surface was replaced"))
+        failPending(MiiRendererException("The Piip preview was replaced."))
         if (readySignal.isCompleted) readySignal = CompletableDeferred()
         lastOrbit = null
         canonicalBase64 = bootCanonical
@@ -175,7 +172,7 @@ class MiiRenderController private constructor(
         activeWebView = null
         lastOrbit = null
         restartsSinceReady = 0
-        failPending(MiiRendererException("Mii render surface was detached"))
+        failPending(MiiRendererException("The Piip preview was closed."))
         mutableStatus.value = MiiRenderStatus.Detached
     }
 
@@ -200,45 +197,6 @@ class MiiRenderController private constructor(
         )
     }
 
-    suspend fun setMii(
-        canonicalBase64: String,
-        camera: MiiRenderCamera = MiiRenderCamera.WholeHead,
-    ) {
-        validateCanonical(canonicalBase64)
-        val value = request(
-            JSONObject()
-                .put("type", "setMii")
-                .put("canonicalBase64", canonicalBase64)
-                .put("camera", camera.wireValue),
-            RENDER_TIMEOUT_MS,
-        )
-        val resolvedCanonical = value?.takeIf(String::isNotBlank) ?: canonicalBase64
-        validateCanonical(resolvedCanonical)
-        this.canonicalBase64 = resolvedCanonical
-        mutableStatus.value = MiiRenderStatus.Ready(resolvedCanonical)
-    }
-
-    suspend fun updateField(
-        name: String,
-        value: Any,
-        renderPart: MiiRenderPart = MiiRenderPart.Head,
-        bodyUpdate: MiiBodyUpdate = MiiBodyUpdate.None,
-    ) {
-        require(name.matches(FIELD_NAME_REGEX)) { "Invalid Mii field name" }
-        require(value is Number || value is String || value is Boolean) {
-            "Mii field values must be numbers, strings, or booleans"
-        }
-        request(
-            JSONObject()
-                .put("type", "updateField")
-                .put("field", name)
-                .put("value", value)
-                .put("renderPart", renderPart.wireValue)
-                .put("bodyUpdate", bodyUpdate.wireValue),
-            RENDER_TIMEOUT_MS,
-        )
-    }
-
     suspend fun applyAppearance(
         appearance: MiiAppearance,
     ): String {
@@ -252,7 +210,7 @@ class MiiRenderController private constructor(
                 .put("fields", fields),
             RENDER_TIMEOUT_MS,
         ) ?: throw MiiRendererException(
-            "Mii renderer returned no canonical appearance data",
+            "The Piip renderer returned no appearance data.",
         )
         validateCanonical(exported)
         canonicalBase64 = exported
@@ -274,17 +232,6 @@ class MiiRenderController private constructor(
                 .put("transitionMillis", transitionMillis),
             DEFAULT_TIMEOUT_MS,
         )
-    }
-
-    suspend fun exportCanonical(): String {
-        val exported = request(
-            JSONObject().put("type", "export"),
-            DEFAULT_TIMEOUT_MS,
-        ) ?: throw MiiRendererException("Mii renderer returned no canonical data")
-        validateCanonical(exported)
-        canonicalBase64 = exported
-        mutableStatus.value = MiiRenderStatus.Ready(exported)
-        return exported
     }
 
     suspend fun capturePortraitPng(
@@ -311,14 +258,6 @@ class MiiRenderController private constructor(
                 captureChunks.remove(id)
             }
         }
-    }
-
-    suspend fun capturePortraitBitmap(
-        size: Int = DEFAULT_PORTRAIT_SIZE,
-    ): Bitmap {
-        val bytes = capturePortraitPng(size)
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            ?: throw MiiRendererException("The exported Mii portrait is invalid")
     }
 
     suspend fun exportPortrait(
@@ -380,7 +319,7 @@ class MiiRenderController private constructor(
     private suspend fun sendCommand(command: JSONObject) {
         withContext(Dispatchers.Main.immediate) {
             val webView = activeWebView
-                ?: throw MiiRendererException("Mii render surface is not attached")
+                ?: throw MiiRendererException("The Piip preview is not open.")
             val encoded = Base64.encodeToString(
                 command.toString().toByteArray(Charsets.UTF_8),
                 Base64.NO_WRAP,
@@ -419,7 +358,7 @@ class MiiRenderController private constructor(
             "capture-start" -> handleCaptureStart(json)
             "capture-chunk" -> handleCaptureChunk(json)
             "capture-complete" -> handleCaptureComplete(json)
-            "protocol-error" -> failRuntime("The Mii renderer protocol failed.")
+            "protocol-error" -> failRuntime("The Piip renderer protocol failed.")
         }
     }
 
@@ -435,7 +374,7 @@ class MiiRenderController private constructor(
                 mutableStatus.value = MiiRenderStatus.Ready(canonicalBase64)
                 if (!readySignal.isCompleted) readySignal.complete(Unit)
             }
-            "error" -> failRuntime("The Mii renderer could not be initialized.")
+            "error" -> failRuntime("The Piip renderer could not start.")
         }
     }
 
@@ -444,7 +383,7 @@ class MiiRenderController private constructor(
         if (id.isBlank()) return
         if (!json.optBoolean("ok")) {
             val error = MiiRendererException(
-                json.optString("error", "The Mii renderer operation failed."),
+                json.optString("error", "The Piip renderer operation failed."),
             )
             pendingRequests.remove(id)?.completeExceptionally(error)
             pendingCaptures.remove(id)?.completeExceptionally(error)
@@ -481,7 +420,7 @@ class MiiRenderController private constructor(
             data.length > MAX_CAPTURE_CHUNK_LENGTH
         ) {
             pendingCaptures.remove(id)?.completeExceptionally(
-                MiiRendererException("The Mii portrait stream is invalid"),
+                MiiRendererException("The Piip portrait stream is invalid"),
             )
             captureChunks.remove(id)
             return
@@ -494,7 +433,7 @@ class MiiRenderController private constructor(
         val accumulator = captureChunks.remove(id) ?: return
         if (accumulator.parts.any { it == null }) {
             pendingCaptures.remove(id)?.completeExceptionally(
-                MiiRendererException("The Mii portrait stream is incomplete"),
+                MiiRendererException("The Piip portrait stream is incomplete"),
             )
             return
         }
@@ -503,14 +442,14 @@ class MiiRenderController private constructor(
         }
         if (encoded.length > MAX_CAPTURE_BASE64_LENGTH) {
             pendingCaptures.remove(id)?.completeExceptionally(
-                MiiRendererException("The Mii portrait is unexpectedly large"),
+                MiiRendererException("The Piip portrait is unexpectedly large"),
             )
             return
         }
         val bytes = runCatching { Base64.decode(encoded, Base64.DEFAULT) }.getOrNull()
         if (bytes == null || !bytes.hasPngSignature()) {
             pendingCaptures.remove(id)?.completeExceptionally(
-                MiiRendererException("The Mii portrait is invalid"),
+                MiiRendererException("The Piip portrait is invalid"),
             )
             return
         }
@@ -542,7 +481,7 @@ class MiiRenderController private constructor(
             error: WebResourceError,
         ) {
             if (request.isForMainFrame) {
-                failRuntime("The local Mii renderer page could not be loaded.")
+                failRuntime("The Piip renderer page could not be loaded.")
             }
         }
 
@@ -593,7 +532,7 @@ class MiiRenderController private constructor(
     private fun validateCanonical(value: String) {
         val decoded = runCatching { Base64.decode(value, Base64.DEFAULT) }.getOrNull()
         require(decoded != null && decoded.size in MIN_CANONICAL_BYTES..MAX_CANONICAL_BYTES) {
-            "Invalid canonical Mii data"
+            "Invalid Piip data"
         }
     }
 
@@ -649,7 +588,6 @@ class MiiRenderController private constructor(
         private const val MAX_CAPTURE_CHUNK_LENGTH = 40 * 1024
         private const val MAX_CAPTURE_BASE64_LENGTH = 16 * 1024 * 1024
         private const val MAX_RENDERER_RESTARTS = 2
-        private val FIELD_NAME_REGEX = Regex("[A-Za-z][A-Za-z0-9]{0,63}")
 
         @Volatile
         private var instance: MiiRenderController? = null

@@ -2,7 +2,6 @@ package com.pocketpass.app.feature
 
 import com.pocketpass.app.domain.model.DeleteNotificationCommand
 import com.pocketpass.app.domain.model.FriendRequestNotificationStatus
-import com.pocketpass.app.domain.model.MarkAllNotificationsReadCommand
 import com.pocketpass.app.domain.model.MarkNotificationReadCommand
 import com.pocketpass.app.domain.model.NotificationAction
 import com.pocketpass.app.domain.model.NotificationId
@@ -127,25 +126,6 @@ class NotificationStateHolder(
                     readAt = Clock.System.now(),
                 ),
             )
-        }
-    }
-
-    fun markAllRead() {
-        val account = activeAccountId.value ?: return
-        scope.launch {
-            when (
-                val result = notificationRepository.markAllRead(
-                    MarkAllNotificationsReadCommand(
-                        accountId = account,
-                        readAt = Clock.System.now(),
-                    ),
-                )
-            ) {
-                is RepositoryResult.Success -> error.value = null
-                is RepositoryResult.Failure -> {
-                    error.value = result.error.message ?: "Notifications could not be updated."
-                }
-            }
         }
     }
 

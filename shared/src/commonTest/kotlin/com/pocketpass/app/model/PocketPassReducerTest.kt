@@ -93,19 +93,6 @@ class PocketPassReducerTest {
     }
 
     @Test
-    fun closeNewGroupPopsOnlyWhenTheComposerIsOnTop() {
-        val messages = PocketPassReducer.reduce(
-            PocketPassUiState(),
-            PocketPassEvent.SelectDestination(PocketPassDestination.Messages),
-        )
-        val composer = PocketPassReducer.reduce(messages, PocketPassEvent.OpenNewGroup)
-        assertEquals(messages.routes, PocketPassReducer.reduce(composer, PocketPassEvent.CloseNewGroup).routes)
-
-        val detail = PocketPassReducer.reduce(messages, PocketPassEvent.OpenMessage("crew"))
-        assertEquals(detail, PocketPassReducer.reduce(detail, PocketPassEvent.CloseNewGroup))
-    }
-
-    @Test
     fun groupEventsLeaveReducerStateUntouched() {
         val detail = PocketPassReducer.reduce(
             PocketPassReducer.reduce(
@@ -342,16 +329,6 @@ class PocketPassReducerTest {
     }
 
     @Test
-    fun messageBadgeTextCanChangeAtRuntime() {
-        val changed = PocketPassReducer.reduce(
-            PocketPassUiState(),
-            PocketPassEvent.SetMessageBadgeText("99+"),
-        )
-
-        assertEquals("99+", changed.messageBadgeText)
-    }
-
-    @Test
     fun shuffleAlternatesBetweenBothFigmaFixtures() {
         val shuffled = PocketPassReducer.reduce(
             PocketPassUiState(),
@@ -367,7 +344,7 @@ class PocketPassReducerTest {
     }
 
     @Test
-    fun settingsClampAndResetToFigmaDefaults() {
+    fun settingsClampToTheirRanges() {
         var state = PocketPassUiState()
         state = PocketPassReducer.reduce(state, PocketPassEvent.SetNearby(false))
         state = PocketPassReducer.reduce(state, PocketPassEvent.SetSoundLevel(3f))
@@ -380,13 +357,6 @@ class PocketPassReducerTest {
         assertEquals(1f, state.soundLevel)
         assertEquals(0f, state.sfxLevel)
         assertEquals(ThemeMode.Dark, state.themeMode)
-
-        state = PocketPassReducer.reduce(state, PocketPassEvent.ResetSettings)
-        assertTrue(state.nearbyEnabled)
-        assertEquals(0.45f, state.soundLevel)
-        assertEquals(0.6f, state.sfxLevel)
-        assertEquals(ThemeMode.System, state.themeMode)
-        assertFalse(state.stepRewardsEnabled)
     }
 
     @Test

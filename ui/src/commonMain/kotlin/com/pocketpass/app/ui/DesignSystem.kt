@@ -33,10 +33,6 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import com.pocketpass.ui.resources.Res
 import com.pocketpass.ui.resources.gochi_hand
-import com.pocketpass.ui.resources.instrument_sans_400
-import com.pocketpass.ui.resources.instrument_sans_500
-import com.pocketpass.ui.resources.instrument_sans_600
-import com.pocketpass.ui.resources.instrument_sans_700
 import com.pocketpass.ui.resources.rubik_400
 import com.pocketpass.ui.resources.rubik_500
 import com.pocketpass.ui.resources.rubik_600
@@ -69,21 +65,9 @@ val GochiHand: FontFamily
 val Staatliches: FontFamily
     @Composable get() = FontFamily(Font(Res.font.staatliches, FontWeight.Normal))
 
-/** Sudofont: the Nintendo DS special characters, used for message emoji. */
 val Sudofont: FontFamily
     @Composable get() = FontFamily(Font(Res.font.sudofont, FontWeight.Normal))
 
-val InstrumentSans: FontFamily
-    @Composable get() = FontFamily(
-        Font(Res.font.instrument_sans_400, FontWeight.Normal),
-        Font(Res.font.instrument_sans_500, FontWeight.Medium),
-        Font(Res.font.instrument_sans_600, FontWeight.SemiBold),
-        Font(Res.font.instrument_sans_700, FontWeight.Bold),
-    )
-
-// A file under composeResources that FigmaAsset streams through Coil: the Figma exports are
-// plain SVGs, which Compose resources cannot rasterise on Android, so one loader serves every
-// platform instead.
 @JvmInline
 value class PocketAsset(val path: String)
 
@@ -211,10 +195,6 @@ fun DesignMetrics.anchoredX(x: Number, anchor: DesignAnchor): Float =
     x.toFloat() + anchorShift(anchor, overscanX) - LocalDesignOrigin.current.x
 
 @Composable
-fun DesignMetrics.anchoredY(y: Number, anchor: DesignAnchor): Float =
-    y.toFloat() + anchorShift(anchor, overscanY) - LocalDesignOrigin.current.y
-
-@Composable
 fun Modifier.anchoredBounds(
     metrics: DesignMetrics,
     x: Number,
@@ -301,15 +281,12 @@ fun Modifier.designBounds(
 object Assets {
     val AuthLeaf = figma("auth_leaf.png")
     val AuthCheck = figma("auth_check.svg")
-    val StatusWifi = figma("status_wifi.svg")
-    val StatusBattery = figma("status_battery.svg")
     val NavMessages = figma("nav_messages.svg")
     val NavFriends = figma("nav_friends.svg")
     val NavHome = figma("nav_home.svg")
     val NavActivities = figma("nav_activities.svg")
     val NavSettings = figma("nav_settings.svg")
     val HomeAvatarMatt = figma("home_avatar_matt.svg")
-    val HomeCardOnline = figma("home_card_online.png")
     val OnlineDot = figma("online_dot.svg")
     val PatternHomeBottom = figma("pattern_home_bottom.svg")
     val PatternHomeTop = figma("pattern_home_top.svg")
@@ -329,16 +306,13 @@ object Assets {
     val HomeMoodEmojiParty = figma("home_mood_emoji_party.svg")
     val HomeMoodEmojiPlayful = figma("home_mood_emoji_playful.svg")
     val HomeMoodEmojiCool = figma("home_mood_emoji_cool.svg")
-    val PatternActivitiesBottom = figma("pattern_activities_bottom.svg")
-    val PatternActivitiesTop = figma("pattern_activities_top.svg")
+    val PatternActivitiesBottom = figma("pattern_home_bottom.svg")
+    val PatternActivitiesTop = figma("pattern_home_top.svg")
     val ActivitiesGames = figma("activities_games.svg")
     val ActivitiesArrowGreen = figma("activities_arrow_green.svg")
     val ActivitiesShop = figma("activities_shop.svg")
     val ActivitiesArrowOrange = figma("activities_arrow_orange.svg")
     val ActivitiesTrophy = figma("activities_trophy.svg")
-    val ActivitiesPanelGames = figma("activities_panel_games.png")
-    val ActivitiesPanelShop = figma("activities_panel_shop.png")
-    val ActivitiesPanelLeaderboard = figma("activities_panel_leaderboard.png")
     val ActivitiesArrowYellow = figma("activities_arrow_yellow.svg")
     val ActivitiesCoinDefault = figma("activities_coin_default.png")
     val ActivitiesPuzzleDefault = figma("activities_puzzle_default.png")
@@ -350,7 +324,6 @@ object Assets {
     val GameWoodTop = figma("game_wood_top.jpg")
     val GameWoodBottom = figma("game_wood_bottom.jpg")
     val PuzzleSwapTitle = figma("puzzle_swap_title.svg")
-    val PuzzleSwapBottom = figma("puzzle_bottom.jpg")
     val PuzzlePockiHappy = puzzle("pocki_happy.png")
     val BingoPaper = figma("bingo_paper.png")
     val BingoTitle = figma("bingo_title.svg")
@@ -364,10 +337,9 @@ object Assets {
     val GamesIconBingo = figma("games_icon_bingo.svg")
     val GamesIconWorldTour = figma("games_icon_world_tour.svg")
     val ShopCategoryHats = figma("shop_category_hats.svg")
-    val ShopItemBaseballCap = figma("shop_item_baseball_cap.png")
+    val ShopItemBaseballCap = figma("home_avatar_matt.svg")
     val ShopItemHalo = figma("shop_item_halo.png")
-    val PatternMessagesTop = figma("pattern_messages_top.svg")
-    val PatternMessagesBottom = figma("pattern_messages_bottom.svg")
+    val PatternMessagesTop = figma("pattern_home_top.svg")
     val MessagesAvatarSpob = figma("messages_avatar_spob.svg")
     val MessagesAvatarSans = figma("messages_avatar_sans.svg")
     val MessagesBadge = figma("messages_badge.svg")
@@ -377,23 +349,11 @@ object Assets {
     val MessagesSendButton = figma("messages_send_button.svg")
     val MessageActionAdd = figma("message_action_add.svg")
     val MessageActionImage = figma("message_action_image.svg")
-    val MessageActionFile = figma("message_action_file.svg")
-    val MessagesBadgeComposite = figma("messages_badge_composite.png")
-    val MessagesListPanel = figma("messages_list_panel.png")
-    val PatternFriendsBottom = figma("pattern_friends_bottom.svg")
-    val PatternFriendsTop = figma("pattern_friends_top.svg")
-    val FriendsAvatarMatt = figma("friends_avatar_matt.svg")
+    val FriendsAvatarMatt = figma("home_avatar_matt.svg")
     val FriendsFilter = figma("friends_filter.svg")
     val FriendsBadge = figma("friends_badge.png")
-    val FriendsCardOnline = figma("friends_card_online.png")
-    val FriendsCardOffline = figma("friends_card_offline.png")
-    val PatternSettingsBottom = figma("pattern_settings_bottom.svg")
-    val PatternSettingsTop = figma("pattern_settings_top.svg")
     val SettingsNearby = figma("settings_nearby.svg")
-    val SettingsNearbyPanel = figma("settings_nearby_panel.png")
-    val SettingsSwitchOn = figma("settings_switch_on.svg")
     val SettingsSound = figma("settings_sound.svg")
-    val SettingsSoundPanel = figma("settings_sound_panel.png")
     val SettingsGear = figma("settings_gear_face.svg")
     val SettingsGearShadow = figma("settings_gear_shadow.svg")
     val SettingsNotifications = figma("settings_notifications.svg")
@@ -415,7 +375,6 @@ object Assets {
     val SettingsLogout = figma("settings_logout.svg")
     val SettingsConnectedApps = figma("settings_connected_apps.svg")
     val SettingsSocial = figma("settings_social.svg")
-    val SettingsCreditsAvatar = figma("settings_credits_avatar.svg")
     val SettingsCreditsAvatarSimply = figma("settings_credits_avatar_simply.png")
     val SettingsCreditsAvatarBrocoDev = figma("settings_credits_avatar_brocodev.png")
     val SettingsCreditsAvatarK0o1 = figma("settings_credits_avatar_k0o1.jpg")

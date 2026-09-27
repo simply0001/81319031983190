@@ -29,11 +29,6 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.Text
 import com.pocketpass.app.ui.theme.pocketPalette
 
-/**
- * The third Activities counter: steps walked today and the tokens they have
- * earned. Sized like the coin/puzzle counters; shown only while step rewards
- * are on. Without the activity permission it turns into a tap-to-allow.
- */
 @Composable
 internal fun StepsCounter(
     metrics: DesignMetrics,

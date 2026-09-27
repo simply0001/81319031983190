@@ -12,10 +12,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         messageNotifications.configure()
-        // Registers the BGTaskScheduler background-refresh handler; must run
-        // before this method returns.
         PhoneEntryKt.PhoneAppDidLaunch()
-        // WidgetKit is Swift-only, so Kotlin hands widget refreshes back here.
         PhoneEntryKt.PhoneAppSetWidgetReloader {
             WidgetCenter.shared.reloadAllTimelines()
         }
@@ -38,7 +35,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         messageNotifications.registrationFailed()
     }
 
-    // The pocketpass:// scheme carries the OAuth sign-in callback.
     func application(
         _ app: UIApplication,
         open url: URL,

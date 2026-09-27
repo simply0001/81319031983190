@@ -39,6 +39,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @SuppressLint("MissingPermission")
 internal class NearbyBleEngine(
@@ -60,6 +61,7 @@ internal class NearbyBleEngine(
     private val scanner: BluetoothLeScanner? = adapter.bluetoothLeScanner
     private val advertiser: BluetoothLeAdvertiser? = adapter.bluetoothLeAdvertiser
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val machineDispatcher = Dispatchers.Default.limitedParallelism(1)
     @Volatile
     private var invitationNonce = NearbyDeviceTag.invitationNonce(deviceTagSecret)
     private val sessions = ConcurrentHashMap<String, GattSession>()
@@ -75,6 +77,7 @@ internal class NearbyBleEngine(
     private var advertising = false
     private var scanning = false
     private var unfilteredScan = false
+    @Volatile
     private var stopped = false
 
     private val advertiseCallback = object : AdvertiseCallback() {
@@ -118,8 +121,6 @@ internal class NearbyBleEngine(
                 }
                 remoteNonce = nonce
             } else {
-                // iOS cannot put service data in its advertisements, so a bare
-                // PocketPass service UUID is an iPhone; this side initiates.
                 if (record.serviceUuids?.contains(SERVICE_UUID) != true) return
                 remoteNonce = null
             }
@@ -326,7 +327,10 @@ internal class NearbyBleEngine(
                 failSession(session, "Encrypted response notifications could not be enabled.")
                 return
             }
-            dispatchEvents(session, session.machine.onTransportReady())
+            scope.launch(machineDispatcher) {
+                if (sessions[session.device.address] !== session) return@launch
+                dispatchEvents(session, session.withMachine { it.onTransportReady() })
+            }
         }
 
         @Deprecated("Deprecated in Android 13")
@@ -411,9 +415,9 @@ internal class NearbyBleEngine(
 
     fun stop() {
         stopped = true
-        if (advertising) advertiser?.stopAdvertising(advertiseCallback)
-        if (scanning) scanner?.stopScan(scanCallback)
-        sessions.keys.toList().forEach(::closeSession)
+        if (advertising) runCatching { advertiser?.stopAdvertising(advertiseCallback) }
+        if (scanning) runCatching { scanner?.stopScan(scanCallback) }
+        sessions.values.toList().forEach { closeSession(it) }
         gattServer?.clearServices()
         gattServer?.close()
         gattServer = null
@@ -490,8 +494,10 @@ internal class NearbyBleEngine(
             }
 
             is RepositoryResult.Success -> {
-                session.credentialAttached = true
-                val events = session.machine.attachCredential(result.value)
+                val events = withContext(machineDispatcher) {
+                    session.credentialAttached = true
+                    session.withMachine { it.attachCredential(result.value) }
+                }
                 dispatchEvents(session, events)
                 events.none { it is NearbyHandshakeSession.Event.Failed }
             }
@@ -514,8 +520,9 @@ internal class NearbyBleEngine(
                 return
             }
             ?: return
-        scope.launch {
-            dispatchEvents(session, session.machine.onPacket(packet))
+        scope.launch(machineDispatcher) {
+            if (sessions[session.device.address] !== session) return@launch
+            dispatchEvents(session, session.withMachine { it.onPacket(packet) })
         }
     }
 
@@ -545,23 +552,18 @@ internal class NearbyBleEngine(
         }
     }
 
-    // The peripheral's proof is ready the moment it queues its own encrypted
-    // confirmation; tearing the link down right then races the indication still
-    // in flight, the central never confirms, and the pair ends the day with two
-    // receipts for two different handshakes. Close only once every fragment has
-    // been acknowledged, or after a deadline if the ack never comes.
     private fun closeAfterDrain(session: GattSession) {
         val drained = synchronized(session) {
             session.closeWhenDrained = true
             !session.sending && session.outbound.isEmpty()
         }
         if (drained) {
-            closeSession(session.device.address)
+            closeSession(session)
             return
         }
         scope.launch {
             delay(DRAIN_CLOSE_TIMEOUT_MILLIS)
-            closeSession(session.device.address)
+            closeSession(session)
         }
     }
 
@@ -588,7 +590,7 @@ internal class NearbyBleEngine(
             next
         }
         if (fragment == null) {
-            if (session.closeWhenDrained) closeSession(session.device.address)
+            if (session.closeWhenDrained) closeSession(session)
             return
         }
         val started = when (session.role) {
@@ -653,7 +655,6 @@ internal class NearbyBleEngine(
                         byteArrayOf(0xFF.toByte()),
                     )
                     .build(),
-                // iOS peers advertise the service UUID with no service data.
                 ScanFilter.Builder()
                     .setServiceUuid(SERVICE_UUID)
                     .build(),
@@ -678,11 +679,17 @@ internal class NearbyBleEngine(
     }
 
     private fun closeSession(address: String) {
-        val session = sessions.remove(address) ?: return
-        session.machine.unexposedCredential()?.let { credential ->
+        sessions[address]?.let { closeSession(it) }
+    }
+
+    private fun closeSession(session: GattSession) {
+        if (!sessions.remove(session.device.address, session)) return
+        val unexposed = session.withMachine { machine ->
+            machine.unexposedCredential().also { machine.close() }
+        }
+        unexposed?.let { credential ->
             scope.launch { credentialPool.release(accountId, credential) }
         }
-        session.machine.close()
         session.gatt?.runCatching {
             disconnect()
             close()
@@ -694,7 +701,8 @@ internal class NearbyBleEngine(
     }
 
     private fun failSession(session: GattSession, message: String) {
-        closeSession(session.device.address)
+        closeSession(session)
+        if (stopped) return
         onState(
             if (advertising && scanning) {
                 NearbyRuntimeStatus.Running
@@ -708,12 +716,13 @@ internal class NearbyBleEngine(
     }
 
     private fun publishState() {
-        if (advertising && scanning) {
+        if (!stopped && advertising && scanning) {
             onState(NearbyRuntimeStatus.Running, null, sessions.size, null)
         }
     }
 
     private fun reportError(message: String) {
+        if (stopped) return
         onState(NearbyRuntimeStatus.Error, message, sessions.size, null)
     }
 
@@ -765,6 +774,10 @@ internal class NearbyBleEngine(
         characteristic.value = value
         server.notifyCharacteristicChanged(device, characteristic, true)
     }
+
+    private inline fun <T> GattSession.withMachine(
+        block: (NearbyHandshakeSession) -> T,
+    ): T = synchronized(machine) { block(machine) }
 
     private data class GattSession(
         val device: BluetoothDevice,

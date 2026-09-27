@@ -98,7 +98,7 @@ internal fun ConsentPermissionList(m: DesignMetrics, request: OAuthConsentReques
         }
     }
     if(request.scopes.isEmpty() && request.extraClaims.isEmpty()) BoardLabel(m, "No additional permissions requested.", 32f)
-    BoardLabel(m, "You can disconnect this app in Settings → Social → Connected Apps. Disconnecting stops future access; it cannot erase information the app already copied.", 30f,
+    BoardLabel(m, "Disconnect this app any time in Settings → Social → Connected Apps. Disconnecting stops future access; it cannot erase information the app already copied.", 30f,
         modifier = Modifier.fillMaxWidth().controllerTarget("consent_revoke_info", layer = CONSENT_REVIEW_LAYER) {},
         color = pocketPalette.textSecondary)
 }

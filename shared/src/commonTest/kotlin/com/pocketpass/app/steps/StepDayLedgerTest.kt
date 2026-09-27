@@ -111,7 +111,6 @@ class StepDayLedgerTest {
         val previous = StepDayLedger.advance(first(), 5_300, day + 22 * hour, boot, day)
         val nextDay = day + 24 * hour
 
-        // 400 steps over four hours, two of them after midnight.
         val state = StepDayLedger.advance(previous, 5_700, nextDay + 2 * hour, boot, nextDay)
 
         assertEquals(200, state.stepsToday)

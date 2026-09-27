@@ -143,7 +143,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -177,7 +177,8 @@ class AppContainer(
     val database: PocketPassDatabase = PocketPassDatabase.build(context)
     val settingsRepository: SettingsRepository = DataStoreSettingsRepository(context)
     val soundEffects = SoundEffectPlayer(context)
-    private val appForeground = MutableStateFlow(false)
+    private val mutableAppForeground = MutableStateFlow(false)
+    val appForeground: StateFlow<Boolean> = mutableAppForeground.asStateFlow()
     private val connectivityManager =
         context.getSystemService(ConnectivityManager::class.java)
     private val realtimeNetworkState = MutableStateFlow(
@@ -559,7 +560,7 @@ class AppContainer(
         sink = AndroidWidgetSnapshotSink(context),
     )
 
-    val widgetDesignRepository: WidgetDesignRepository =
+    private val widgetDesignRepository: WidgetDesignRepository =
         FileWidgetDesignRepository(context, applicationScope)
     val widgetDesigns = WidgetDesignsStateHolder(widgetDesignRepository, applicationScope)
     val widgetPlatform: WidgetPlatformActions = AndroidWidgetPlatformActions(context)
@@ -576,9 +577,6 @@ class AppContainer(
 
     val authRemoteDataSource: SupabaseAuthRemoteDataSource?
         get() = backendComponents?.authRemote
-
-    val realtimeGateway: SupabaseRealtimeGateway?
-        get() = backendComponents?.realtime
 
     val messagePush = MessagePushManager(
         context = context,
@@ -645,7 +643,7 @@ class AppContainer(
         repositories.session.handleAuthCallback(callbackUri)
 
     fun setAppForeground(foreground: Boolean) {
-        appForeground.value = foreground
+        mutableAppForeground.value = foreground
         appUpdate.setForeground(foreground)
         stepRewards.setForeground(foreground)
         if (foreground && !BuildConfig.DEBUG) AppUpdateCheckScheduler.schedule(context)
@@ -737,7 +735,7 @@ class AppContainer(
             ?: return RepositoryResult.Failure(
                 RepositoryFailure(
                     kind = RepositoryFailureKind.Unauthorized,
-                    message = "Sign in again to delete this Mii.",
+                    message = "Sign in again to delete this Piip.",
                     retryable = false,
                 ),
             )

@@ -8,7 +8,6 @@ import com.pocketpass.app.data.local.dao.FriendCodeDao
 import com.pocketpass.app.data.local.dao.MessageDao
 import com.pocketpass.app.data.local.dao.OutboxEnqueueResult
 import com.pocketpass.app.data.local.dao.ProfileDao
-import com.pocketpass.app.data.local.dao.SyncCursorDao
 import com.pocketpass.app.data.local.entity.SyncCursorEntity
 import com.pocketpass.app.data.local.entity.FriendCodeEntity
 import com.pocketpass.app.data.local.toDomain
@@ -107,8 +106,16 @@ class RoomProfileRepository(
         }
 
     override suspend fun refreshMessageColours(accountId: UserId, conversationId: ConversationId): RepositoryResult<Unit> = repositoryCall {
-        val ids = profileDao.messageAuthorIds(accountId.value, conversationId.value).map(::UserId).toSet()
-        when (val result = remote.fetchAuthorProfiles(ids)) {
+        refreshAuthorProfiles(profileDao.messageAuthorIds(accountId.value, conversationId.value))
+    }
+
+    suspend fun refreshAllMessageColours(accountId: UserId): RepositoryResult<Unit> = repositoryCall {
+        refreshAuthorProfiles(profileDao.allMessageAuthorIds(accountId.value))
+    }
+
+    private suspend fun refreshAuthorProfiles(authorIds: List<String>): RepositoryResult<Unit> {
+        val ids = authorIds.map(::UserId).toSet()
+        return when (val result = remote.fetchAuthorProfiles(ids)) {
             is RepositoryResult.Failure -> result
             is RepositoryResult.Success -> {
                 val profiles = result.value.associateBy { it.userId }
@@ -364,6 +371,10 @@ class RoomMessageRepository(
                         command.accountId.value,
                         command.conversationId.value,
                     )
+                    database.syncCursorDao().delete(
+                        command.accountId.value,
+                        messageCursorStream(command.conversationId),
+                    )
                 }
                 RepositoryResult.Success(Unit)
             }
@@ -410,15 +421,65 @@ class RoomMessageRepository(
         accountId: UserId,
         conversationId: ConversationId,
     ): RepositoryResult<Unit> = repositoryCall {
-        when (val result = remote.fetchMessages(accountId, conversationId)) {
+        val stream = messageCursorStream(conversationId)
+        val seenThrough = messageCursor(accountId, conversationId, stream)
+        val result = if (seenThrough == null) {
+            remote.fetchMessages(accountId, conversationId)
+        } else {
+            remote.fetchMessageChanges(
+                accountId = accountId,
+                conversationId = conversationId,
+                changedAfter = seenThrough - MESSAGE_CURSOR_OVERLAP,
+            )
+        }
+        when (result) {
             is RepositoryResult.Failure -> result
             is RepositoryResult.Success -> {
                 require(result.value.all { it.conversationId == conversationId }) {
                     "Remote message page contains another conversation"
                 }
-                reconciler.upsertMessages(accountId, result.value)
-                reconciler.refreshConversationPreview(accountId, conversationId)
+                if (result.value.isNotEmpty()) {
+                    reconciler.upsertMessages(accountId, result.value)
+                    reconciler.refreshConversationPreview(accountId, conversationId)
+                    advanceMessageCursor(
+                        accountId = accountId,
+                        stream = stream,
+                        seenThrough = result.value.maxOf(Message::latestChangeAt),
+                    )
+                }
                 RepositoryResult.Success(Unit)
+            }
+        }
+    }
+
+    private suspend fun messageCursor(
+        accountId: UserId,
+        conversationId: ConversationId,
+        stream: String,
+    ): Instant? {
+        if (!messageDao.hasMessages(accountId.value, conversationId.value)) return null
+        return database.syncCursorDao().get(accountId.value, stream)?.cursor?.let(::parseCursorOrNull)
+    }
+
+    private suspend fun advanceMessageCursor(
+        accountId: UserId,
+        stream: String,
+        seenThrough: Instant,
+    ) {
+        database.withWriterTransaction {
+            val current = database.syncCursorDao()
+                .get(accountId.value, stream)
+                ?.cursor
+                ?.let(::parseCursorOrNull)
+            if (current == null || seenThrough > current) {
+                database.syncCursorDao().upsert(
+                    SyncCursorEntity(
+                        accountId = accountId.value,
+                        stream = stream,
+                        cursor = seenThrough.toString(),
+                        updatedAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                    ),
+                )
             }
         }
     }
@@ -617,7 +678,8 @@ class RoomSyncRepository(
     private val notifications: NotificationRepository,
     private val encounters: RoomEncounterRepository,
     private val outboxProcessor: OutboxProcessor,
-    private val syncCursorDao: SyncCursorDao,
+    private val pendingOperationScheduler: PendingOperationScheduler =
+        PendingOperationScheduler.None,
     private val clock: Clock = Clock.System,
 ) : SyncRepository {
     private val synchronizationMutex = Mutex()
@@ -632,6 +694,9 @@ class RoomSyncRepository(
         try {
             var firstFailure: RepositoryFailure? = null
             val drain = outboxProcessor.drain(accountId)
+            if (drain.hasRemainingWork) {
+                pendingOperationScheduler.schedule(accountId)
+            }
             if (drain.retryableFailures > 0 || drain.reachedBatchLimit) {
                 firstFailure = RepositoryFailure(
                     kind = RepositoryFailureKind.Unavailable,
@@ -662,16 +727,7 @@ class RoomSyncRepository(
 
             val failure = firstFailure
             if (failure == null) {
-                val completedAt = clock.now()
-                syncCursorDao.upsert(
-                    SyncCursorEntity(
-                        accountId = accountId.value,
-                        stream = FULL_SYNC_STREAM,
-                        cursor = completedAt.toString(),
-                        updatedAtEpochMillis = completedAt.toEpochMilliseconds(),
-                    ),
-                )
-                mutableSyncState.value = SyncState.Succeeded(completedAt)
+                mutableSyncState.value = SyncState.Succeeded(clock.now())
                 RepositoryResult.Success(Unit)
             } else {
                 mutableSyncState.value = SyncState.Failed(
@@ -702,7 +758,6 @@ class RoomSyncRepository(
     }
 
     private companion object {
-        const val FULL_SYNC_STREAM = "full_sync"
         const val RETRY_HINT_SECONDS = 10L
     }
 }

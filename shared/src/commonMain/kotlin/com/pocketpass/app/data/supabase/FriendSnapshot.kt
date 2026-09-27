@@ -7,12 +7,6 @@ import com.pocketpass.app.domain.model.FriendshipStatus
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 
-/**
- * Merges accepted friendships with the account's pending friend requests into
- * the friends snapshot. Without the requests, the next sync after a request
- * was acknowledged reconciled the optimistic "request sent" row away and the
- * profile fell back to "Add Friend" until the request was answered.
- */
 internal fun buildFriendSnapshot(
     accountId: UserId,
     friendships: List<FriendshipDto>,
@@ -57,7 +51,6 @@ internal fun buildFriendSnapshot(
     )
 }
 
-/** Everyone a friends snapshot needs a profile for. */
 internal fun friendSnapshotPeerIds(
     accountId: UserId,
     friendships: List<FriendshipDto>,

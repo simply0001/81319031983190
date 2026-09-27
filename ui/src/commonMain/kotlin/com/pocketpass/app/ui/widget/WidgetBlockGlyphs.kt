@@ -4,25 +4,6 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.PocketAsset
 import com.pocketpass.app.widget.WidgetBlock
 
-fun WidgetBlock.glyph(): PocketAsset = when (this) {
-    WidgetBlock.Tokens -> Assets.ActivitiesCoinDefault
-    WidgetBlock.StepsToday -> Assets.SettingsSteps
-    WidgetBlock.EncountersToday -> Assets.SettingsNearby
-    WidgetBlock.LastPass -> Assets.FriendWave
-    WidgetBlock.FriendsOnline -> Assets.NavFriends
-    WidgetBlock.UnreadNotifications -> Assets.SettingsNotifications
-    WidgetBlock.NearbyStatus -> Assets.SettingsNearby
-    WidgetBlock.Profile -> Assets.NavHome
-    WidgetBlock.DisplayName -> Assets.NavHome
-    WidgetBlock.FriendCode -> Assets.NavFriends
-    WidgetBlock.Achievements -> Assets.ActivitiesTrophy
-    WidgetBlock.BingoLines -> Assets.GamesIconBingo
-    WidgetBlock.WorldTourCountries -> Assets.GamesIconWorldTour
-    WidgetBlock.LeaderboardRank -> Assets.ActivitiesTrophy
-    WidgetBlock.RecentPeople -> Assets.FriendWave
-    WidgetBlock.OnlineFriends -> Assets.NavFriends
-}
-
 fun WidgetBlock.settingsGlyph(): PocketAsset = when (this) {
     WidgetBlock.Tokens -> Assets.SettingsTokens
     WidgetBlock.StepsToday -> Assets.SettingsSteps

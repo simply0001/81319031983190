@@ -128,7 +128,7 @@ internal fun PretendoImportOverlay(
             ),
     )
     if (found == null) {
-        PretendoEntryPanel(metrics, import, dispatch)
+        PretendoEntryPanel(metrics, import)
         PocketKeyboard(
             metrics = metrics,
             layout = PocketKeyboardLayout.Text,
@@ -165,7 +165,6 @@ internal fun PretendoImportOverlay(
 private fun PretendoEntryPanel(
     metrics: DesignMetrics,
     import: PretendoImportState,
-    dispatch: (PocketPassEvent) -> Unit,
 ) {
     val palette = pocketPalette
     val focus = LocalControllerFocus.current
@@ -201,7 +200,7 @@ private fun PretendoEntryPanel(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = "Type a Pretendo Network ID to copy its Mii",
+            text = "Type a Pretendo Network ID to copy its Piip",
             modifier = Modifier.designBounds(metrics, 60f, 140f, 960f, 46f),
             color = palette.textSecondary,
             fontFamily = Rubik,
@@ -329,7 +328,7 @@ private fun PretendoPreviewPanel(
             .testTag("pretendo_import_panel"),
     ) {
         Text(
-            text = "Import this Mii?",
+            text = "Import this Piip?",
             modifier = Modifier.designBounds(metrics, 60f, 44f, 960f, 90f),
             color = palette.textPrimary,
             fontFamily = Rubik,

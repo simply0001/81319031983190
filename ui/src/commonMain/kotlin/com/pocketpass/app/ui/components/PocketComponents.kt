@@ -49,7 +49,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
@@ -57,6 +56,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.StatusInfo
 import com.pocketpass.app.status.StatusFormatter
@@ -161,7 +162,6 @@ private fun Outline.inset(amount: Float): Outline? = when (this) {
 private fun CornerRadius.shrink(amount: Float): CornerRadius =
     CornerRadius((x - amount).coerceAtLeast(0f), (y - amount).coerceAtLeast(0f))
 
-// Composition is single-threaded, so a plain map is a safe read-once cache for asset bytes.
 private val assetByteCache = mutableMapOf<String, ByteArray>()
 
 @OptIn(ExperimentalResourceApi::class)
@@ -174,6 +174,42 @@ fun rememberPocketAssetBytes(resource: PocketAsset): ByteArray? {
     return bytes
 }
 
+private class LoadedPocketAsset(
+    val path: String,
+    val bytes: ByteArray,
+)
+
+private class PocketAssetRequestHolder {
+    var path: String? = null
+    var request: ImageRequest? = null
+}
+
+@OptIn(ExperimentalResourceApi::class)
+@Composable
+private fun rememberPocketAssetRequest(resource: PocketAsset): ImageRequest? {
+    val context = LocalPlatformContext.current
+    val path = resource.path
+    val loaded by produceState(assetByteCache[path]?.let { LoadedPocketAsset(path, it) }, path) {
+        value = LoadedPocketAsset(
+            path = path,
+            bytes = assetByteCache[path] ?: Res.readBytes(path).also { assetByteCache[path] = it },
+        )
+    }
+    val current = assetByteCache[path]?.let { LoadedPocketAsset(path, it) } ?: loaded ?: return null
+    val holder = remember { PocketAssetRequestHolder() }
+    val request = holder.request
+    if (request != null && holder.path == current.path) return request
+    return ImageRequest.Builder(context)
+        .data(current.bytes)
+        .memoryCacheKey(current.path)
+        .placeholderMemoryCacheKey(holder.path)
+        .build()
+        .also {
+            holder.path = current.path
+            holder.request = it
+        }
+}
+
 @Composable
 fun FigmaAsset(
     resource: PocketAsset,
@@ -184,7 +220,7 @@ fun FigmaAsset(
     colorFilter: ColorFilter? = null,
 ) {
     AsyncImage(
-        model = rememberPocketAssetBytes(resource),
+        model = rememberPocketAssetRequest(resource),
         contentDescription = description,
         modifier = modifier.alpha(alpha),
         contentScale = contentScale,
@@ -864,6 +900,7 @@ fun PocketPanel(
     focusLayer: Int = 0,
     onClick: (() -> Unit)? = null,
     onControllerActivate: (() -> Unit)? = null,
+    enabled: Boolean = true,
     horizontal: DesignAnchor? = null,
     vertical: DesignAnchor = DesignAnchor.Center,
     modifier: Modifier = Modifier,
@@ -909,11 +946,11 @@ fun PocketPanel(
                 if (tag == null || activate == null) {
                     Modifier
                 } else {
-                    Modifier.controllerTarget(tag, focusLayer, radius.toFloat()) { activate() }
+                    Modifier.controllerTarget(tag, focusLayer, radius.toFloat()) { if (enabled) activate() }
                 },
             )
             .then(
-                if (onClick == null) {
+                if (onClick == null || !enabled) {
                     Modifier
                 } else {
                     Modifier.clickable(
@@ -932,19 +969,6 @@ fun PocketPanel(
         }
     }
 }
-
-@Composable
-fun pocketTextStyle(
-    metrics: DesignMetrics,
-    size: Float,
-    color: Color,
-    weight: FontWeight = FontWeight.ExtraBold,
-): TextStyle = TextStyle(
-    fontFamily = Rubik,
-    fontWeight = weight,
-    fontSize = metrics.sp(size),
-    color = color,
-)
 
 @Composable
 fun PassingStreakPill(

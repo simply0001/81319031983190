@@ -5,7 +5,6 @@ import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.SystemClock
 import androidx.annotation.RawRes
-import androidx.compose.runtime.staticCompositionLocalOf
 import com.pocketpass.app.R
 import java.util.concurrent.ConcurrentHashMap
 
@@ -63,10 +62,6 @@ class SoundEffectPlayer(context: Context) : SoundEffectSink {
         if (last != null && now - last < MIN_REPEAT_INTERVAL_MILLIS) return
         lastStartedAt[effect] = now
         pool.play(sample, level, level, 1, 0, 1f)
-    }
-
-    fun release() {
-        pool.release()
     }
 
     private companion object {

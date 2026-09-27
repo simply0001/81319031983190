@@ -6,7 +6,6 @@ import com.pocketpass.app.domain.model.ActivitySnapshot
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.ConversationMember
 import com.pocketpass.app.domain.model.ConversationSummary
-import com.pocketpass.app.domain.model.FORMER_MEMBER_LABEL
 import com.pocketpass.app.domain.model.Friend
 import com.pocketpass.app.domain.model.Message
 import com.pocketpass.app.domain.model.NearbyEncounter
@@ -119,7 +118,6 @@ data class PocketPassUiState(
     val previewMessages: List<Message> = emptyList(),
     val messageDraft: String = "",
     val typingConversationIds: Set<String> = emptySet(),
-    val messageActionRailExpanded: Boolean = false,
     val messageSendInProgress: Boolean = false,
     val messageOperationError: String? = null,
     val messageActionMessageId: String? = null,
@@ -149,7 +147,6 @@ data class PocketPassUiState(
     val friendCodeError: String? = null,
     val notifications: List<com.pocketpass.app.domain.model.PocketPassNotification> = emptyList(),
     val notificationOperationError: String? = null,
-    val messageBadgeOverride: String? = null,
     val auth: AuthUiState = AuthUiState(),
     val accountSecurity: AccountSecurityUiState = AccountSecurityUiState(),
     val sessionState: SessionState = SessionState.Initializing,
@@ -189,67 +186,26 @@ data class PocketPassUiState(
             ?: PocketPassDestination.Home
 
     val messageBadgeText: String
-        get() = messageBadgeOverride
-            ?: unreadConversationCount.coerceAtLeast(0).toString()
+        get() = unreadConversationCount.coerceAtLeast(0).toString()
 
     val unreadNotificationCount: Int
         get() = notifications.count { it.isUnread }
-
-    fun senderDisplayName(userId: UserId): String =
-        selectedMembersById[userId]?.displayName
-            ?: friends.firstOrNull { it.profile.userId == userId }?.profile?.displayName
-            ?: FORMER_MEMBER_LABEL
 }
 
 object PocketPassReducer {
-    fun reduce(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState =
+    fun reduce(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState {
+        if (event is PocketPassEvent.StatusChanged) return state.copy(status = event.status)
+        return reduceRoutes(state, event)
+            ?: reduceWidgetMaker(state, event)
+            ?: reduceSettings(state, event)
+            ?: reduceShop(state, event)
+            ?: reduceDialogs(state, event)
+            ?: state
+    }
+
+    private fun reduceRoutes(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState? =
         when (event) {
-            is PocketPassEvent.Boards, is PocketPassEvent.PreviewMessage -> state
-            is PocketPassEvent.Auth -> state
-            is PocketPassEvent.AccountSetup -> state
-            is PocketPassEvent.AccountSecurity -> state
-            is PocketPassEvent.Mii -> state
-
-            PocketPassEvent.OpenMiiEditor,
-            is PocketPassEvent.EditMiiSlot,
-            PocketPassEvent.OpenConnectedApps,
-            PocketPassEvent.CloseConnectedApps,
-            is PocketPassEvent.OpenRevokeConnectedApp,
-            PocketPassEvent.CloseRevokeConnectedApp,
-            PocketPassEvent.ConfirmRevokeConnectedApp,
-            PocketPassEvent.DismissOAuthConsent,
-            PocketPassEvent.ApproveOAuthConsent,
-            PocketPassEvent.DenyOAuthConsent,
-            -> state
-
-            PocketPassEvent.OpenMiiSlots -> state.copy(miiSlotsVisible = true)
-            PocketPassEvent.CloseMiiSlots -> state.copy(
-                miiSlotsVisible = false,
-                miiDeleteSlot = null,
-                miiDeleteError = null,
-            )
-
-            PocketPassEvent.OpenThemePicker -> state.copy(themePickerExpanded = true)
-            PocketPassEvent.CloseThemePicker -> state.copy(themePickerExpanded = false)
-            PocketPassEvent.ToggleSortMenu -> state.copy(sortMenuOpen = !state.sortMenuOpen)
-            PocketPassEvent.CloseSortMenu -> state.copy(sortMenuOpen = false)
-
-            is PocketPassEvent.SetActiveMiiSlot -> state
-
-            is PocketPassEvent.OpenDeleteMiiSlot -> state.copy(
-                miiDeleteSlot = event.slot,
-                miiDeleteError = null,
-            )
-
-            PocketPassEvent.CloseDeleteMiiSlot -> state.copy(
-                miiDeleteSlot = null,
-                miiDeleteError = null,
-            )
-
-            PocketPassEvent.ConfirmDeleteMiiSlot -> state.copy(
-                miiDeleteInProgress = true,
-                miiDeleteError = null,
-            )
+            PocketPassEvent.Back -> reduceBack(state)
 
             is PocketPassEvent.SelectDestination -> state.copy(
                 routes = listOf(PocketPassRoute.Root(event.destination)),
@@ -284,234 +240,53 @@ object PocketPassReducer {
                 }
             }
 
-            PocketPassEvent.CloseNewGroup ->
-                if (state.routes.lastOrNull() == PocketPassRoute.NewGroup) {
-                    state.copy(routes = state.routes.dropLast(1))
-                } else {
-                    state
-                }
-
-            is PocketPassEvent.UpdateMessageDraft,
-            PocketPassEvent.SendMessage,
-            PocketPassEvent.ToggleMessageActions,
-            is PocketPassEvent.RetryMessage,
-            is PocketPassEvent.SelectMessageAction,
-            is PocketPassEvent.OpenMessageActions,
-            PocketPassEvent.CloseMessageActions,
-            PocketPassEvent.EditSelectedMessage,
-            PocketPassEvent.DeleteSelectedMessage,
-            PocketPassEvent.CancelMessageEdit,
-            is PocketPassEvent.ToggleGroupMember,
-            is PocketPassEvent.UpdateGroupTitle,
-            PocketPassEvent.CreateGroup,
-            PocketPassEvent.OpenGroupInfo,
-            PocketPassEvent.CloseGroupInfo,
-            is PocketPassEvent.AddGroupMembers,
-            is PocketPassEvent.RemoveGroupMember,
-            is PocketPassEvent.AddGroupMemberFriend,
-            PocketPassEvent.LeaveGroup,
-            is PocketPassEvent.RenameGroup,
-            PocketPassEvent.DismissConversationNotice,
-            PocketPassEvent.ToggleHomeMoodPicker,
-            is PocketPassEvent.SelectHomeMood,
-            PocketPassEvent.CloseHomeMoodPicker,
-            PocketPassEvent.OpenBioEditor,
-            is PocketPassEvent.UpdateBioDraft,
-            PocketPassEvent.SaveBio,
-            PocketPassEvent.CloseBioEditor,
-            PocketPassEvent.OpenNameEditor,
-            is PocketPassEvent.UpdateNameDraft,
-            PocketPassEvent.SaveName,
-            PocketPassEvent.CloseNameEditor,
-            PocketPassEvent.OpenShop,
-            PocketPassEvent.OpenGames,
-            PocketPassEvent.CloseGames,
-            is PocketPassEvent.OpenGame,
-            is PocketPassEvent.SelectBingoSquare,
-            PocketPassEvent.CloseBingoSquare,
-            PocketPassEvent.OpenWorldTourRegions,
-            PocketPassEvent.CloseWorldTourRegions,
-            PocketPassEvent.PreviousPuzzle,
-            PocketPassEvent.NextPuzzle,
-            PocketPassEvent.OpenBuyPuzzlePiece,
-            PocketPassEvent.CloseBuyPuzzlePiece,
-            PocketPassEvent.ConfirmBuyPuzzlePiece,
-            PocketPassEvent.DismissPuzzleNotice,
-            PocketPassEvent.OpenPuzzleInfo,
-            PocketPassEvent.ClosePuzzleInfo,
-            PocketPassEvent.OpenLeaderboard,
-            PocketPassEvent.CloseLeaderboard,
-            PocketPassEvent.OpenLeaderboardSettings,
-            PocketPassEvent.CloseLeaderboardSettings,
-            is PocketPassEvent.SetLeaderboardScope,
-            is PocketPassEvent.SetGlobalLeaderboardLimit,
-            PocketPassEvent.OpenAchievements,
-            PocketPassEvent.CloseAchievements,
-            PocketPassEvent.OpenAddFriend,
-            PocketPassEvent.RefreshFriends,
-            PocketPassEvent.SendProfileFriendRequest,
-            PocketPassEvent.MessageProfileFriend,
-            PocketPassEvent.ToggleNotifications,
-            PocketPassEvent.CloseFriendsOverlay,
-            is PocketPassEvent.UpdateFriendCode,
-            PocketPassEvent.SubmitFriendCode,
-            is PocketPassEvent.OpenNotification,
-            is PocketPassEvent.RespondToNotificationFriendRequest,
-            is PocketPassEvent.DeleteNotification,
-            PocketPassEvent.MarkAllNotificationsRead,
-            PocketPassEvent.ClearAllNotifications,
-            PocketPassEvent.RequestNearbyPermissions,
-            PocketPassEvent.SkipNearbyPermissions,
-            -> state
-
-            is PocketPassEvent.OpenUserProfile,
-            PocketPassEvent.CloseUserProfile,
-            PocketPassEvent.RemoveProfileFriend,
-            PocketPassEvent.CloseRemoveFriend,
-            -> state.copy(removeFriendPromptVisible = false)
-
-            PocketPassEvent.OpenRemoveFriend -> state.copy(removeFriendPromptVisible = true)
-
-            is PocketPassEvent.OpenBuyShopItem -> {
-                val item = state.shop.item(event.itemId)
-                if (item != null && state.shop.canBuy(item)) {
-                    state.copy(shop = state.shop.copy(buyPromptItemId = event.itemId))
-                } else {
-                    state
-                }
-            }
-
-            is PocketPassEvent.OpenShopCategory -> {
-                if (state.shop.visible && state.shop.categories.any { it.id == event.categoryId }) {
-                    state.copy(shop = state.shop.copy(selectedCategoryId = event.categoryId))
-                } else {
-                    state
-                }
-            }
-
-            PocketPassEvent.CloseShopCategory ->
-                state.copy(shop = state.shop.copy(selectedCategoryId = null))
-
-            PocketPassEvent.CloseBuyShopItem,
-            PocketPassEvent.ConfirmBuyShopItem,
-            is PocketPassEvent.WearShopItem,
-            -> state.copy(shop = state.shop.copy(buyPromptItemId = null))
-
-            PocketPassEvent.CloseShop ->
-                state.copy(shop = state.shop.copy(buyPromptItemId = null, selectedCategoryId = null))
-
-            PocketPassEvent.Back -> when {
-                state.shop.buyPromptItemId != null ->
-                    state.copy(shop = state.shop.copy(buyPromptItemId = null))
-                state.shop.selectedCategoryId != null ->
-                    state.copy(shop = state.shop.copy(selectedCategoryId = null))
-                state.removeFriendPromptVisible -> state.copy(removeFriendPromptVisible = false)
-                state.miiDeleteSlot != null && !state.miiDeleteInProgress -> state.copy(
-                    miiDeleteSlot = null,
-                    miiDeleteError = null,
-                )
-
-                state.miiSlotsVisible -> state.copy(miiSlotsVisible = false)
-                state.sortMenuOpen -> state.copy(sortMenuOpen = false)
-                state.themePickerExpanded -> state.copy(themePickerExpanded = false)
-                state.widgetMaker.blockPicker != null ->
-                    state.copy(widgetMaker = state.widgetMaker.copy(blockPicker = null))
-                state.widgetMaker.deletePromptVisible ->
-                    state.copy(widgetMaker = state.widgetMaker.copy(deletePromptVisible = false))
-                state.widgetMaker.renameDraft != null ->
-                    state.copy(widgetMaker = state.widgetMaker.copy(renameDraft = null))
-                state.routes.size <= 1 && state.rootDestination == PocketPassDestination.Messages ->
-                    state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home)))
-                state.routes.size <= 1 -> state
-                else -> state.copy(
-                    routes = state.routes.dropLast(1),
-                    widgetMaker = if (state.routes.last() == PocketPassRoute.WidgetMaker) {
-                        state.widgetMaker.copy(assigningAppWidgetId = null)
-                    } else {
-                        state.widgetMaker
-                    },
-                )
-            }
-
-            PocketPassEvent.ShuffleActivities -> state.copy(
-                activityVariant = if (state.activityVariant == ActivityVariant.Default) {
-                    ActivityVariant.Shuffled
-                } else {
-                    ActivityVariant.Default
-                },
-            )
-
-            is PocketPassEvent.SetMessageBadgeText -> state.copy(
-                messageBadgeOverride = event.text.take(12),
-            )
-            is PocketPassEvent.SetNearby -> state.copy(nearbyEnabled = event.enabled)
-            is PocketPassEvent.SetSoundLevel -> state.copy(
-                soundLevel = event.level.coerceIn(0f, 1f),
-            )
-            is PocketPassEvent.SetSfxLevel -> state.copy(
-                sfxLevel = event.level.coerceIn(0f, 1f),
-            )
-
-            is PocketPassEvent.SetThemeMode -> state.copy(themeMode = event.mode)
-            is PocketPassEvent.SetRecentInteractionsSort ->
-                state.copy(recentInteractionsSort = event.sort)
-            is PocketPassEvent.SetFriendsSort ->
-                state.copy(friendsSort = event.sort)
-            PocketPassEvent.OpenAccessibility ->
-                if (state.routes.lastOrNull() == PocketPassRoute.Accessibility) {
-                    state
-                } else {
-                    state.copy(routes = state.routes + PocketPassRoute.Accessibility)
-                }
-            PocketPassEvent.OpenAppSettings ->
-                if (state.routes.lastOrNull() == PocketPassRoute.AppSettings) {
-                    state
-                } else {
-                    state.copy(routes = state.routes + PocketPassRoute.AppSettings)
-                }
+            PocketPassEvent.OpenAccessibility -> state.pushRoute(PocketPassRoute.Accessibility)
+            PocketPassEvent.OpenAppSettings -> state.pushRoute(PocketPassRoute.AppSettings)
             PocketPassEvent.OpenChatColours -> if (state.routes.lastOrNull() == PocketPassRoute.ChatColours) state
                 else state.copy(routes = state.routes + PocketPassRoute.ChatColours, chatColourSaveError = null)
-            is PocketPassEvent.SetMessagePrivacy -> state
-            is PocketPassEvent.SetInvitesPrivacy -> state
-            is PocketPassEvent.SetBoardsVisible -> state
-            is PocketPassEvent.SaveChatColour -> state
-            PocketPassEvent.OpenSocial ->
-                if (state.routes.lastOrNull() == PocketPassRoute.Social) {
-                    state
-                } else {
-                    state.copy(routes = state.routes + PocketPassRoute.Social)
-                }
-            PocketPassEvent.OpenAccountSecurity ->
-                if (state.routes.lastOrNull() == PocketPassRoute.AccountSecurity) {
-                    state
-                } else {
-                    state.copy(routes = state.routes + PocketPassRoute.AccountSecurity)
-                }
-            PocketPassEvent.OpenContributors ->
-                if (state.routes.lastOrNull() == PocketPassRoute.Contributors) {
-                    state
-                } else {
-                    state.copy(routes = state.routes + PocketPassRoute.Contributors)
-                }
-            PocketPassEvent.OpenNotificationSettings ->
-                if (state.routes.lastOrNull() == PocketPassRoute.NotificationSettings) {
-                    state
-                } else {
-                    state.copy(
-                        routes = state.routes + PocketPassRoute.NotificationSettings,
-                    )
-                }
-            PocketPassEvent.OpenAppUpdate ->
-                if (state.routes.lastOrNull() == PocketPassRoute.AppUpdate) {
-                    state
-                } else {
-                    state.copy(routes = state.routes + PocketPassRoute.AppUpdate)
-                }
-            PocketPassEvent.CheckForAppUpdate,
-            PocketPassEvent.DownloadAppUpdate,
-            PocketPassEvent.InstallAppUpdate,
-            -> state
+            PocketPassEvent.OpenSocial -> state.pushRoute(PocketPassRoute.Social)
+            PocketPassEvent.OpenAccountSecurity -> state.pushRoute(PocketPassRoute.AccountSecurity)
+            PocketPassEvent.OpenContributors -> state.pushRoute(PocketPassRoute.Contributors)
+            PocketPassEvent.OpenNotificationSettings -> state.pushRoute(PocketPassRoute.NotificationSettings)
+            PocketPassEvent.OpenAppUpdate -> state.pushRoute(PocketPassRoute.AppUpdate)
+            else -> null
+        }
 
+    private fun reduceBack(state: PocketPassUiState): PocketPassUiState = when {
+        state.shop.buyPromptItemId != null ->
+            state.copy(shop = state.shop.copy(buyPromptItemId = null))
+        state.shop.selectedCategoryId != null ->
+            state.copy(shop = state.shop.copy(selectedCategoryId = null))
+        state.removeFriendPromptVisible -> state.copy(removeFriendPromptVisible = false)
+        state.miiDeleteSlot != null && !state.miiDeleteInProgress -> state.copy(
+            miiDeleteSlot = null,
+            miiDeleteError = null,
+        )
+
+        state.miiSlotsVisible -> state.copy(miiSlotsVisible = false)
+        state.sortMenuOpen -> state.copy(sortMenuOpen = false)
+        state.themePickerExpanded -> state.copy(themePickerExpanded = false)
+        state.widgetMaker.blockPicker != null ->
+            state.copy(widgetMaker = state.widgetMaker.copy(blockPicker = null))
+        state.widgetMaker.deletePromptVisible ->
+            state.copy(widgetMaker = state.widgetMaker.copy(deletePromptVisible = false))
+        state.widgetMaker.renameDraft != null ->
+            state.copy(widgetMaker = state.widgetMaker.copy(renameDraft = null))
+        state.routes.size <= 1 && state.rootDestination == PocketPassDestination.Messages ->
+            state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home)))
+        state.routes.size <= 1 -> state
+        else -> state.copy(
+            routes = state.routes.dropLast(1),
+            widgetMaker = if (state.routes.last() == PocketPassRoute.WidgetMaker) {
+                state.widgetMaker.copy(assigningAppWidgetId = null)
+            } else {
+                state.widgetMaker
+            },
+        )
+    }
+
+    private fun reduceWidgetMaker(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState? =
+        when (event) {
             PocketPassEvent.OpenWidgetMaker ->
                 if (state.routes.lastOrNull() == PocketPassRoute.WidgetMaker) {
                     state
@@ -537,9 +312,6 @@ object PocketPassReducer {
                     )
                 }
             }
-            PocketPassEvent.CreateWidgetDesign,
-            is PocketPassEvent.PinWidgetDesign,
-            -> state
             is PocketPassEvent.UpdateWidgetDesign ->
                 state.copy(widgetDesigns = state.widgetDesigns.upserted(event.design))
             is PocketPassEvent.DeleteWidgetDesign -> state.copy(
@@ -605,6 +377,30 @@ object PocketPassReducer {
             )
             PocketPassEvent.DismissWidgetMessage ->
                 state.copy(widgetMaker = state.widgetMaker.copy(message = null))
+            else -> null
+        }
+
+    private fun reduceSettings(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState? =
+        when (event) {
+            PocketPassEvent.ShuffleActivities -> state.copy(
+                activityVariant = if (state.activityVariant == ActivityVariant.Default) {
+                    ActivityVariant.Shuffled
+                } else {
+                    ActivityVariant.Default
+                },
+            )
+            is PocketPassEvent.SetNearby -> state.copy(nearbyEnabled = event.enabled)
+            is PocketPassEvent.SetSoundLevel -> state.copy(
+                soundLevel = event.level.coerceIn(0f, 1f),
+            )
+            is PocketPassEvent.SetSfxLevel -> state.copy(
+                sfxLevel = event.level.coerceIn(0f, 1f),
+            )
+            is PocketPassEvent.SetThemeMode -> state.copy(themeMode = event.mode)
+            is PocketPassEvent.SetRecentInteractionsSort ->
+                state.copy(recentInteractionsSort = event.sort)
+            is PocketPassEvent.SetFriendsSort ->
+                state.copy(friendsSort = event.sort)
             is PocketPassEvent.SetMoodEmojisEnabled -> state.copy(
                 moodEmojisEnabled = event.enabled,
             )
@@ -626,21 +422,77 @@ object PocketPassReducer {
             is PocketPassEvent.SetStepRewardsEnabled -> state.copy(
                 stepRewardsEnabled = event.enabled,
             )
-            PocketPassEvent.RequestStepRewardsPermission -> state
-            PocketPassEvent.ResetSettings -> state.copy(
-                nearbyEnabled = true,
-                soundLevel = 0.45f,
-                sfxLevel = 0.6f,
-                themeMode = ThemeMode.System,
-                moodEmojisEnabled = true,
-                encounterLedEnabled = true,
-                encounterAlertsEnabled = true,
-                nearbyRepairAlertsEnabled = true,
-                updateAlertsEnabled = true,
-                messageAlertsEnabled = true,
-                stepRewardsEnabled = false,
+            else -> null
+        }
+
+    private fun reduceShop(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState? =
+        when (event) {
+            is PocketPassEvent.OpenBuyShopItem -> {
+                val item = state.shop.item(event.itemId)
+                if (item != null && state.shop.canBuy(item)) {
+                    state.copy(shop = state.shop.copy(buyPromptItemId = event.itemId))
+                } else {
+                    state
+                }
+            }
+
+            is PocketPassEvent.OpenShopCategory -> {
+                if (state.shop.visible && state.shop.categories.any { it.id == event.categoryId }) {
+                    state.copy(shop = state.shop.copy(selectedCategoryId = event.categoryId))
+                } else {
+                    state
+                }
+            }
+
+            PocketPassEvent.CloseShopCategory ->
+                state.copy(shop = state.shop.copy(selectedCategoryId = null))
+
+            PocketPassEvent.CloseBuyShopItem,
+            PocketPassEvent.ConfirmBuyShopItem,
+            is PocketPassEvent.WearShopItem,
+            -> state.copy(shop = state.shop.copy(buyPromptItemId = null))
+
+            PocketPassEvent.CloseShop ->
+                state.copy(shop = state.shop.copy(buyPromptItemId = null, selectedCategoryId = null))
+
+            else -> null
+        }
+
+    private fun reduceDialogs(state: PocketPassUiState, event: PocketPassEvent): PocketPassUiState? =
+        when (event) {
+            PocketPassEvent.OpenMiiSlots -> state.copy(miiSlotsVisible = true)
+            PocketPassEvent.CloseMiiSlots -> state.copy(
+                miiSlotsVisible = false,
+                miiDeleteSlot = null,
+                miiDeleteError = null,
             )
-            PocketPassEvent.SignOut -> state
+
+            PocketPassEvent.OpenThemePicker -> state.copy(themePickerExpanded = true)
+            PocketPassEvent.ToggleSortMenu -> state.copy(sortMenuOpen = !state.sortMenuOpen)
+            PocketPassEvent.CloseSortMenu -> state.copy(sortMenuOpen = false)
+
+            is PocketPassEvent.OpenDeleteMiiSlot -> state.copy(
+                miiDeleteSlot = event.slot,
+                miiDeleteError = null,
+            )
+
+            PocketPassEvent.CloseDeleteMiiSlot -> state.copy(
+                miiDeleteSlot = null,
+                miiDeleteError = null,
+            )
+
+            PocketPassEvent.ConfirmDeleteMiiSlot -> state.copy(
+                miiDeleteInProgress = true,
+                miiDeleteError = null,
+            )
+
+            is PocketPassEvent.OpenUserProfile,
+            PocketPassEvent.CloseUserProfile,
+            PocketPassEvent.RemoveProfileFriend,
+            PocketPassEvent.CloseRemoveFriend,
+            -> state.copy(removeFriendPromptVisible = false)
+
+            PocketPassEvent.OpenRemoveFriend -> state.copy(removeFriendPromptVisible = true)
 
             PocketPassEvent.OpenDeleteAccount -> state.copy(
                 deleteAccountVisible = true,
@@ -657,16 +509,13 @@ object PocketPassReducer {
                 deleteAccountError = null,
             )
 
-            is PocketPassEvent.StatusChanged -> state.copy(status = event.status)
+            else -> null
         }
 }
 
-/**
- * Whether the shoulder buttons should stop switching the main tabs. The
- * Shop, Games and Leaderboard overlays are exempt: switching tabs simply
- * closes them, so a player can hop from the shop to Settings with R1. A
- * dialog inside one of them, or any other layer, still blocks the switch.
- */
+private fun PocketPassUiState.pushRoute(route: PocketPassRoute): PocketPassUiState =
+    if (routes.lastOrNull() == route) this else copy(routes = routes + route)
+
 fun PocketPassUiState.blocksShoulderTabs(): Boolean {
     if (!hasDismissableLayer()) return false
     val activitiesOverlayOpen = shop.visible || games.visible || leaderboard.visible
@@ -709,7 +558,6 @@ fun PocketPassUiState.hasDismissableLayer(): Boolean =
         bioEditor.visible ||
         nameEditor.visible ||
         friendsOverlay != FriendsOverlay.None ||
-        messageActionRailExpanded ||
         messageActionMessageId != null ||
         editingMessageId != null ||
         groupInfoOpen ||

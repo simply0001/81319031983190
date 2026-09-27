@@ -89,6 +89,8 @@ fun NotificationChangeBroadcastDto.isFor(userId: String): Boolean {
 }
 
 sealed interface ConversationRealtimeEvent {
+    data object Subscribed : ConversationRealtimeEvent
+
     data class ChatColourChanged(val userId: String) : ConversationRealtimeEvent
     data class MessageInvalidated(
         val invalidation: MessageInvalidationDto,

@@ -344,13 +344,3 @@ interface PresenceRepository {
         status: PresenceStatus,
     ): RepositoryResult<Unit>
 }
-
-interface SyncCoordinator {
-    val syncState: StateFlow<SyncState>
-
-    fun schedule(accountId: UserId)
-
-    suspend fun reconcile(accountId: UserId): RepositoryResult<Unit>
-
-    fun cancel(accountId: UserId)
-}

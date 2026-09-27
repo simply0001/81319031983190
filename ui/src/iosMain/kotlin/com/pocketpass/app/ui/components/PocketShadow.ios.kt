@@ -22,7 +22,6 @@ actual fun DrawScope.drawRoundedShadow(mask: RoundedShadowMask, alpha: Float, of
     val paint = Paint().apply {
         color = ((alpha * 255).roundToInt().coerceIn(0, 255) shl 24)
         isAntiAlias = true
-        // Skia's radius-to-sigma rule, matching BlurMaskFilter's interpretation on Android.
         maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, mask.blurPx * 0.57735f + 0.5f)
     }
     drawContext.canvas.nativeCanvas.drawRRect(

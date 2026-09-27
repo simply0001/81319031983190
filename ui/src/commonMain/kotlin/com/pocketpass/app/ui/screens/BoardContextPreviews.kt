@@ -19,7 +19,6 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.components.AvatarCollage
 import com.pocketpass.app.ui.theme.pocketPalette
 
-/** Read-only companion to the controls on the other screen or tablet pane. */
 @Composable
 private fun BoardPreviewLayout(
     m: DesignMetrics,
@@ -160,7 +159,6 @@ internal fun BoardDirectoryPreview(m: DesignMetrics, state: BoardsUiState, modif
 @Composable
 private fun BoardLatestNote(m: DesignMetrics, post: BoardPost, modifier: Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(m.dp(18f))) {
-        // Directory previews never reveal spoilers, even if another view already revealed the note.
         if(post.removed || post.spoiler) {
             BoardLabel(m, if(post.removed) "This note was removed." else "Spoiler · Open the board to reveal", 38f,
                 color = pocketPalette.textSecondary, maxLines = 3)

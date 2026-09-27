@@ -4,7 +4,6 @@ import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.repository.remote.ProductionRemoteDataSources
 import com.pocketpass.app.domain.repository.MessageRepository
 import com.pocketpass.app.domain.repository.MutableFriendsRepository
-import com.pocketpass.app.domain.repository.MutableProfileRepository
 import com.pocketpass.app.domain.repository.NotificationRepository
 import com.pocketpass.app.domain.repository.SyncRepository
 import com.pocketpass.app.domain.model.NearbyEncounter
@@ -18,7 +17,7 @@ import com.pocketpass.app.sync.RemotePendingOperationExecutor
 import kotlin.time.Clock
 
 data class ProductionRepositoryBundle(
-    val profiles: MutableProfileRepository,
+    val profiles: RoomProfileRepository,
     val friends: MutableFriendsRepository,
     val messages: MessageRepository,
     val notifications: NotificationRepository,
@@ -108,7 +107,7 @@ data class ProductionRepositoryBundle(
                 notifications = notificationRepository,
                 encounters = encounterRepository,
                 outboxProcessor = outboxProcessor,
-                syncCursorDao = database.syncCursorDao(),
+                pendingOperationScheduler = pendingOperationScheduler,
                 clock = clock,
             )
             return ProductionRepositoryBundle(

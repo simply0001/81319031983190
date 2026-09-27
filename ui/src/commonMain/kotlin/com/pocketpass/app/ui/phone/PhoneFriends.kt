@@ -147,7 +147,7 @@ private fun PhoneFriendsStatus(
         subtitle = when {
             loading -> "Checking PocketPass for your friends"
             error != null -> "Tap to try again"
-            else -> "Tap to add someone with a friend code"
+            else -> "Tap to add someone with a Friend Code"
         },
         tag = if (error == null) "friends_empty_add" else "friends_retry",
         onClick = when {

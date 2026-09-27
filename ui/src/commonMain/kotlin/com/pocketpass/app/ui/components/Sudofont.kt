@@ -13,12 +13,6 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import com.pocketpass.app.ui.Sudofont
 
-/**
- * One DS-style character as Sudofont draws it. The font maps
- * each glyph to both the DS private-use code point and a standard Unicode
- * code point; the app inserts the standard one so other clients still show
- * something sensible.
- */
 data class SudofontGlyph(
     val codePoint: Int,
     val pua: Int,
@@ -27,7 +21,6 @@ data class SudofontGlyph(
     val text: String = codePointToString(codePoint)
 }
 
-/** The 29 DS characters plus PocketPass's crying face, in three rows of 10. */
 val SudofontGlyphs: List<SudofontGlyph> = listOf(
     SudofontGlyph(0x1F603, 0xE008, "happy"),
     SudofontGlyph(0x1F620, 0xE009, "angry"),
@@ -70,10 +63,8 @@ private val sudofontCodePoints: Set<Int> = buildSet {
 
 fun isSudofontCodePoint(codePoint: Int): Boolean = codePoint in sudofontCodePoints
 
-/** A half-open char range inside a string. */
 data class TextRun(val start: Int, val end: Int)
 
-/** Every maximal run of Sudofont glyphs in [text], as char offsets. */
 fun sudofontRuns(text: CharSequence): List<TextRun> {
     val runs = mutableListOf<TextRun>()
     var index = 0
@@ -83,9 +74,6 @@ fun sudofontRuns(text: CharSequence): List<TextRun> {
         if (isSudofontCodePoint(codePoint)) {
             if (runStart < 0) runStart = index
         } else if (runStart >= 0) {
-            // A variation selector after a glyph stays outside the run: inside
-            // it Android's font matching would hand the cluster to the colour
-            // emoji font, outside it the shaper simply hides it.
             runs += TextRun(runStart, index)
             runStart = -1
         }
@@ -101,7 +89,6 @@ fun sudofontSpanStyle(family: FontFamily): SpanStyle = SpanStyle(
     fontSynthesis = FontSynthesis.None,
 )
 
-/** [text] with every Sudofont glyph run styled to draw in [family]; the same instance when there are none. */
 fun withSudofont(text: AnnotatedString, family: FontFamily): AnnotatedString {
     val runs = sudofontRuns(text.text)
     if (runs.isEmpty()) return text
@@ -112,7 +99,6 @@ fun withSudofont(text: AnnotatedString, family: FontFamily): AnnotatedString {
     }
 }
 
-/** Draws DS glyphs in Sudofont inside a text field; the text itself is untouched. */
 class SudofontVisualTransformation(private val family: FontFamily) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText =
         TransformedText(withSudofont(text, family), OffsetMapping.Identity)
@@ -124,7 +110,6 @@ fun rememberSudofontTransformation(): VisualTransformation {
     return remember(family) { SudofontVisualTransformation(family) }
 }
 
-/** Drops one code point, so a backspace never leaves half of a surrogate pair. */
 fun String.dropLastCodePoint(): String {
     if (isEmpty()) return this
     val pair = length >= 2 && this[length - 1].isLowSurrogate() && this[length - 2].isHighSurrogate()
@@ -140,7 +125,6 @@ fun codePointToString(codePoint: Int): String {
     ).concatToString()
 }
 
-/** The code point starting at [index] and how many chars it spans. */
 private fun codePointAt(text: CharSequence, index: Int): Pair<Int, Int> {
     val high = text[index]
     if (high.isHighSurrogate() && index + 1 < text.length) {

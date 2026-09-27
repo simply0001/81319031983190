@@ -14,7 +14,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketpass.app.BuildConfig
 import com.pocketpass.app.audio.LocalSoundEffects
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
 import com.pocketpass.app.model.hasDismissableLayer
 import com.pocketpass.app.state.PocketPassViewModel
 import com.pocketpass.app.ui.LocalAppVersionName
@@ -26,7 +25,6 @@ import com.pocketpass.app.ui.theme.pocketPalette
 @Composable
 fun PhoneApp(
     viewModel: PocketPassViewModel,
-    extensions: PocketPassExtensions = PocketPassExtensions.None,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     CompositionLocalProvider(
@@ -43,7 +41,6 @@ fun PhoneApp(
                     state = state,
                     dispatch = viewModel::dispatch,
                     miiEditorController = viewModel.miiEditorController,
-                    extensions = extensions,
                 )
             }
         }

@@ -93,7 +93,6 @@ object BoardDrawingTools {
     val sizes = listOf(2f, 4f, 8f, 16f, 32f)
 }
 
-/** Undo is per stroke, so switching pens never transforms earlier marks. */
 data class BoardDrawingHistory(val drawing: BoardDrawing = BoardDrawing(), val redo: List<BoardStroke> = emptyList()) {
     fun add(stroke: BoardStroke): BoardDrawingHistory {
         val next = drawing.copy(strokes = drawing.strokes + stroke)
@@ -140,7 +139,6 @@ data class BoardDraftContent(
     @SerialName("reply_to") val replyTo: String? = null,
 )
 
-/** A failed publish keeps the exact payload and ID, even after process death. */
 @Serializable
 data class LocalBoardDraft(
     val id: String = newBoardId(), val boardId: String, val revisionId: String = newBoardId(),
@@ -159,7 +157,6 @@ enum class BoardsScreen { Chooser, Chats, Directory, Board, Thread, Compose, Dra
 enum class BoardSort(val wire: String, val label: String) { Newest("newest", "Newest"), Activity("activity", "Recent Activity"), Popular("popular", "Popular") }
 enum class BoardPeriod(val wire: String, val label: String) { Today("today", "Today"), Week("week", "This Week"), All("all", "All Time") }
 
-/** Normalized paper coordinates; only the editor's viewport, never published content. */
 data class BoardCanvasViewport(val left: Float = 0f, val top: Float = 0f, val width: Float = 1f,
     val height: Float = 1f, val zoom: Float = 1f, val drawing: Boolean = false)
 
@@ -195,7 +192,6 @@ data class BoardsUiState(
 sealed interface BoardAction {
     data class OpenDestination(val boardId: String, val threadId: String? = null, val review: Boolean = false) : BoardAction
     data class OpenNotice(val notice: BoardNotice) : BoardAction
-    data object OpenChooser : BoardAction
     data object OpenChats : BoardAction
     data class Directory(val explore: Boolean = false, val search: String = "") : BoardAction
     data class OpenBoard(val id: String) : BoardAction
@@ -209,7 +205,6 @@ sealed interface BoardAction {
     data object More : BoardAction
     data object Refresh : BoardAction
     data object Back : BoardAction
-    data object ClearError : BoardAction
     data class Compose(val replyTo: String? = null) : BoardAction
     data class DrawBranding(val kind: String) : BoardAction
     data class ImportBranding(val kind: String) : BoardAction

@@ -25,7 +25,6 @@ data class LocalSettings(
     val stepRewardsEnabled: Boolean = false,
     val lastNotifiedUpdateVersionCode: Int = 0,
     val lastSeenMinSupportedVersionCode: Int = 0,
-    /** Passes created up to this server time have been announced (or predate this install). */
     val nearbyAlertsSeenThroughEpochMillis: Long = 0L,
     val leaderboardScope: LeaderboardScope = LeaderboardScope.Friends,
     val globalLeaderboardLimit: Int = 20,

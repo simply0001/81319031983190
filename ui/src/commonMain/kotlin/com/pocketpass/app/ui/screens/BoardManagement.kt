@@ -67,7 +67,7 @@ internal fun BoardManagement(m: DesignMetrics, state: PocketPassUiState, send: (
         }
         BoardButton(m, "Create invitation code", "board_create_code", enabled = !s.busy, confirmSound = true,
             neighbors = mapOf(FocusDirection.Up to if(canSend) "board_invite_friend_code_send" else "board_invite_friend_code")) { action("create_code") }
-        s.inviteCode?.let { code -> BoardLabel(m, code, 44f, true); BoardLabel(m, "Share this code with the people you want to invite. You can revoke it below.") }
+        s.inviteCode?.let { code -> BoardLabel(m, code, 44f, true); BoardLabel(m, "Share this code with the people you want to invite. Revoke it below.") }
     }
     if(b.role == "owner") BoardOwnerSettings(m, b, s.busy, send)
     if(b.role == "owner") BoardDisclosure(m, "Board artwork", "board_section_artwork") {

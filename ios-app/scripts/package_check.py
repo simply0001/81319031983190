@@ -95,7 +95,6 @@ def check_bundle(app, env=os.environ, distribution=False):
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
         entitlements = plistlib.loads(subprocess.check_output(["codesign", "-d", "--entitlements", ":-", str(bundle)], stderr=subprocess.DEVNULL))
         require(entitlements.get("com.apple.developer.team-identifier") == env["APPLE_TEAM_ID"], "Archive is signed by the wrong team")
-        # Older Apple accounts can have an App ID prefix different from the Team ID.
         require(entitlements.get("application-identifier", "").endswith("." + identifier), "Archive has the wrong application identifier")
         require(GROUP_ID in entitlements.get("com.apple.security.application-groups", []), "App and widget must share the PocketPass App Group")
         if distribution:
@@ -118,7 +117,6 @@ def check_ipa(path, env=os.environ):
             root = Path(directory).resolve()
             for name in archive.namelist():
                 require((root / name).resolve().is_relative_to(root), "Invalid path in exported IPA")
-            # ditto preserves executable bits and symlinks required by codesign.
             subprocess.run(["ditto", "-x", "-k", str(path), directory], check=True)
         check_bundle(Path(directory) / "Payload/PocketPass.app", env, distribution=True)
 

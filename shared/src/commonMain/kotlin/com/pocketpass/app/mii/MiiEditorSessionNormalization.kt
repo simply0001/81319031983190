@@ -3,7 +3,6 @@ package com.pocketpass.app.mii
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-// How many trait options fit on one editor page; mirrored by MiiEditorStateHolder.
 const val TRAITS_PER_PAGE = 12
 
 class InMemoryMiiEditorPersistence : MiiEditorPersistence {

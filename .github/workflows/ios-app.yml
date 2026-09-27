@@ -10,7 +10,6 @@ concurrency:
 jobs:
   ipa:
     name: PocketPass IPA (macOS)
-    # Actions minutes are only free on the public mirror; the private repo would bill them.
     if: github.repository == 'simply0001/81319031983190'
     runs-on: macos-15
     timeout-minutes: 60
@@ -32,10 +31,6 @@ jobs:
       - name: Generate the Xcode project
         working-directory: ios-app
         run: xcodegen generate
-      # No signing on CI: the IPA is unsigned, and a sideloading tool (Sideloadly,
-      # AltStore) re-signs it with the user's own Apple ID during install.
-      # The publishable key reaches the Kotlin build through the Xcode pre-build
-      # gradle step's environment; without the secret the app stays in fixture mode.
       - name: Build for a device, unsigned
         working-directory: ios-app
         env:

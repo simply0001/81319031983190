@@ -14,7 +14,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
@@ -126,10 +125,4 @@ class AndroidStatusProvider : StatusProvider {
             connectivityManager.unregisterNetworkCallback(networkCallback)
         }
     }.distinctUntilChanged()
-}
-
-class FixedStatusProvider(
-    private val fixed: StatusInfo = StatusInfo(),
-) : StatusProvider {
-    override fun status(context: Context): Flow<StatusInfo> = flow { emit(fixed) }
 }

@@ -26,7 +26,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,7 +35,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -58,8 +56,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
@@ -69,6 +65,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.derivedStateOf
@@ -76,6 +73,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,7 +109,6 @@ import com.pocketpass.app.audio.LocalSoundEffects
 import com.pocketpass.app.audio.SoundEffect
 import com.pocketpass.app.domain.model.PROFILE_NAME_MAX_LENGTH
 import com.pocketpass.app.domain.model.AvatarReference
-import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.ConversationSummary
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.ui.components.AvatarCollage
@@ -138,11 +135,8 @@ import com.pocketpass.app.model.BIO_MAX_LENGTH
 import com.pocketpass.app.model.BioEditorUiState
 import com.pocketpass.app.model.NameEditorUiState
 import com.pocketpass.app.model.GameTarget
-import com.pocketpass.app.model.MessageComposerAction
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
-import com.pocketpass.app.model.PocketPassExtensions
-import com.pocketpass.app.model.PocketPassExtensionTarget
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.ProfileViewerSource
@@ -171,7 +165,6 @@ import com.pocketpass.app.ui.components.FigmaAsset
 import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.controller.FocusDirection
 import com.pocketpass.app.ui.controller.LocalControllerFocus
-import com.pocketpass.app.ui.controller.LocalControllerFocusGroup
 import com.pocketpass.app.ui.controller.ControllerFocusViewport
 import com.pocketpass.app.ui.controller.LocalControllerFocusViewport
 import com.pocketpass.app.ui.controller.controllerFocusBarrier
@@ -193,10 +186,8 @@ import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.components.typingCaretInline
 import com.pocketpass.app.ui.components.pocketShadow
 import com.pocketpass.app.ui.designBounds
-import com.pocketpass.app.ui.theme.PocketPalette
 import com.pocketpass.app.ui.theme.pocketPalette
 import androidx.compose.ui.draw.alpha
-import com.pocketpass.app.model.ProfileFriendRequestState
 import com.pocketpass.app.mii.MII_FIRST_SLOT
 import com.pocketpass.app.mii.MII_SLOT_COUNT
 import com.pocketpass.app.mii.MiiSlotSummary
@@ -211,14 +202,12 @@ fun BottomScreen(
     route: PocketPassRoute,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     when (route) {
         is PocketPassRoute.MessageDetail -> MessageDetailBottom(
             conversationId = route.conversationId,
             state = state,
             dispatch = dispatch,
-            extensions = extensions,
         )
         PocketPassRoute.NewGroup -> NewGroupBottom(
             state = state,
@@ -258,10 +247,10 @@ fun BottomScreen(
         )
         is PocketPassRoute.Root -> when (route.destination) {
             PocketPassDestination.Home -> HomeBottom(state, dispatch)
-            PocketPassDestination.Activities -> ActivitiesBottom(state, dispatch, extensions)
+            PocketPassDestination.Activities -> ActivitiesBottom(state, dispatch)
             PocketPassDestination.Messages -> if (state.boardsVisible) BoardsBottom(state, dispatch) else MessagesBottom(state, dispatch)
             PocketPassDestination.Friends -> FriendsBottom(state, dispatch)
-            PocketPassDestination.Settings -> SettingsBottom(state, dispatch, extensions)
+            PocketPassDestination.Settings -> SettingsBottom(state, dispatch)
         }
     }
 }
@@ -696,7 +685,7 @@ internal fun FriendsStatusPanel(
     val subtitle = when {
         loading -> "Checking PocketPass for your friends"
         error != null -> "Tap to try again"
-        else -> "Tap to add someone with a friend code"
+        else -> "Tap to add someone with a Friend Code"
     }
     val onClick: (() -> Unit)? = when {
         loading -> null
@@ -1834,8 +1823,6 @@ private fun HorizontalCards(
     val density = LocalDensity.current
     val cardIds = remember(people) { people.map { "card_${it.focusKey}" } }
     if (focus != null) {
-        // Follow the controller focus explicitly: the generic bring-into-view reveal has
-        // proven unreliable for this row, which strands the highlight on off-screen cards.
         LaunchedEffect(focus, scroll, cardIds, metrics, density) {
             snapshotFlow { focus.focusId.takeUnless { focus.hidden } }
                 .collect { focusId ->
@@ -1878,23 +1865,24 @@ private fun HorizontalCards(
             ),
         ) {
             people.forEachIndexed { index, person ->
-                PersonCard(
-                    metrics = metrics,
-                    x = 50f + index * 502.303f,
-                    y = 16f,
-                    borderColor = cardBorder,
-                    bottomColor = cardBottom,
-                    nameColor = nameColor,
-                    detailColor = detailColor,
-                    avatar = person.avatar,
-                    fallbackAvatar = person.fallbackAvatar,
-                    name = person.name,
-                    initial = person.initial,
-                    showOnline = person.isOnline,
-                    detail = person.detail,
-                    focusId = "card_${person.focusKey}",
-                    onClick = { onCard(person.id) },
-                )
+                key(person.focusKey) {
+                    PersonCard(
+                        metrics = metrics,
+                        x = 50f + index * 502.303f,
+                        y = 16f,
+                        borderColor = cardBorder,
+                        bottomColor = cardBottom,
+                        nameColor = nameColor,
+                        detailColor = detailColor,
+                        avatar = person.avatar,
+                        name = person.name,
+                        initial = person.initial,
+                        showOnline = person.isOnline,
+                        detail = person.detail,
+                        focusId = "card_${person.focusKey}",
+                        onClick = { onCard(person.id) },
+                    )
+                }
             }
         }
     }
@@ -1910,7 +1898,6 @@ private fun PersonCard(
     nameColor: Color,
     detailColor: Color,
     avatar: AvatarReference?,
-    fallbackAvatar: PocketAsset?,
     initial: String,
     name: String,
     showOnline: Boolean,
@@ -1996,10 +1983,10 @@ private fun PersonCard(
                 fontSize = metrics.sp(150f),
                 maxLines = 1,
             )
-            if (avatar != null || fallbackAvatar != null) {
+            if (avatar != null) {
                 DynamicAvatar(
                     avatar = avatar,
-                    fallbackResource = fallbackAvatar,
+                    fallbackResource = null,
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.White)
@@ -2049,12 +2036,9 @@ private fun PersonCard(
 
 internal data class PersonCardUi(
     val id: String,
-    // Unique per card: encounters can repeat the same profile, so the focus target and
-    // compose identity must not key on the profile id alone.
     val focusKey: String,
     val name: String,
     val avatar: AvatarReference?,
-    val fallbackAvatar: PocketAsset?,
     val isOnline: Boolean,
     val detail: String,
     val initial: String,
@@ -2069,7 +2053,6 @@ private fun List<Friend>.toFriendCardUi(): List<PersonCardUi> =
             focusKey = friend.profile.userId.value,
             name = displayName,
             avatar = friend.profile.avatar,
-            fallbackAvatar = null,
             isOnline = friend.isOnline,
             detail = if (friend.isOnline) {
                 "Now"
@@ -2089,7 +2072,6 @@ private fun List<NearbyEncounter>.toEncounterCardUi(): List<PersonCardUi> =
             focusKey = encounter.id.value,
             name = displayName,
             avatar = encounter.profile.avatar,
-            fallbackAvatar = null,
             isOnline = false,
             detail = relativeTime(encounter.occurredAt),
             initial = displayName.firstOrNull()?.uppercase() ?: "?",
@@ -2114,7 +2096,6 @@ internal const val CARD_PORTRAIT_ZOOM = 0.90f
 private fun ActivitiesBottom(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     BottomPage(entrance = EntranceMotion.None) { metrics ->
         val overlayOpen = state.shop.visible || state.games.visible ||
@@ -2703,18 +2684,23 @@ private fun ShopItemActionButton(
 }
 
 @Composable
+internal fun DialogFocusHandoff(initialFocusId: String?) {
+    val focus = LocalControllerFocus.current
+    val returnTarget = remember { focus?.focusedTarget(null) }
+    DisposableEffect(focus) {
+        onDispose { returnTarget?.let { focus?.restoreFocus(it) } }
+    }
+    LaunchedEffect(initialFocusId) { initialFocusId?.let { focus?.focus(it, reveal = false) } }
+}
+
+@Composable
 internal fun BuyShopItemConfirmDialog(
     metrics: DesignMetrics,
     item: ShopItem,
     body: String,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
-    val focus = LocalControllerFocus.current
-    val returnTarget = remember { focus?.focusedTarget(null) }
-    DisposableEffect(focus) {
-        onDispose { returnTarget?.let { focus?.restoreFocus(it) } }
-    }
-    LaunchedEffect(Unit) { focus?.focus("shop_buy_cancel", reveal = false) }
+    DialogFocusHandoff("shop_buy_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(
@@ -2828,7 +2814,6 @@ internal fun BuyShopItemConfirmDialog(
 }
 
 private val LeaderboardBorder = Color(0xFFEBA637)
-private val LeaderboardNameColor = Color(0xFF5C5C5C)
 private val LeaderboardTrophyColor = Color(0xFFFFA621)
 private val LeaderboardWaveColor = Color(0xFF00D600)
 
@@ -3327,41 +3312,43 @@ internal fun LeaderboardPanel(
                 }
                 CompositionLocalProvider(LocalControllerFocusViewport provides focusViewport) {
                     entries.forEachIndexed { index, entry ->
-                        if (index > 0) {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .requiredHeight(metrics.dp(9f))
-                                    .clip(RoundedCornerShape(metrics.dp(100f)))
-                                    .background(divider.copy(alpha = 0.13f)),
+                        key(entry.userId.value) {
+                            if (index > 0) {
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .requiredHeight(metrics.dp(9f))
+                                        .clip(RoundedCornerShape(metrics.dp(100f)))
+                                        .background(divider.copy(alpha = 0.13f)),
+                                )
+                            }
+                            val rowTag = leaderboardRowTag(entry)
+                            LeaderboardRow(
+                                metrics = metrics,
+                                entry = entry,
+                                modifier = Modifier
+                                    .controllerTarget(
+                                        rowTag,
+                                        layer = 10,
+                                        cornerRadius = LEADERBOARD_RING_RADIUS,
+                                        neighbors = mapOf(
+                                            FocusDirection.Left to rowTag,
+                                            FocusDirection.Right to rowTag,
+                                            FocusDirection.Up to when {
+                                                index > 0 -> leaderboardRowTag(entries[index - 1])
+                                                self != null -> "leaderboard_you_card"
+                                                else -> rowTag
+                                            },
+                                            FocusDirection.Down to leaderboardRowTag(entries.getOrElse(index + 1) { entry }),
+                                        ),
+                                    ) {}
+                                    .padding(
+                                        end = metrics.dp(LEADERBOARD_RING_INSET_END),
+                                        top = metrics.dp(LEADERBOARD_RING_INSET_Y),
+                                        bottom = metrics.dp(LEADERBOARD_RING_INSET_Y),
+                                    ),
                             )
                         }
-                        val rowTag = leaderboardRowTag(entry)
-                        LeaderboardRow(
-                            metrics = metrics,
-                            entry = entry,
-                            modifier = Modifier
-                                .controllerTarget(
-                                    rowTag,
-                                    layer = 10,
-                                    cornerRadius = LEADERBOARD_RING_RADIUS,
-                                    neighbors = mapOf(
-                                        FocusDirection.Left to rowTag,
-                                        FocusDirection.Right to rowTag,
-                                        FocusDirection.Up to when {
-                                            index > 0 -> leaderboardRowTag(entries[index - 1])
-                                            self != null -> "leaderboard_you_card"
-                                            else -> rowTag
-                                        },
-                                        FocusDirection.Down to leaderboardRowTag(entries.getOrElse(index + 1) { entry }),
-                                    ),
-                                ) {}
-                                .padding(
-                                    end = metrics.dp(LEADERBOARD_RING_INSET_END),
-                                    top = metrics.dp(LEADERBOARD_RING_INSET_Y),
-                                    bottom = metrics.dp(LEADERBOARD_RING_INSET_Y),
-                                ),
-                        )
                     }
                 }
             }
@@ -3519,6 +3506,10 @@ fun AchievementsBottomOverlay(
     metrics: DesignMetrics,
     state: PocketPassUiState,
 ) {
+    val firstSection = AchievementSection.entries.firstOrNull { section ->
+        AchievementCatalog.definitions.any { definition -> definition.section == section }
+    }
+    DialogFocusHandoff(firstSection?.let { "achievement_section_${it.name}" })
     val blockInteraction = remember { MutableInteractionSource() }
     PatternBackground(
         metrics = metrics,
@@ -3979,17 +3970,19 @@ private fun MessagesBottom(
                             .requiredHeight(metrics.dp(rowsHeight.coerceAtLeast(panelHeight))),
                     ) {
                         conversations.forEachIndexed { index, conversation ->
-                            val palette = messageListRowPalette()
-                            MessageRow(
-                                metrics = metrics,
-                                y = MESSAGE_ROW_INSET + index * MESSAGE_ROW_HEIGHT,
-                                conversation = conversation,
-                                palette = palette,
-                                selfId = selfId,
-                                onClick = {
-                                    dispatch(PocketPassEvent.OpenMessage(conversation.id.value))
-                                },
-                            )
+                            key(conversation.id.value) {
+                                val palette = messageListRowPalette()
+                                MessageRow(
+                                    metrics = metrics,
+                                    y = MESSAGE_ROW_INSET + index * MESSAGE_ROW_HEIGHT,
+                                    conversation = conversation,
+                                    palette = palette,
+                                    selfId = selfId,
+                                    onClick = {
+                                        dispatch(PocketPassEvent.OpenMessage(conversation.id.value))
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -4192,7 +4185,6 @@ private fun MessageDetailBottom(
     conversationId: String,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     val conversation = state.conversations.firstOrNull { it.id.value == conversationId }
     val selfId = state.profile?.userId
@@ -4226,11 +4218,6 @@ private fun MessageDetailBottom(
     val canSend = state.messageDraft.trim().isNotEmpty() &&
         state.messageDraft.length <= 4_000 &&
         !state.messageSendInProgress
-    val railProgress by animateFloatAsState(
-        targetValue = if (state.messageActionRailExpanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-        label = "messageActionRail",
-    )
 
     LaunchedEffect(conversationId, conversation) {
         if (conversation == null) dispatch(PocketPassEvent.Back)
@@ -4333,27 +4320,12 @@ private fun MessageDetailBottom(
             metrics = metrics,
             value = state.messageDraft,
             canSend = canSend,
-            railProgress = { railProgress },
-            railExpanded = state.messageActionRailExpanded,
             editing = state.editingMessageId != null,
             error = state.messageOperationError,
             onSend = {
                 if (canSend) dispatch(PocketPassEvent.SendMessage)
             },
-            onToggleRail = { dispatch(PocketPassEvent.ToggleMessageActions) },
-            onAction = { action ->
-                dispatch(PocketPassEvent.SelectMessageAction(action))
-                when (action) {
-                    MessageComposerAction.Image -> Unit
-
-                    MessageComposerAction.File -> extensions.open(
-                        PocketPassExtensionTarget.MessageComposer(
-                            conversationId = conversationId,
-                            action = action,
-                        ),
-                    )
-                }
-            },
+            onPickPhoto = { dispatch(PocketPassEvent.PickMessageImage) },
         )
 
         PocketKeyboard(
@@ -4737,25 +4709,15 @@ private fun MessageComposer(
     metrics: DesignMetrics,
     value: String,
     canSend: Boolean,
-    railProgress: () -> Float,
-    railExpanded: Boolean,
     editing: Boolean,
     error: String?,
     onSend: () -> Unit,
-    onToggleRail: () -> Unit,
-    onAction: (MessageComposerAction) -> Unit,
+    onPickPhoto: () -> Unit,
 ) {
     val fieldShape = RoundedCornerShape(metrics.dp(80.75f))
     val sendInteraction = remember { MutableInteractionSource() }
-    val addInteraction = remember { MutableInteractionSource() }
+    val photoInteraction = remember { MutableInteractionSource() }
     val focus = LocalControllerFocus.current
-    LaunchedEffect(railExpanded) {
-        if (railExpanded) {
-            focus?.focus("message_action_image", reveal = false)
-        } else if (focus?.focusId == null) {
-            focus?.focus("message_actions", reveal = false)
-        }
-    }
 
     Box(
         modifier = Modifier.designBounds(metrics, 62f, COMPOSER_RESTING_Y, 761.063f, 177.174f),
@@ -4852,121 +4814,48 @@ private fun MessageComposer(
         )
     }
 
-    val railHeight = remember(railProgress) {
-        {
-            RAIL_COLLAPSED_HEIGHT +
-                (RAIL_EXPANDED_HEIGHT - RAIL_COLLAPSED_HEIGHT) * railProgress()
-        }
-    }
-    val railShape = RoundedCornerShape(percent = 50)
+    val photoShape = RoundedCornerShape(percent = 50)
     Box(
         modifier = Modifier
-            .graphicsLayer {
-                translationX = 1019.548f
-                translationY = COMPOSER_RESTING_Y + RAIL_COLLAPSED_HEIGHT - railHeight()
-            }
-            .layout { measurable, _ ->
-                val widthPx = metrics.dp(158.452f).roundToPx()
-                val heightPx = metrics.dp(railHeight()).roundToPx()
-                val placeable = measurable.measure(
-                    Constraints.fixed(widthPx, heightPx),
-                )
-                layout(widthPx, heightPx) { placeable.place(0, 0) }
-            }
-            .testTag("message_actions")
-            .then(
-                if (railExpanded) {
-                    Modifier
-                } else {
-                    Modifier.controllerTarget("message_actions", cornerRadius = 79f) {
-                        onToggleRail()
-                    }
-                },
+            .designBounds(metrics, 1019.548f, COMPOSER_RESTING_Y, 158.452f, PHOTO_BUTTON_HEIGHT)
+            .testTag("message_photo")
+            .controllerTarget("message_photo", cornerRadius = 79f) { onPickPhoto() }
+            .clip(photoShape)
+            .pocketFrame(
+                Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0f to pocketPalette.surface,
+                        PHOTO_BUTTON_FILL_HOLD to pocketPalette.surface,
+                        1f to pocketPalette.tint(Color(0xFFBDF8CB)),
+                    ),
+                ),
+                metrics.dp(18f),
+                Brush.verticalGradient(
+                    listOf(Color(0xFF5A96A9), Color(0xFF286C81)),
+                ),
+                photoShape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(railShape)
-                .pocketFrame(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to pocketPalette.surface,
-                            RAIL_FILL_HOLD to pocketPalette.surface,
-                            1f to pocketPalette.tint(Color(0xFFBDF8CB)),
-                        ),
-                    ),
-                    metrics.dp(18f),
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF5A96A9), Color(0xFF286C81)),
-                    ),
-                    railShape,
-                ),
-        ) {
-            val handover = remember(railProgress) {
-                { (railProgress() / RAIL_HANDOVER_PROGRESS).coerceIn(0f, 1f) }
-            }
-            RailGlyph(
-                metrics = metrics,
-                resource = Assets.MessageActionImage,
-                railHeight = railHeight,
-                x = 38.07f,
-                y = 47f,
-                width = 81.86f,
-                height = 81.86f,
-                alpha = handover,
-            )
-            RailGlyph(
-                metrics = metrics,
-                resource = Assets.MessageActionFile,
-                railHeight = railHeight,
-                x = 41f,
-                y = 185.732f,
-                width = 76f,
-                height = 94f,
-                alpha = handover,
-            )
-            RailGlyph(
-                metrics = metrics,
-                resource = Assets.MessageActionAdd,
-                railHeight = railHeight,
-                x = 46.171f,
-                y = RAIL_EXPANDED_HEIGHT - RAIL_COLLAPSED_HEIGHT + 46.983f,
-                width = 66.111f,
-                height = 67.535f,
-                alpha = { 1f - handover() },
-            )
-        }
-        if (railExpanded) {
-            MessageRailHitTarget(
+        FigmaAsset(
+            resource = Assets.MessageActionImage,
+            modifier = Modifier.designBounds(
                 metrics,
-                { railHeight() - RAIL_EXPANDED_HEIGHT },
-                157.732f,
-                "message_action_image",
-            ) {
-                onAction(MessageComposerAction.Image)
-            }
-            MessageRailHitTarget(
-                metrics,
-                { railHeight() - RAIL_EXPANDED_HEIGHT + 157.732f },
-                169f,
-                "message_action_file",
-            ) {
-                onAction(MessageComposerAction.File)
-            }
-        }
-    }
-    if (!railExpanded) {
-        Box(
-            modifier = Modifier
-                .designBounds(metrics, 990f, COMPOSER_RESTING_Y - 38.5f, 220f, 230f)
-                .clickable(
-                    interactionSource = addInteraction,
-                    indication = null,
-                    onClick = onToggleRail,
-                ),
+                (158.452f - PHOTO_GLYPH_SIZE) / 2f,
+                (PHOTO_BUTTON_HEIGHT - PHOTO_GLYPH_SIZE) / 2f,
+                PHOTO_GLYPH_SIZE,
+                PHOTO_GLYPH_SIZE,
+            ),
         )
     }
+    Box(
+        modifier = Modifier
+            .designBounds(metrics, 990f, COMPOSER_RESTING_Y - 38.5f, 220f, 230f)
+            .clickable(
+                interactionSource = photoInteraction,
+                indication = null,
+                onClick = onPickPhoto,
+            ),
+    )
 
     if (editing) {
         MessageEditingChip(
@@ -5005,64 +4894,17 @@ private const val COMPOSER_RESTING_Y = 380f
 
 private const val MESSAGE_KEYBOARD_HEIGHT = 500f
 
-private const val RAIL_COLLAPSED_HEIGHT = 161.5f
-// Two actions (image, file) plus the collapsed pill; the emoji action moved
-// to the keyboard.
-private const val RAIL_EXPANDED_HEIGHT = 326.732f
-private const val RAIL_HANDOVER_PROGRESS = 0.45f
-private const val RAIL_FILL_HOLD = 0.6265f
+private const val PHOTO_BUTTON_HEIGHT = 161.5f
+private const val PHOTO_BUTTON_FILL_HOLD = 0.6265f
+private const val PHOTO_GLYPH_SIZE = 81.86f
 
 private const val ADD_FRIEND_KEYPAD_LIFT = 80f
 private const val ADD_FRIEND_FOCUS_LAYER = 10
 
 @Composable
-private fun RailGlyph(
-    metrics: DesignMetrics,
-    resource: PocketAsset,
-    railHeight: () -> Float,
-    x: Float,
-    y: Float,
-    width: Float,
-    height: Float,
-    alpha: () -> Float,
-) {
-    FigmaAsset(
-        resource = resource,
-        modifier = Modifier
-            .designBounds(metrics, width, height) {
-                Offset(x, railHeight() - RAIL_EXPANDED_HEIGHT + y)
-            }
-            .graphicsLayer { this.alpha = alpha() },
-    )
-}
-
-@Composable
-private fun BoxScope.MessageRailHitTarget(
-    metrics: DesignMetrics,
-    y: () -> Float,
-    height: Float,
-    tag: String,
-    onClick: () -> Unit,
-) {
-    val interaction = remember(tag) { MutableInteractionSource() }
-    Box(
-        modifier = Modifier
-            .designBounds(metrics, 158.452f, height) { Offset(0f, y()) }
-            .testTag(tag)
-            .controllerTarget(tag, cornerRadius = 60f) { onClick() }
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            ),
-    )
-}
-
-@Composable
 private fun SettingsBottom(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
-    extensions: PocketPassExtensions,
 ) {
     BottomPage(entrance = EntranceMotion.None) { metrics ->
         val scroll = rememberScrollState()
@@ -6482,6 +6324,20 @@ internal fun MiiSlotCard(
     onUse: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val focus = LocalControllerFocus.current
+    val shown = remember(summary.slot) { MiiSlotShownState(summary.isEmpty, isActive) }
+    LaunchedEffect(summary.isEmpty, isActive) {
+        val emptied = summary.isEmpty && !shown.empty
+        val activated = isActive && !shown.active
+        shown.empty = summary.isEmpty
+        shown.active = isActive
+        if ((emptied || activated) && focus != null && focus.focusId == null) {
+            focus.focus(
+                if (emptied) "mii_slot_${summary.slot}" else "mii_slot_edit_${summary.slot}",
+                reveal = false,
+            )
+        }
+    }
     val palette = pocketPalette
     val portraitShape = RoundedCornerShape(metrics.dp(56f))
     Box(
@@ -6674,6 +6530,8 @@ internal fun MiiSlotCard(
     }
 }
 
+private class MiiSlotShownState(var empty: Boolean, var active: Boolean)
+
 @Composable
 private fun MiiSlotIconButton(
     metrics: DesignMetrics,
@@ -6716,6 +6574,7 @@ internal fun MiiDeleteConfirmDialog(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val busy = state.miiDeleteInProgress
+    DialogFocusHandoff("mii_delete_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(
@@ -6795,7 +6654,7 @@ internal fun MiiDeleteConfirmDialog(
                 )
                 .testTag("mii_delete_cancel")
                 .controllerTarget("mii_delete_cancel", layer = 20) {
-                    dispatch(PocketPassEvent.CloseDeleteMiiSlot)
+                    if (!busy) dispatch(PocketPassEvent.CloseDeleteMiiSlot)
                 }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -6820,7 +6679,7 @@ internal fun MiiDeleteConfirmDialog(
                 .pocketFrame(redButtonBrush(), metrics.dp(20.152f), Color(0xFFC24B4B), buttonShape)
                 .testTag("mii_delete_confirm")
                 .controllerTarget("mii_delete_confirm", layer = 20) {
-                    dispatch(PocketPassEvent.ConfirmDeleteMiiSlot)
+                    if (!busy) dispatch(PocketPassEvent.ConfirmDeleteMiiSlot)
                 }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -6869,8 +6728,7 @@ internal fun RemoveFriendConfirmDialog(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val name = state.profileViewer.profile?.displayName?.takeIf { it.isNotBlank() } ?: "This friend"
-    val focus = LocalControllerFocus.current
-    LaunchedEffect(Unit) { focus?.focus("remove_friend_cancel", reveal = false) }
+    DialogFocusHandoff("remove_friend_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(
@@ -6915,7 +6773,7 @@ internal fun RemoveFriendConfirmDialog(
             maxLines = 1,
         )
         Text(
-            text = "$name will be removed from your friends. You can add them again later.",
+            text = "$name will be removed from your friends. Add them again later.",
             modifier = Modifier.designBounds(metrics, 90f, 148f, 900f, 130f),
             color = pocketPalette.textSecondary,
             fontFamily = Rubik,
@@ -7016,60 +6874,13 @@ internal fun FriendStat(
 }
 
 @Composable
-internal fun FriendActionButton(
-    metrics: DesignMetrics,
-    x: Float,
-    label: String,
-    textColor: Color,
-    fill: Brush,
-    borderColor: Color,
-    enabled: Boolean,
-    tag: String,
-    focusLayer: Int = 0,
-    onClick: () -> Unit,
-) {
-    val shape = RoundedCornerShape(metrics.dp(118f))
-    Box(
-        Modifier
-            .designBounds(metrics, x, 12f, 545f, 165f)
-            .pocketShadow(metrics, 118f, 0.11f, 6f),
-    )
-    Box(
-        modifier = Modifier
-            .designBounds(metrics, x, 0f, 545f, 165f)
-            .clip(shape)
-            .pocketFrame(fill, metrics.dp(20.152f), borderColor, shape)
-            .testTag(tag)
-            .controllerTarget(tag, layer = focusLayer, cornerRadius = 118f) {
-                if (enabled) onClick()
-            }
-            .clickable(
-                interactionSource = remember(tag) { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            )
-            .alpha(if (enabled) 1f else 0.6f),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(48f),
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
 fun DeleteAccountOverlay(
     metrics: DesignMetrics,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val busy = state.deleteAccountInProgress
+    DialogFocusHandoff("delete_account_cancel")
     val entrance = remember { Animatable(56f) }
     LaunchedEffect(Unit) {
         entrance.animateTo(
@@ -7152,7 +6963,7 @@ fun DeleteAccountOverlay(
                 )
                 .testTag("delete_account_cancel")
                 .controllerTarget("delete_account_cancel", layer = 20) {
-                    dispatch(PocketPassEvent.CloseDeleteAccount)
+                    if (!busy) dispatch(PocketPassEvent.CloseDeleteAccount)
                 }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -7177,7 +6988,7 @@ fun DeleteAccountOverlay(
                 .pocketFrame(redButtonBrush(), metrics.dp(20.152f), Color(0xFFC24B4B), buttonShape)
                 .testTag("delete_account_confirm")
                 .controllerTarget("delete_account_confirm", layer = 20) {
-                    dispatch(PocketPassEvent.ConfirmDeleteAccount)
+                    if (!busy) dispatch(PocketPassEvent.ConfirmDeleteAccount)
                 }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -7548,7 +7359,6 @@ private fun ContributorsBottom(dispatch: (PocketPassEvent) -> Unit) {
             subtitle = "The people behind PocketPass.",
             backTag = "contributors_back",
         ) { dispatch(PocketPassEvent.Back) }
-        // The roster can outgrow the display, so it scrolls under the header.
         val scroll = rememberScrollState()
         val belowHeader = remember(metrics) { BelowSubpageHeaderShape(metrics) }
         DesignBox(

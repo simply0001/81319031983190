@@ -214,7 +214,6 @@ private val SymbolRows = listOf(
     ".,_+?!'\"",
 )
 
-// Only the Nintendo DS characters Sudofont draws; the wrapper Text picks the font.
 private val EmojiKeys: List<String> = SudofontGlyphs.map { it.text }
 private val EmojiKeyLabel: String = SudofontGlyphs.first().text
 
@@ -235,8 +234,6 @@ fun PocketKeyboard(
     canBackspace: Boolean = true,
     topRowUpTarget: ((centerX: Float) -> String?)? = null,
     emojiKey: Boolean = false,
-    // Callers whose submit already has its own sound (sending a message)
-    // pass null so the key does not double up with a confirm.
     submitSound: SoundEffect? = SoundEffect.Confirm,
 ) {
     val scale = height / POCKET_KEYBOARD_HEIGHT
@@ -492,7 +489,6 @@ private fun TextKeys(
     val topPadding = 22f * scale
     val bottomY = topPadding + 3f * (keyHeight + gap)
     val backspaceX = if (submitLabel != null) BACKSPACE_X else BACKSPACE_X_NO_SUBMIT
-    // Shift sits beside the third letter row; ?123/ABC starts the bottom row.
     val showEmojiKey = emojiKey && !emailKeys
     val emojiX = MODE_KEY_X + 130f + KEY_ROW_GAP
     val spaceX = if (showEmojiKey) emojiX + 130f + KEY_ROW_GAP else emojiX

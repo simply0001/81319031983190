@@ -39,8 +39,6 @@ internal fun classifyBackGamepadKey(
             BackGamepadKeyAction.Consume
         }
     }
-    // With nothing to erase, B first leaves the emoji or symbols page and
-    // only closes the keyboard from the letters page.
     if (keyboardActive && canEscape && keyCode == KeyEvent.KEYCODE_BUTTON_B) {
         return if (isDown && repeatCount == 0) {
             BackGamepadKeyAction.KeyboardEscape

@@ -7,7 +7,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +46,6 @@ import com.pocketpass.app.ui.components.PocketKeyboardLayout
 import com.pocketpass.app.ui.components.PocketPanel
 import com.pocketpass.app.ui.components.Text
 import com.pocketpass.app.ui.controller.controllerTarget
-import com.pocketpass.app.ui.designBounds
 import com.pocketpass.app.ui.theme.pocketPalette
 
 private val AccountErrorRed = Color(0xFF9B3434)

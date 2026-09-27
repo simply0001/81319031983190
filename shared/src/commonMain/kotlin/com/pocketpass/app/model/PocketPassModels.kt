@@ -64,11 +64,6 @@ enum class RecentInteractionsSort(val key: String) {
     NameAZ("name"),
 }
 
-enum class MessageComposerAction {
-    Image,
-    File,
-}
-
 enum class FriendsOverlay {
     None,
     AddFriend,
@@ -311,7 +306,6 @@ sealed interface PocketPassEvent {
     data class AccountSetup(val event: AccountSetupEvent) : PocketPassEvent
     data class AccountSecurity(val event: AccountSecurityEvent) : PocketPassEvent
     data class Mii(val event: MiiEditorEvent) : PocketPassEvent
-    data object OpenMiiEditor : PocketPassEvent
     data object OpenMiiSlots : PocketPassEvent
     data object CloseMiiSlots : PocketPassEvent
     data object OpenConnectedApps : PocketPassEvent
@@ -323,7 +317,6 @@ sealed interface PocketPassEvent {
     data object ApproveOAuthConsent : PocketPassEvent
     data object DenyOAuthConsent : PocketPassEvent
     data object OpenThemePicker : PocketPassEvent
-    data object CloseThemePicker : PocketPassEvent
     data object ToggleSortMenu : PocketPassEvent
     data object CloseSortMenu : PocketPassEvent
     data class EditMiiSlot(val slot: Int) : PocketPassEvent
@@ -336,16 +329,14 @@ sealed interface PocketPassEvent {
     data class PreviewMessage(val conversationId: String?) : PocketPassEvent
     data class UpdateMessageDraft(val value: String) : PocketPassEvent
     data object SendMessage : PocketPassEvent
-    data object ToggleMessageActions : PocketPassEvent
     data class RetryMessage(val messageId: String) : PocketPassEvent
-    data class SelectMessageAction(val action: MessageComposerAction) : PocketPassEvent
+    data object PickMessageImage : PocketPassEvent
     data class OpenMessageActions(val messageId: String) : PocketPassEvent
     data object CloseMessageActions : PocketPassEvent
     data object EditSelectedMessage : PocketPassEvent
     data object DeleteSelectedMessage : PocketPassEvent
     data object CancelMessageEdit : PocketPassEvent
     data object OpenNewGroup : PocketPassEvent
-    data object CloseNewGroup : PocketPassEvent
     data class ToggleGroupMember(val userId: String) : PocketPassEvent
     data class UpdateGroupTitle(val value: String) : PocketPassEvent
     data object CreateGroup : PocketPassEvent
@@ -403,10 +394,8 @@ sealed interface PocketPassEvent {
     data class UpdateNameDraft(val value: String) : PocketPassEvent
     data object SaveName : PocketPassEvent
     data object CloseNameEditor : PocketPassEvent
-    data class SetMessageBadgeText(val text: String) : PocketPassEvent
     data class SetNearby(val enabled: Boolean) : PocketPassEvent
     data object RequestNearbyPermissions : PocketPassEvent
-    data object SkipNearbyPermissions : PocketPassEvent
     data class SetSoundLevel(val level: Float) : PocketPassEvent
     data class SetSfxLevel(val level: Float) : PocketPassEvent
     data class SetThemeMode(val mode: ThemeMode) : PocketPassEvent
@@ -457,7 +446,6 @@ sealed interface PocketPassEvent {
     data class SetMessageAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetStepRewardsEnabled(val enabled: Boolean) : PocketPassEvent
     data object RequestStepRewardsPermission : PocketPassEvent
-    data object ResetSettings : PocketPassEvent
     data object OpenDeleteAccount : PocketPassEvent
     data object CloseDeleteAccount : PocketPassEvent
     data object ConfirmDeleteAccount : PocketPassEvent
@@ -483,27 +471,6 @@ sealed interface PocketPassEvent {
         val notificationId: String,
         val accept: Boolean,
     ) : PocketPassEvent
-    data class DeleteNotification(val notificationId: String) : PocketPassEvent
-    data object MarkAllNotificationsRead : PocketPassEvent
     data object ClearAllNotifications : PocketPassEvent
     data class StatusChanged(val status: StatusInfo) : PocketPassEvent
-}
-
-sealed interface PocketPassExtensionTarget {
-    data object HomeMore : PocketPassExtensionTarget
-    data object Shop : PocketPassExtensionTarget
-    data object Leaderboard : PocketPassExtensionTarget
-    data object Notifications : PocketPassExtensionTarget
-    data class MessageComposer(
-        val conversationId: String,
-        val action: MessageComposerAction,
-    ) : PocketPassExtensionTarget
-}
-
-fun interface PocketPassExtensions {
-    fun open(target: PocketPassExtensionTarget)
-
-    companion object {
-        val None = PocketPassExtensions { }
-    }
 }

@@ -3,8 +3,6 @@ package com.pocketpass.app.ui.components
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// The animated triangle backdrop. Android runs the shader as AGSL inside a View; Skia
-// platforms run the identical source through a RuntimeEffect.
 @Composable
 expect fun AnimatedPatternSurface(
     topColor: Color,

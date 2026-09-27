@@ -74,8 +74,6 @@ class ProductionMutationStore(
             ),
             value = command.profile,
         ) {
-            // Bios become visible only after the server accepts them. Keep the
-            // attempted text independently so permanent filter rejection is recoverable.
             usePrepared("INSERT INTO profile_bio_drafts(accountId, draft, acceptedBio, operationId, error) SELECT userId, ?, bio, ?, NULL FROM profiles WHERE userId = ? ON CONFLICT(accountId) DO UPDATE SET draft=excluded.draft, operationId=excluded.operationId, error=NULL") { statement ->
                 statement.bindText(1, command.profile.bio)
                 statement.bindText(2, command.clientOperationId.value)
@@ -465,36 +463,6 @@ private suspend fun PooledConnection.insertOperation(operation: OperationSpec) {
         statement.bindLong(9, 0L)
         statement.bindLong(10, operation.createdAtEpochMillis)
         statement.bindLong(11, operation.createdAtEpochMillis)
-        statement.step()
-    }
-}
-
-private suspend fun PooledConnection.upsertProfile(profile: UserProfile) {
-    val entity = profile.toEntity()
-    usePrepared(
-        """
-        INSERT INTO profiles
-            (userId, displayName, avatarKind, avatarValue, username, bio, age,
-             countryCode, locationLabel, lastSeenAtEpochMillis, presence, updatedAtEpochMillis)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(userId) DO UPDATE SET displayName=excluded.displayName, avatarKind=excluded.avatarKind,
-            avatarValue=excluded.avatarValue, username=excluded.username, bio=excluded.bio, age=excluded.age,
-            countryCode=excluded.countryCode, locationLabel=excluded.locationLabel, lastSeenAtEpochMillis=excluded.lastSeenAtEpochMillis,
-            presence=excluded.presence, updatedAtEpochMillis=excluded.updatedAtEpochMillis
-        """.trimIndent(),
-    ) { statement ->
-        statement.bindText(1, entity.userId)
-        statement.bindText(2, entity.displayName)
-        statement.bindTextOrNull(3, entity.avatarKind)
-        statement.bindTextOrNull(4, entity.avatarValue)
-        statement.bindText(5, entity.username)
-        statement.bindText(6, entity.bio)
-        statement.bindLongOrNull(7, entity.age?.toLong())
-        statement.bindTextOrNull(8, entity.countryCode)
-        statement.bindTextOrNull(9, entity.locationLabel)
-        statement.bindLongOrNull(10, entity.lastSeenAtEpochMillis)
-        statement.bindText(11, entity.presence)
-        statement.bindLong(12, entity.updatedAtEpochMillis)
         statement.step()
     }
 }

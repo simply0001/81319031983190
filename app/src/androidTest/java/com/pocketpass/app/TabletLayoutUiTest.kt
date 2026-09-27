@@ -57,7 +57,7 @@ class TabletLayoutUiTest {
             SideEffect { imeBottom = keyboardHeight }
             PocketPassTheme(state.themeMode) {
                 PhoneSurface { metrics ->
-                    PhoneRoot(metrics, state, { lastEvent = it; state = PocketPassReducer.reduce(state, it) }, null, PocketPassExtensions.None)
+                    PhoneRoot(metrics, state, { lastEvent = it; state = PocketPassReducer.reduce(state, it) }, null)
                 }
             }
         }
@@ -80,7 +80,6 @@ class TabletLayoutUiTest {
         }
     }
 
-    // Touch gestures exercise the transformed phone surface; performScrollTo uses unscaled distances.
     private fun swipeContentUp() {
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val usableHeight = root.height - imeBottom

@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -41,7 +42,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.pocketpass.app.domain.model.BingoCell
+import com.pocketpass.app.domain.model.WorldTourRegion
 import com.pocketpass.app.model.GameTarget
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassUiState
@@ -75,7 +76,11 @@ import com.pocketpass.app.ui.components.rememberContinuousRotation
 import com.pocketpass.app.ui.components.rememberPocketAssetBytes
 import com.pocketpass.app.ui.formatInstant
 import com.pocketpass.app.ui.supportsAnimatedPatterns
+import com.pocketpass.app.ui.controller.ControllerFocusViewport
+import com.pocketpass.app.ui.controller.FocusDirection
+import com.pocketpass.app.ui.controller.LocalControllerFocusViewport
 import com.pocketpass.app.ui.controller.controllerFocusBarrier
+import com.pocketpass.app.ui.controller.controllerFocusViewport
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.designBounds
 import com.pocketpass.app.ui.anchoredBounds
@@ -336,6 +341,7 @@ fun GameBottomOverlay(
     showBackground: Boolean = true,
     overlaysOnly: Boolean = false,
 ) {
+    DialogFocusHandoff(if (overlaysOnly) null else gameFocusTag(state.games.activeGame))
     val blockInteraction = remember { MutableInteractionSource() }
     val overlayTag = if (overlaysOnly) "game_dialog_overlay" else "game_bottom_overlay"
     Box(
@@ -382,6 +388,28 @@ private const val BINGO_CELL_SIZE = 166f
 private const val BINGO_CELL_STEP = 176f
 private const val BINGO_CARD_SIZE = 870f
 private const val BINGO_CARD_ROTATION = -1.73f
+private const val BINGO_BOARD_LAYER = 20
+private const val BINGO_GOAL_LAYER = 30
+private const val BINGO_GOAL_NOTE_TAG = "bingo_goal_note"
+
+private fun bingoCellTag(index: Int): String = "bingo_cell_$index"
+
+private fun gameFocusTag(game: GameTarget?): String? = when (game) {
+    GameTarget.PuzzleSwap -> "puzzle_buy"
+    GameTarget.Bingo -> bingoCellTag(0)
+    GameTarget.WorldTour -> WORLD_TOUR_REGIONS_BUTTON_TAG
+    null -> null
+}
+
+private fun bingoCellNeighbors(row: Int, column: Int): Map<FocusDirection, String> {
+    val index = row * 5 + column
+    return buildMap {
+        if (column > 0) put(FocusDirection.Left, bingoCellTag(index - 1))
+        if (column < 4) put(FocusDirection.Right, bingoCellTag(index + 1))
+        if (row > 0) put(FocusDirection.Up, bingoCellTag(index - 5))
+        if (row < 4) put(FocusDirection.Down, bingoCellTag(index + 5))
+    }
+}
 
 @Composable
 private fun BingoBottom(
@@ -441,7 +469,13 @@ private fun BingoBottom(
                         )
                         .background(Color.White)
                         .border(metrics.dp(3f), Color.Black)
-                        .testTag("bingo_cell_$index")
+                        .testTag(bingoCellTag(index))
+                        .controllerTarget(
+                            bingoCellTag(index),
+                            layer = BINGO_BOARD_LAYER,
+                            cornerRadius = 0f,
+                            neighbors = bingoCellNeighbors(row, column),
+                        ) { if (cell != null) dispatch(PocketPassEvent.SelectBingoSquare(index)) }
                         .clickable(
                             interactionSource = interaction,
                             indication = null,
@@ -484,6 +518,7 @@ private fun BingoBottom(
     val goalIndex = state.games.bingoGoalIndex
     val selectedCell = goalIndex?.let(displayCells::getOrNull)
     if (goalIndex != null && selectedCell != null) {
+        DialogFocusHandoff(BINGO_GOAL_NOTE_TAG)
         val scrimInteraction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
@@ -498,6 +533,13 @@ private fun BingoBottom(
         FigmaAsset(
             resource = Assets.BingoNotePaper,
             modifier = Modifier.designBounds(metrics, 117f, 48.5f, 1005f, 1005f),
+        )
+        Box(
+            Modifier
+                .designBounds(metrics, 240f, 132f, 740f, 801f)
+                .controllerTarget(BINGO_GOAL_NOTE_TAG, layer = BINGO_GOAL_LAYER, cornerRadius = 24f) {
+                    dispatch(PocketPassEvent.CloseBingoSquare)
+                },
         )
         var goalFontSize by remember(goalIndex) { mutableStateOf(100.167f) }
         Box(
@@ -682,8 +724,8 @@ private fun WorldTourBottom(
     Box(
         modifier = Modifier
             .anchoredBounds(metrics, 1080f, 40f, 120f, 120f, DesignAnchor.End, DesignAnchor.Center)
-            .testTag("world_tour_regions_button")
-            .controllerTarget("world_tour_regions_button", layer = 20) {
+            .testTag(WORLD_TOUR_REGIONS_BUTTON_TAG)
+            .controllerTarget(WORLD_TOUR_REGIONS_BUTTON_TAG, layer = 20) {
                 dispatch(PocketPassEvent.OpenWorldTourRegions)
             }
             .clickable(
@@ -757,6 +799,11 @@ private fun WorldTourBottom(
 
 private val WorldTourTextColor = Color(0xFF1D596B)
 private val WorldTourBorderColor = Color(0xFF5E9AAC)
+private const val WORLD_TOUR_REGIONS_LAYER = 30
+private const val WORLD_TOUR_REGIONS_BUTTON_TAG = "world_tour_regions_button"
+private const val WORLD_TOUR_REGIONS_EMPTY_TAG = "world_tour_regions_empty"
+
+private fun worldTourRegionTag(region: WorldTourRegion): String = "world_tour_region_${region.countryCode}"
 
 @Composable
 private fun WorldTourRegionsBottom(
@@ -764,6 +811,8 @@ private fun WorldTourRegionsBottom(
     state: PocketPassUiState,
     showBackground: Boolean,
 ) {
+    val regions = state.worldTour.regions
+    DialogFocusHandoff(regions.firstOrNull()?.let(::worldTourRegionTag) ?: WORLD_TOUR_REGIONS_EMPTY_TAG)
     val blockInteraction = remember { MutableInteractionSource() }
     if (showBackground) PatternBackground(
         metrics = metrics,
@@ -778,16 +827,17 @@ private fun WorldTourRegionsBottom(
         Modifier
             .anchoredBounds(metrics, 0f, 0f, 1240f, 1080f, DesignAnchor.Stretch, DesignAnchor.Stretch)
             .testTag("world_tour_regions_overlay")
-            .controllerFocusBarrier("world_tour_regions_overlay", layer = 30)
+            .controllerFocusBarrier("world_tour_regions_overlay", layer = WORLD_TOUR_REGIONS_LAYER)
             .clickable(
                 interactionSource = blockInteraction,
                 indication = null,
             ) {},
     )
-    val regions = state.worldTour.regions
+    val focusViewport = remember { ControllerFocusViewport() }
     Column(
         modifier = Modifier
             .designBounds(metrics, 40f, 60f, 1160f, 980f)
+            .controllerFocusViewport(focusViewport)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(metrics.dp(40f)),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -840,66 +890,74 @@ private fun WorldTourRegionsBottom(
                         ),
                     verticalArrangement = Arrangement.spacedBy(metrics.dp(31f)),
                 ) {
-                    if (regions.isEmpty()) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .requiredHeight(metrics.dp(124f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "No regions discovered yet",
-                                color = WorldTourTextColor.copy(alpha = 0.4f),
-                                fontFamily = Rubik,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = metrics.sp(45f),
-                            )
-                        }
-                    }
-                    regions.forEachIndexed { index, region ->
-                        if (index > 0) {
+                    CompositionLocalProvider(LocalControllerFocusViewport provides focusViewport) {
+                        if (regions.isEmpty()) {
                             Box(
                                 Modifier
                                     .fillMaxWidth()
-                                    .requiredHeight(metrics.dp(9f))
-                                    .clip(RoundedCornerShape(metrics.dp(100f)))
-                                    .background(WorldTourTextColor.copy(alpha = 0.13f)),
-                            )
+                                    .requiredHeight(metrics.dp(124f))
+                                    .controllerTarget(WORLD_TOUR_REGIONS_EMPTY_TAG, layer = WORLD_TOUR_REGIONS_LAYER) {},
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "No regions discovered yet",
+                                    color = WorldTourTextColor.copy(alpha = 0.4f),
+                                    fontFamily = Rubik,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = metrics.sp(45f),
+                                )
+                            }
                         }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .requiredHeight(metrics.dp(110f))
-                                .testTag("world_tour_region_${region.countryCode}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(metrics.dp(40f)),
-                        ) {
-                            Text(
-                                text = CountryCatalog.flagEmoji(region.countryCode),
-                                fontSize = metrics.sp(80f),
-                                maxLines = 1,
-                            )
-                            Text(
-                                text = CountryCatalog.countries
-                                    .firstOrNull { it.code == region.countryCode }
-                                    ?.name
-                                    ?: region.countryCode,
-                                modifier = Modifier.weight(1f),
-                                color = WorldTourTextColor,
-                                fontFamily = Rubik,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = metrics.sp(64f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = formatInstant(region.firstMetAt, "MMM d"),
-                                color = WorldTourTextColor.copy(alpha = 0.55f),
-                                fontFamily = Rubik,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = metrics.sp(45f),
-                                maxLines = 1,
-                            )
+                        regions.forEachIndexed { index, region ->
+                            if (index > 0) {
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .requiredHeight(metrics.dp(9f))
+                                        .clip(RoundedCornerShape(metrics.dp(100f)))
+                                        .background(WorldTourTextColor.copy(alpha = 0.13f)),
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .requiredHeight(metrics.dp(110f))
+                                    .testTag(worldTourRegionTag(region))
+                                    .controllerTarget(
+                                        worldTourRegionTag(region),
+                                        layer = WORLD_TOUR_REGIONS_LAYER,
+                                        cornerRadius = 55f,
+                                    ) {},
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(metrics.dp(40f)),
+                            ) {
+                                Text(
+                                    text = CountryCatalog.flagEmoji(region.countryCode),
+                                    fontSize = metrics.sp(80f),
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    text = CountryCatalog.countries
+                                        .firstOrNull { it.code == region.countryCode }
+                                        ?.name
+                                        ?: region.countryCode,
+                                    modifier = Modifier.weight(1f),
+                                    color = WorldTourTextColor,
+                                    fontFamily = Rubik,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = metrics.sp(64f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = formatInstant(region.firstMetAt, "MMM d"),
+                                    color = WorldTourTextColor.copy(alpha = 0.55f),
+                                    fontFamily = Rubik,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = metrics.sp(45f),
+                                    maxLines = 1,
+                                )
+                            }
                         }
                     }
                 }

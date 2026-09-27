@@ -1,7 +1,10 @@
 package com.pocketpass.app.nearby
 
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.util.Log
 import android.os.Build
 import android.os.Looper
@@ -29,6 +32,11 @@ import kotlinx.coroutines.withContext
 
 private const val TAG = "PocketPassNearby"
 
+interface NearbyEngineHost {
+    fun restartEngine()
+    fun stopEngine()
+}
+
 class NearbyLifecycleController(
     private val context: Context,
     private val settingsRepository: SettingsRepository,
@@ -45,6 +53,12 @@ class NearbyLifecycleController(
     private val serviceHandshake = Any()
     private var startInFlight = false
     private var stopDeferred = false
+    private var engineHost: NearbyEngineHost? = null
+    private val bluetoothStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) evaluate()
+        }
+    }
 
     val permissionRequests = permissionRequestEvents.asSharedFlow()
     val state: StateFlow<NearbyFeatureState> = combine(
@@ -58,9 +72,15 @@ class NearbyLifecycleController(
     )
 
     init {
+        ContextCompat.registerReceiver(
+            context,
+            bluetoothStateReceiver,
+            IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         scope.launch(Dispatchers.Main.immediate) {
             combine(
-                settings,
+                settingsRepository.settings,
                 sessionState,
             ) { localSettings, session ->
                 localSettings to session
@@ -140,16 +160,6 @@ class NearbyLifecycleController(
         }
     }
 
-    fun skipOnboarding() {
-        scope.launch(Dispatchers.Main.immediate) {
-            settingsRepository.setNearby(false)
-            settingsRepository.setNearbyOnboardingCompleted(true)
-            permissionUi.value = NearbyPermissionUiState()
-            stopService()
-            runtime.value = NearbyRuntimeState(NearbyRuntimeStatus.Disabled)
-        }
-    }
-
     fun onNearbyPreferenceChanged(enabled: Boolean) {
         scope.launch(Dispatchers.Main.immediate) {
             if (!enabled) {
@@ -196,21 +206,30 @@ class NearbyLifecycleController(
     }
 
     fun shouldRun(): Boolean =
+        shouldKeepService() && NearbyPermissionPolicy.isBluetoothEnabled(context)
+
+    private fun shouldKeepService(): Boolean =
         latestSettings.nearbyEnabled &&
             latestSettings.nearbyOnboardingCompleted &&
             activeAccountId() != null &&
             NearbyPermissionPolicy.missingBlePermissions(context).isEmpty() &&
             NearbyPermissionPolicy.supportsBle(context) &&
-            NearbyPermissionPolicy.isBluetoothEnabled(context) &&
             NearbyPermissionPolicy.isLegacyLocationEnabled(context)
 
+    fun attachEngineHost(host: NearbyEngineHost) {
+        engineHost = host
+    }
+
+    fun detachEngineHost(host: NearbyEngineHost) {
+        if (engineHost === host) engineHost = null
+    }
+
     private fun evaluate() {
-        // Service callbacks run on Main. Keep foreground requests and stops on
-        // that same queue so a stop cannot overtake an unacknowledged start.
         if (Looper.myLooper() != Looper.getMainLooper()) {
             scope.launch(Dispatchers.Main.immediate) { evaluate() }
             return
         }
+        if (latestSession is SessionState.Initializing) return
         val accountId = activeAccountId()
         when {
             accountId == null || !latestSettings.nearbyEnabled -> {
@@ -241,7 +260,11 @@ class NearbyLifecycleController(
 
             !NearbyPermissionPolicy.isBluetoothEnabled(context) ||
                 !NearbyPermissionPolicy.isLegacyLocationEnabled(context) -> {
-                stopService("bluetooth or location off")
+                if (NearbyPermissionPolicy.isLegacyLocationEnabled(context)) {
+                    engineHost?.stopEngine()
+                } else {
+                    stopService("location off")
+                }
                 runtime.value = NearbyRuntimeState(
                     NearbyRuntimeStatus.BluetoothOff,
                     "Turn on Bluetooth" +
@@ -271,6 +294,11 @@ class NearbyLifecycleController(
             return
         }
         runtime.value = NearbyRuntimeState(NearbyRuntimeStatus.Starting)
+        val host = engineHost
+        if (host != null) {
+            host.restartEngine()
+            return
+        }
         synchronized(serviceHandshake) {
             startInFlight = true
             stopDeferred = false
@@ -300,6 +328,7 @@ class NearbyLifecycleController(
                 return
             }
         }
+        engineHost = null
         Log.i(TAG, "Stopping nearby service: $reason")
         context.stopService(Intent(context, NearbyEncounterService::class.java))
     }
@@ -309,7 +338,7 @@ class NearbyLifecycleController(
             startInFlight = false
             stopDeferred.also { stopDeferred = false }
         }
-        return !stopRequested && shouldRun()
+        return !stopRequested && shouldKeepService()
     }
 
     fun onServiceStartFailed(detail: String) {

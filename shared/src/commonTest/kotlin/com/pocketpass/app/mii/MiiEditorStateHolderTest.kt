@@ -1179,3 +1179,9 @@ class MiiEditorStateHolderTest {
         const val OTHER_ACCOUNT = "user-456"
     }
 }
+
+private val MiiEditorUiState.setupComplete: Boolean
+    get() = saved != null
+
+private val PretendoImportState.canImport: Boolean
+    get() = found != null && !lookingUp

@@ -21,8 +21,6 @@ import androidx.compose.ui.unit.IntSize
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-// The focus ring's soft outer glow and inner gloss are pre-blurred once into small alpha
-// masks, then stretched over the ring. Only the blur filter itself differs per platform.
 internal expect fun Paint.applyBlurMaskFilter(radius: Float)
 
 internal class HighlightMask(

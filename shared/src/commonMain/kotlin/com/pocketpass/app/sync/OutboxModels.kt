@@ -15,13 +15,6 @@ import com.pocketpass.app.domain.model.SendMessageCommand
 import com.pocketpass.app.domain.model.UserId
 import kotlin.time.Instant
 
-object OutboxOperationKinds {
-    const val SEND_MESSAGE = LocalOperationKinds.SEND_MESSAGE
-    const val MARK_CONVERSATION_READ = LocalOperationKinds.MARK_CONVERSATION_READ
-    const val EDIT_MESSAGE = LocalOperationKinds.EDIT_MESSAGE
-    const val DELETE_MESSAGE = LocalOperationKinds.DELETE_MESSAGE
-}
-
 class MessageOutboxStore(
     private val outboxDao: OutboxDao,
     private val payloadCodec: MessageSendPayloadCodec = BinaryMessageSendPayloadCodec,
@@ -35,7 +28,7 @@ class MessageOutboxStore(
         val operation = messageOperation(
             command.clientOperationId.value,
             command.accountId,
-            OutboxOperationKinds.EDIT_MESSAGE,
+            LocalOperationKinds.EDIT_MESSAGE,
             command.messageId,
             editPayloadCodec.encode(
                 MessageEditPayload(
@@ -56,7 +49,7 @@ class MessageOutboxStore(
         val operation = messageOperation(
             command.clientOperationId.value,
             command.accountId,
-            OutboxOperationKinds.DELETE_MESSAGE,
+            LocalOperationKinds.DELETE_MESSAGE,
             command.messageId,
             deletePayloadCodec.encode(
                 MessageDeletePayload(
@@ -123,7 +116,7 @@ class MessageOutboxStore(
             operationId = operationId,
             accountId = command.accountId.value,
             idempotencyKey = command.clientOperationId.value,
-            kind = OutboxOperationKinds.SEND_MESSAGE,
+            kind = LocalOperationKinds.SEND_MESSAGE,
             aggregateId = command.messageId.value,
             payload = payloadCodec.encode(
                 MessageSendPayload(
@@ -155,7 +148,7 @@ class MessageOutboxStore(
             operationId = operationId,
             accountId = command.accountId.value,
             idempotencyKey = operationId,
-            kind = OutboxOperationKinds.MARK_CONVERSATION_READ,
+            kind = LocalOperationKinds.MARK_CONVERSATION_READ,
             aggregateId = command.conversationId.value,
             payload = readPayloadCodec.encode(
                 ConversationReadPayload(

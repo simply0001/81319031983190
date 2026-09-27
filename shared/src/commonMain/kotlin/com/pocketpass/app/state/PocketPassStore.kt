@@ -21,7 +21,6 @@ import com.pocketpass.app.model.ConnectedAppsUiState
 import com.pocketpass.app.model.GameTarget
 import com.pocketpass.app.model.GamesUiState
 import com.pocketpass.app.model.LeaderboardUiState
-import com.pocketpass.app.model.MessageComposerAction
 import com.pocketpass.app.model.OAuthConsentUiState
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
@@ -37,6 +36,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -48,18 +48,14 @@ import kotlinx.coroutines.launch
 import com.pocketpass.app.model.PuzzleUiState
 import kotlin.time.Clock
 
-/**
- * The platform-neutral heart of the app: it owns PocketPassUiState, folds every feature
- * holder's state into it, and routes events to the reducer and the feature holders.
- * Each platform wraps it — Android in a ViewModel, iOS in the app's entry point.
- */
 class PocketPassStore(
     private val container: PocketPassStoreContainer,
     private val statusFeed: StatusFeed,
     private val routeStore: RouteStateStore = NoRouteStateStore,
     private val scope: CoroutineScope,
 ) {
-    private val boards = com.pocketpass.app.boards.BoardsStateHolder(container.repositories.boards, container.activeAccountId, scope)
+    private val boardsActive = MutableStateFlow(false)
+    private val boards = com.pocketpass.app.boards.BoardsStateHolder(container.repositories.boards, container.activeAccountId, scope, boardsActive)
     private val _state = MutableStateFlow(
         PocketPassUiState(
             routes = routeStore.restore()
@@ -74,6 +70,12 @@ class PocketPassStore(
 
     init {
         scope.launch { boards.state.collect { value -> _state.update { it.copy(boards = value) } } }
+        scope.launch {
+            combine(
+                _state.map { it.boardsVisible && it.routes.lastOrNull() == PocketPassRoute.Root(PocketPassDestination.Messages) }.distinctUntilChanged(),
+                container.appForeground,
+            ) { onScreen, foreground -> onScreen && foreground }.collect { boardsActive.value = it }
+        }
         scope.launch {
             state.map { it.sessionState.accountIdOrNull() to it.selectedConversationId }.distinctUntilChanged().collectLatest { (account, conversation) ->
                 _state.update { it.copy(messageAuthorColours = emptyMap()) }
@@ -124,6 +126,8 @@ class PocketPassStore(
     }
 
     fun dispatch(event: PocketPassEvent) {
+        if (event == PocketPassEvent.ConfirmDeleteMiiSlot && _state.value.miiDeleteInProgress) return
+        if (event == PocketPassEvent.ConfirmDeleteAccount && _state.value.deleteAccountInProgress) return
         soundEffectFor(event, _state.value.rootDestination)?.let(container.soundEffects::play)
         when (event) {
             is PocketPassEvent.Boards -> {
@@ -207,7 +211,6 @@ class PocketPassStore(
                 if (container.friends.closeOverlay()) return
                 if (container.messages.closeGroupInfo()) return
                 if (container.messages.closeMessageActions()) return
-                if (container.messages.closeActionRail()) return
                 if (container.messages.cancelEdit()) return
                 if (_state.value.boardsVisible && _state.value.routes.lastOrNull() == PocketPassRoute.Root(PocketPassDestination.Messages) && boards.back()) return
                 if (_state.value.routes.lastOrNull() is PocketPassRoute.MessageDetail) {
@@ -292,16 +295,6 @@ class PocketPassStore(
                 container.messages.closeConversation()
                 container.messages.closeGroupComposer()
                 container.connectedApps.close()
-            }
-
-            PocketPassEvent.OpenMiiEditor -> {
-                container.profileViewer.close()
-                container.homeProfile.closeBioEditor()
-                container.homeProfile.closeNameEditor()
-                container.homeProfile.closeMoodPicker()
-                container.friends.closeOverlay()
-                container.messages.closeConversation()
-                container.messages.closeGroupComposer()
             }
 
             PocketPassEvent.OpenBioEditor -> {
@@ -481,10 +474,6 @@ class PocketPassStore(
             is PocketPassEvent.Mii -> container.miiEditor.dispatch(event.event)
             PocketPassEvent.CloseMiiSlots ->
                 container.miiEditor.dispatch(MiiEditorEvent.ClosePretendoImport)
-            PocketPassEvent.OpenMiiEditor ->
-                container.miiEditor.beginEdit(
-                    container.miiEditor.state.value.activeSlot,
-                )
             is PocketPassEvent.EditMiiSlot -> container.miiEditor.beginEdit(event.slot)
             is PocketPassEvent.WearShopItem -> {
                 val shop = _state.value.shop
@@ -513,7 +502,7 @@ class PocketPassStore(
                             null
                         },
                         miiDeleteError = if (result is RepositoryResult.Failure) {
-                            "Your Mii could not be deleted."
+                            "Your Piip could not be deleted."
                         } else {
                             null
                         },
@@ -539,15 +528,11 @@ class PocketPassStore(
                 container.messages.setDraft(event.value)
 
             PocketPassEvent.SendMessage -> container.messages.sendDraft()
-            PocketPassEvent.ToggleMessageActions -> container.messages.toggleActionRail()
             is PocketPassEvent.RetryMessage -> runCatching {
                 container.messages.retryMessage(MessageId(event.messageId))
             }
 
-            is PocketPassEvent.SelectMessageAction -> when (event.action) {
-                MessageComposerAction.Image -> container.messages.requestImageAttachment()
-                MessageComposerAction.File -> container.messages.closeActionRail()
-            }
+            PocketPassEvent.PickMessageImage -> container.messages.requestImageAttachment()
 
             is PocketPassEvent.OpenMessageActions -> runCatching {
                 container.messages.openMessageActions(MessageId(event.messageId))
@@ -587,11 +572,6 @@ class PocketPassStore(
                     event.accept,
                 )
             }
-            is PocketPassEvent.DeleteNotification -> runCatching {
-                container.notifications.delete(NotificationId(event.notificationId))
-            }
-            PocketPassEvent.MarkAllNotificationsRead ->
-                container.notifications.markAllRead()
             PocketPassEvent.ClearAllNotifications ->
                 container.notifications.clearAll()
 
@@ -602,9 +582,6 @@ class PocketPassStore(
 
             PocketPassEvent.RequestNearbyPermissions ->
                 container.nearby.requestPermissions()
-
-            PocketPassEvent.SkipNearbyPermissions ->
-                container.nearby.skipOnboarding()
 
             is PocketPassEvent.SetSoundLevel -> scope.launch {
                 container.settings.setSoundLevel(event.level)
@@ -727,10 +704,6 @@ class PocketPassStore(
             PocketPassEvent.RequestStepRewardsPermission ->
                 container.stepRewards.requestPermission()
 
-            PocketPassEvent.ResetSettings -> scope.launch {
-                container.resetSettings()
-            }
-
             PocketPassEvent.CheckForAppUpdate -> container.appUpdate.check()
 
             PocketPassEvent.DownloadAppUpdate -> container.appUpdate.download()
@@ -765,7 +738,6 @@ class PocketPassStore(
                     container.messages.openGroupComposer()
                 }
             }
-            PocketPassEvent.CloseNewGroup -> container.messages.closeGroupComposer()
             is PocketPassEvent.ToggleGroupMember -> runCatching {
                 container.messages.toggleGroupMember(UserId(event.userId))
             }
@@ -914,7 +886,6 @@ class PocketPassStore(
                         previewConversationId = feature.previewConversationId,
                         previewMessages = feature.previewMessages,
                         messageDraft = feature.currentDraft,
-                        messageActionRailExpanded = feature.actionRailExpanded,
                         messageSendInProgress = feature.isSending,
                         messageOperationError = feature.operationError,
                         messageActionMessageId = feature.actionMessageId?.value,
