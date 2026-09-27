@@ -8,7 +8,6 @@ import io.github.jan.supabase.auth.SessionManager
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
-import io.github.jan.supabase.realtime.RealtimeProtocolVersion
 import io.github.jan.supabase.storage.Storage
 
 class PocketPassSupabaseClientFactory(
@@ -42,7 +41,6 @@ class PocketPassSupabaseClientFactory(
                 disconnectOnSessionLoss = true
                 connectOnSubscribe = true
                 disconnectOnNoSubscriptions = true
-                vsn = RealtimeProtocolVersion.V1
             }
             install(Storage)
         }
