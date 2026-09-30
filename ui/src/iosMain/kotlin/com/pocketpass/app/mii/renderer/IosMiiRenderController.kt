@@ -3,6 +3,7 @@
 package com.pocketpass.app.mii.renderer
 
 import com.pocketpass.app.mii.MiiAppearance
+import com.pocketpass.app.mii.MiiHatColourLayout
 import com.pocketpass.app.mii.toNativeRendererFields
 import kotlin.io.encoding.Base64
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -143,6 +145,8 @@ class IosMiiRenderController private constructor() {
     var canonicalBase64: String = DEFAULT_MII_BASE64
         private set
 
+    private var hatColourLayouts: List<MiiHatColourLayout> = emptyList()
+
     private var activeWebView: WKWebView? = null
     private var readySignal = CompletableDeferred<Unit>()
     private val pendingRequests = mutableMapOf<String, CompletableDeferred<String?>>()
@@ -223,7 +227,7 @@ class IosMiiRenderController private constructor() {
         ) ?: throw MiiRendererException("Piip renderer returned no canonical appearance data")
         validateCanonical(exported)
         canonicalBase64 = exported
-        mutableStatus.value = MiiRenderStatus.Ready(exported)
+        mutableStatus.value = MiiRenderStatus.Ready(exported, hatColourLayouts)
         return exported
     }
 
@@ -334,7 +338,8 @@ class IosMiiRenderController private constructor() {
                 runCatching { validateCanonical(canonical) }.onSuccess {
                     canonicalBase64 = canonical
                 }
-                mutableStatus.value = MiiRenderStatus.Ready(canonicalBase64)
+                hatColourLayouts = json.hatColours()
+                mutableStatus.value = MiiRenderStatus.Ready(canonicalBase64, hatColourLayouts)
                 if (!readySignal.isCompleted) readySignal.complete(Unit)
             }
             "error" -> failRuntime("The Piip renderer could not be initialized.")
@@ -437,9 +442,18 @@ class IosMiiRenderController private constructor() {
     private fun JsonObject.boolean(key: String): Boolean? =
         runCatching { (this[key] as? JsonPrimitive)?.boolean }.getOrNull()
 
+    private fun JsonObject.hatColours(): List<MiiHatColourLayout> =
+        (this["hatColours"] as? JsonArray)?.map { element ->
+            val entry = element as? JsonObject
+            MiiHatColourLayout.of(
+                colours = entry?.int("colours") ?: 1,
+                colour2 = entry?.int("colour2") ?: MiiHatColourLayout.WHITE_FAVORITE_COLOR,
+            )
+        }.orEmpty()
+
     companion object {
         const val RENDERER_VERSION =
-            "ariankordi/mii-creator@1cd6b7d1d09e75fffd5c116a10e3e162647ecb78+pocketpass.20260809.5"
+            "ariankordi/mii-creator@1cd6b7d1d09e75fffd5c116a10e3e162647ecb78+pocketpass.20260930.1"
 
         const val DEFAULT_MII_BASE64 =
             "BAXGigDvV8wSNID/cJl869TJwxYAAAAAAAAAAAAAAAAAAAAAAAAAAE0AaQBpAAAAAAAAAAAAAAAAAAAACAAAAAAAQAMDAQYEBgIKCAQEAgIMAAAAAP8AAAAACAQACgEAIf///0AABAACFAMTBBcNBAAKBAEJ//8A/wAAAP//"

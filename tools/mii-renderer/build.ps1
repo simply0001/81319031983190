@@ -113,7 +113,7 @@ try {
 
     $pocketPassSourceRoot = Join-Path $workRoot "src\pocketpass"
     New-Item -ItemType Directory -Path $pocketPassSourceRoot -Force | Out-Null
-    foreach ($name in @("renderer.ts", "RendererFFL.ts", "RendererSettings.ts", "RendererTypes.ts")) {
+    foreach ($name in @("renderer.ts", "RendererFFL.ts", "RendererHatColours.ts", "RendererSettings.ts", "RendererTypes.ts")) {
         Copy-Item -LiteralPath (Join-Path $toolRoot "src\$name") -Destination (Join-Path $pocketPassSourceRoot $name)
     }
 

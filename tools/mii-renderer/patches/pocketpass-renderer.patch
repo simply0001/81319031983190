@@ -1,8 +1,19 @@
 diff --git a/src/class/3DScene.ts b/src/class/3DScene.ts
-index ba40628..a60325f 100644
+index ba40628..96fdda0 100644
 --- a/src/class/3DScene.ts
 +++ b/src/class/3DScene.ts
-@@ -21,9 +21,11 @@ import {
+@@ -14,6 +14,10 @@ import {
+   SwitchMiiColorTableSRGB,
+   ForbiddenShirtPantColors
+ } from "../constants/ColorTables";
++import {
++  hatLayerColours,
++  isTwoColourHatMaterial
++} from "../pocketpass/RendererHatColours";
+ import {
+   cPantsColorBlue,
+   cPantsColorGold,
+@@ -21,9 +25,11 @@ import {
    cPantsColorRed,
    MiiFavoriteFFLColorLookupTable
  } from "./3d/shader/fflShaderConst";
@@ -16,7 +27,7 @@ index ba40628..a60325f 100644
  import { SparkleParticle } from "./3d/effect/SparkleParticle";
  import {
    ClothesType,
-@@ -40,7 +42,7 @@ import {
+@@ -40,7 +46,7 @@ import {
    traverseAddShader,
    traverseMesh
  } from "./3d/shader/ShaderUtils";
@@ -25,7 +36,7 @@ index ba40628..a60325f 100644
  import { ShaderType } from "../constants/BodyShaderTypes";
  import { getHeadModel, getMaskTex, type ModelFlag } from "../util/MiiRendering";
  import {
-@@ -98,7 +100,12 @@ export class Mii3DScene {
+@@ -98,7 +104,12 @@ export class Mii3DScene {
    simpleShaderLegacyColors!: boolean;
    hatModels!: GLTF[];
    clothingTextures!: Record<string, THREE.Texture>;
@@ -39,7 +50,7 @@ index ba40628..a60325f 100644
    camSetup!: () => void;
    texResolution: number;
  
-@@ -113,7 +120,7 @@ export class Mii3DScene {
+@@ -113,7 +124,7 @@ export class Mii3DScene {
      initCallback?: (renderer: THREE.WebGLRenderer) => any,
      // shaderOverride uses MeshStandardMaterial
      shaderOverride: boolean = false,
@@ -48,7 +59,7 @@ index ba40628..a60325f 100644
    ) {
      this.animations = new Map();
      this.animators = new Map();
-@@ -147,7 +154,8 @@ export class Mii3DScene {
+@@ -147,7 +158,8 @@ export class Mii3DScene {
      } else {
        this.#renderer = new THREE.WebGLRenderer({
          alpha: true,
@@ -58,7 +69,7 @@ index ba40628..a60325f 100644
          // powerPreference: "high-performance",
          // stencil: false,
          // depth: false
-@@ -475,17 +483,21 @@ export class Mii3DScene {
+@@ -475,17 +487,21 @@ export class Mii3DScene {
      const type = this.mii.gender == 0 ? "m" : "f";
      this.animators.delete(`animation-${type}`);
      this.swapAnimation("Finish");
@@ -82,7 +93,7 @@ index ba40628..a60325f 100644
        is2DMode = !this.cameraPan;
      switch (this.currentPosition) {
        case CameraPosition.MiiHead:
-@@ -555,13 +567,6 @@ export class Mii3DScene {
+@@ -555,13 +571,6 @@ export class Mii3DScene {
        setTimeout(() => {
          this.resize();
        }, 0);
@@ -96,7 +107,7 @@ index ba40628..a60325f 100644
      }
  
      // this.#scene.fog = new THREE.FogExp2(0xff0000, 1);
-@@ -786,7 +791,7 @@ export class Mii3DScene {
+@@ -786,7 +795,7 @@ export class Mii3DScene {
      }
      return cPantsColorGray;
    }
@@ -105,7 +116,7 @@ index ba40628..a60325f 100644
      if (!this.ready) return;
      this.resize();
  
-@@ -1102,7 +1107,7 @@ export class Mii3DScene {
+@@ -1102,7 +1111,7 @@ export class Mii3DScene {
        this.getRendererElement().style.opacity = "1";
      }
    }
@@ -114,19 +125,63 @@ index ba40628..a60325f 100644
      if (!this.ready) {
        console.log("first time loading head");
      }
-diff --git a/src/util/MiiRendering.ts b/src/util/MiiRendering.ts
-index bc31501..87fe999 100644
---- a/src/util/MiiRendering.ts
-+++ b/src/util/MiiRendering.ts
-@@ -20,7 +20,7 @@ import {
-   isShaderMaterial,
-   getShaderMaterialFromShaderType
- } from "../class/3d/shader/ShaderUtils";
--import { getFFL } from "./FFLLoader";
-+import { getPocketPassFFL as getFFL } from "../pocketpass/RendererFFL";
- import { renderTargetToDataTexture } from "./rendertarget";
- import FFLShaderMaterial from "../external/ffl.js/FFLShaderMaterial";
+@@ -1316,19 +1325,28 @@ export class Mii3DScene {
+                     map: mat.map!
+                   });
+                   (m.material as THREE.MeshBasicMaterial).needsUpdate = true;
++                  const hatColor =
++                    this.mii.hatCommonColor !== -1 &&
++                    this.mii.hatCommonColor < 100
++                      ? SwitchMiiColorTableSRGB[this.mii.hatCommonColor]
++                      : MiiFavoriteColorVec3Table[
++                          this.mii.hatFavoriteColor !== -1
++                            ? this.mii.hatFavoriteColor
++                            : this.mii.favoriteColor
++                        ];
++                  const layered = isTwoColourHatMaterial(mat);
+                   m.geometry.userData = {
+                     // ignore: 1,
+                     cullMode: 0,
+-                    modulateColor:
+-                      this.mii.hatCommonColor !== -1 &&
+-                      this.mii.hatCommonColor < 100
+-                        ? SwitchMiiColorTableSRGB[this.mii.hatCommonColor]
+-                        : MiiFavoriteColorVec3Table[
+-                            this.mii.hatFavoriteColor !== -1
+-                              ? this.mii.hatFavoriteColor
+-                              : this.mii.favoriteColor
+-                          ],
+-                    modulateMode: 5, //5,
++                    modulateColor: hatColor,
++                    modulateColors: layered
++                      ? hatLayerColours(
++                          mat,
++                          hatColor,
++                          (this.mii as any).hatSecondaryColor
++                        )
++                      : undefined,
++                    modulateMode: layered ? 2 : 5,
+                     modulateType: 5 //5,
+                   };
  
+diff --git a/src/class/3d/shader/ShaderUtils.ts b/src/class/3d/shader/ShaderUtils.ts
+index ba0d0b7..0a1b73e 100644
+--- a/src/class/3d/shader/ShaderUtils.ts
++++ b/src/class/3d/shader/ShaderUtils.ts
+@@ -124,8 +124,12 @@ export async function traverseMesh(node: THREE.Mesh, shaderType: ShaderType) {
+       }
+     : {};
+ 
++  const layerColours: number[][] | undefined = userData.modulateColors;
+   const params = {
+-    color: new THREE.Color(...modulateColor),
++    color:
++      isUsingShader && Array.isArray(layerColours)
++        ? layerColours.map((c) => new THREE.Color(c[0], c[1], c[2]))
++        : new THREE.Color(...modulateColor),
+     ...modulate,
+     map: originalMaterial.map || undefined,
+     side
 diff --git a/src/constants/Extensions.ts b/src/constants/Extensions.ts
 index 3e88c07..390f9a4 100644
 --- a/src/constants/Extensions.ts
@@ -153,3 +208,66 @@ index 3e88c07..390f9a4 100644
  ];
  
  export const ClothesTypeList = [
+diff --git a/src/util/IconRendering.ts b/src/util/IconRendering.ts
+index 7f7c202..143f727 100644
+--- a/src/util/IconRendering.ts
++++ b/src/util/IconRendering.ts
+@@ -44,6 +44,10 @@ import {
+   MiiFavoriteColorVec3Table,
+   SwitchMiiColorTableSRGB
+ } from "../constants/ColorTables";
++import {
++  hatLayerColours,
++  isTwoColourHatMaterial
++} from "../pocketpass/RendererHatColours";
+ // import { streetpassHandScaling } from "./scaling";
+ import { ViewType, getCameraForViewType } from "./camera";
+ import { renderTargetToDataURL } from "./rendertarget";
+@@ -61,6 +65,7 @@ export const getAdditionalInfoFromMii = (miiData: Mii) =>
+   ({
+     hatCommonColor: miiData.hatCommonColor,
+     hatFavoriteColor: miiData.hatFavoriteColor,
++    hatSecondaryColor: (miiData as any).hatSecondaryColor ?? -1,
+     hatType: miiData.hatType,
+     pantsColor: miiData.pantsColor,
+     shirtColor: miiData.shirtColor,
+@@ -285,8 +290,11 @@ export function createMiiRender(
+       );
+       hatModel.traverse((m) => {
+         if ((m as THREE.Mesh).isMesh) {
++          const originalMaterial = (m as THREE.Mesh).material as THREE.Material;
+           const oldMat = ((m as THREE.Mesh).material as THREE.MeshBasicMaterial)
+             .map;
++          const layered =
++            isUsingShader && isTwoColourHatMaterial(originalMaterial);
+ 
+           let modulate = isUsingShader
+             ? {
+@@ -298,7 +306,13 @@ export function createMiiRender(
+           (m as THREE.Mesh as any).material = new shaderMaterial(
+             {
+               ...modulate,
+-              color: new THREE.Color(...hatColor),
++              color: layered
++                ? hatLayerColours(
++                    originalMaterial,
++                    hatColor,
++                    (request.additionalInfo as any).hatSecondaryColor
++                  ).map((c) => new THREE.Color(...c))
++                : new THREE.Color(...hatColor),
+               opacity: 1,
+               map: oldMat!
+             }!
+diff --git a/src/util/MiiRendering.ts b/src/util/MiiRendering.ts
+index bc31501..87fe999 100644
+--- a/src/util/MiiRendering.ts
++++ b/src/util/MiiRendering.ts
+@@ -20,7 +20,7 @@ import {
+   isShaderMaterial,
+   getShaderMaterialFromShaderType
+ } from "../class/3d/shader/ShaderUtils";
+-import { getFFL } from "./FFLLoader";
++import { getPocketPassFFL as getFFL } from "../pocketpass/RendererFFL";
+ import { renderTargetToDataTexture } from "./rendertarget";
+ import FFLShaderMaterial from "../external/ffl.js/FFLShaderMaterial";
+ 

@@ -19,11 +19,15 @@
   "pocketPassSources": [
     {
       "path": "src/renderer.ts",
-      "sha256": "ab5435e3e8ddce2eb508caaf7482503c6ce6e522c80064e5af0cfe0f204407f5"
+      "sha256": "22812fa28137491b29250635db51ffcc13f761d5707befdd4d40a70f5d746941"
     },
     {
       "path": "src/RendererFFL.ts",
       "sha256": "2eaabc183c741f484968a31b2403d24581bac99cab2a3c331be7ff26a4f02e16"
+    },
+    {
+      "path": "src/RendererHatColours.ts",
+      "sha256": "e5342f52325f9556f702799657af83a8be695314cb99424503cbc7b5feae786a"
     },
     {
       "path": "src/RendererSettings.ts",
@@ -35,12 +39,12 @@
     },
     {
       "path": "patches/pocketpass-renderer.patch",
-      "sha256": "993b6b6c6bdc8c9e94776a9aef8515309f1fbd567fea2a81e646709d47039d5c"
+      "sha256": "16b3c422ed36b8f8937887d4fb52d2dd88d114f72f07063419c9658d6424f6d2"
     }
   ],
   "bundle": {
     "path": "app/src/main/assets/mii_renderer/dist/renderer.js",
-    "sha256": "77cb351c5f6fdd01cab03e5ce3ff783e2039a27a8099138bdad8ba01b245bfe7"
+    "sha256": "9b656dc3d0185ea3b63295e168d8cca9eaf5d4aea4c1cae8e62bdab448b766d6"
   },
   "upstreamRuntimeAssets": [
     {

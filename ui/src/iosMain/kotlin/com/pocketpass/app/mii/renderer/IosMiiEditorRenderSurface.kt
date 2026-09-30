@@ -147,6 +147,7 @@ private fun BindMiiEditorRenderer(
                                 editorController.dispatch(
                                     MiiEditorEvent.RendererReady(
                                         IosMiiRenderController.RENDERER_VERSION,
+                                        status.hatColours,
                                     ),
                                 )
                             }

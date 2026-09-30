@@ -24,6 +24,7 @@ import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.pocketpass.app.mii.MiiAppearance
+import com.pocketpass.app.mii.MiiHatColourLayout
 import com.pocketpass.app.mii.toNativeRendererFields
 import java.io.File
 import java.io.IOException
@@ -39,6 +40,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MiiRenderController private constructor(
@@ -50,6 +52,7 @@ class MiiRenderController private constructor(
 
     @Volatile
     private var canonicalBase64: String = DEFAULT_MII_BASE64
+    private var hatColourLayouts: List<MiiHatColourLayout> = emptyList()
 
     private var activeWebView: WebView? = null
     private var lastOrbit: Pair<Float, Float>? = null
@@ -214,7 +217,7 @@ class MiiRenderController private constructor(
         )
         validateCanonical(exported)
         canonicalBase64 = exported
-        mutableStatus.value = MiiRenderStatus.Ready(exported)
+        mutableStatus.value = MiiRenderStatus.Ready(exported, hatColourLayouts)
         return exported
     }
 
@@ -371,10 +374,23 @@ class MiiRenderController private constructor(
             canonicalBase64 = canonical
         }
                 restartsSinceReady = 0
-                mutableStatus.value = MiiRenderStatus.Ready(canonicalBase64)
+                hatColourLayouts = parseHatColours(json.optJSONArray("hatColours"))
+                mutableStatus.value = MiiRenderStatus.Ready(canonicalBase64, hatColourLayouts)
                 if (!readySignal.isCompleted) readySignal.complete(Unit)
             }
             "error" -> failRuntime("The Piip renderer could not start.")
+        }
+    }
+
+    private fun parseHatColours(array: JSONArray?): List<MiiHatColourLayout> {
+        if (array == null) return emptyList()
+        return List(array.length()) { index ->
+            val entry = array.optJSONObject(index)
+            MiiHatColourLayout.of(
+                colours = entry?.optInt("colours", 1) ?: 1,
+                colour2 = entry?.optInt("colour2", MiiHatColourLayout.WHITE_FAVORITE_COLOR)
+                    ?: MiiHatColourLayout.WHITE_FAVORITE_COLOR,
+            )
         }
     }
 
@@ -567,7 +583,7 @@ class MiiRenderController private constructor(
 
     companion object {
         const val RENDERER_VERSION =
-            "ariankordi/mii-creator@1cd6b7d1d09e75fffd5c116a10e3e162647ecb78+pocketpass.20260809.5"
+            "ariankordi/mii-creator@1cd6b7d1d09e75fffd5c116a10e3e162647ecb78+pocketpass.20260930.1"
 
         const val DEFAULT_MII_BASE64 =
             "BAXGigDvV8wSNID/cJl869TJwxYAAAAAAAAAAAAAAAAAAAAAAAAAAE0AaQBpAAAAAAAAAAAAAAAAAAAACAAAAAAAQAMDAQYEBgIKCAQEAgIMAAAAAP8AAAAACAQACgEAIf///0AABAACFAMTBBcNBAAKBAEJ//8A/wAAAP//"

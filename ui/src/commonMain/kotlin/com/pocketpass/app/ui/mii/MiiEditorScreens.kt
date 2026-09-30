@@ -58,6 +58,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -95,6 +96,7 @@ import com.pocketpass.app.mii.toggleValue
 import com.pocketpass.app.mii.traitValue
 import com.pocketpass.app.mii.colorValue
 import com.pocketpass.app.mii.isPalette
+import com.pocketpass.app.mii.resolvedHatColour2
 import com.pocketpass.app.mii.verticalUpDelta
 import com.pocketpass.app.model.StatusInfo
 import com.pocketpass.app.ui.BOTTOM_DESIGN_HEIGHT
@@ -881,7 +883,10 @@ private fun ColorSwatches(
     onEvent: (MiiEditorEvent) -> Unit,
 ) {
     if (state.descriptor.colors.isEmpty()) return
-    if (state.activeColorField == MiiColorField.Hat && state.draft.extHatType < 0) return
+    if (
+        (state.activeColorField == MiiColorField.Hat || state.activeColorField == MiiColorField.HatSecondary) &&
+        state.draft.extHatType < 0
+    ) return
     val paletteField = state.chipPaletteField()
     if (paletteField != null) {
         val paletteColors = paletteField.palette()
@@ -1161,6 +1166,7 @@ private fun MiiColorField.palette(): List<Color> = when (this) {
     -> MiiEditorColors.common
     MiiColorField.Favorite,
     MiiColorField.Hat,
+    MiiColorField.HatSecondary,
     MiiColorField.FacePaint,
     -> MiiEditorColors.favorite
 }
@@ -1203,19 +1209,28 @@ private fun AdjustmentButtons(
     val relevant = state.relevantAdjustments()
         .filter { it.gate?.let(state.draft::toggleValue) != false }
     val railToggle = state.railToggle()
+    val hatColourToggle = state.hatColourToggle()
     AdjustmentVisualSlot.entries.forEachIndexed { index, slot ->
         val toggle = railToggle?.takeIf { slot == AdjustmentVisualSlot.Spacing }
+        val colourToggle = hatColourToggle?.takeIf { slot == AdjustmentVisualSlot.Scale }
         val field = relevant.fieldFor(slot)
         val activate: (() -> Unit)? = when {
             toggle != null -> {
                 { onEvent(toggle.event) }
+            }
+            colourToggle != null -> {
+                { onEvent(colourToggle.event) }
             }
             field != null -> {
                 { onEvent(MiiEditorEvent.OpenAdjustment(field)) }
             }
             else -> null
         }
-        val selected = if (toggle != null) toggle.on else field != null && field == state.activeAdjustment
+        val selected = when {
+            toggle != null -> toggle.on
+            colourToggle != null -> colourToggle.on
+            else -> field != null && field == state.activeAdjustment
+        }
         val top = ADJUSTMENT_ROW_TOPS[index]
         val height = if (index == 3) 186f else 185f
         FigmaPillSurface(
@@ -1255,6 +1270,12 @@ private fun AdjustmentButtons(
                     resource = toggle.icon,
                     modifier = Modifier.requiredSize(metrics.dp(83f), metrics.dp(83f)),
                 )
+            } else if (colourToggle != null) {
+                HatColourSplit(
+                    metrics = metrics,
+                    colour1 = colourToggle.colour1,
+                    colour2 = colourToggle.colour2,
+                )
             } else {
                 AdjustmentIcon(
                     metrics = metrics,
@@ -1286,6 +1307,49 @@ private class RailToggle(
     val on: Boolean,
     val event: MiiEditorEvent,
 )
+
+private class HatColourToggle(
+    val on: Boolean,
+    val colour1: Color,
+    val colour2: Color,
+    val event: MiiEditorEvent,
+)
+
+private fun MiiEditorUiState.hatColourToggle(): HatColourToggle? {
+    if (!hatMode || !selectedHatHasSecondColour) return null
+    val palette = MiiEditorColors.favorite
+    val colour1 = draft.extHatColor.takeIf { it >= 0 } ?: draft.favoriteColor
+    val on = activeColorField == MiiColorField.HatSecondary
+    return HatColourToggle(
+        on = on,
+        colour1 = palette.getOrElse(colour1) { palette.first() },
+        colour2 = palette.getOrElse(draft.resolvedHatColour2(hatColourLayouts)) { palette.first() },
+        event = MiiEditorEvent.SelectColorField(
+            if (on) MiiColorField.Hat else MiiColorField.HatSecondary,
+        ),
+    )
+}
+
+@Composable
+private fun HatColourSplit(
+    metrics: DesignMetrics,
+    colour1: Color,
+    colour2: Color,
+) {
+    Canvas(Modifier.requiredSize(metrics.dp(83f), metrics.dp(83f))) {
+        val border = size.minDimension * 0.08f
+        val inset = border / 2f
+        val arcSize = Size(size.width - border, size.height - border)
+        val topLeft = Offset(inset, inset)
+        drawArc(colour1, 90f, 180f, useCenter = true, topLeft = topLeft, size = arcSize)
+        drawArc(colour2, 270f, 180f, useCenter = true, topLeft = topLeft, size = arcSize)
+        drawCircle(
+            color = Color.White,
+            radius = (size.minDimension - border) / 2f,
+            style = Stroke(width = border),
+        )
+    }
+}
 
 private fun MiiEditorUiState.railToggle(): RailToggle? = when (selectedCategory) {
     MiiCategory.Hair -> RailToggle(

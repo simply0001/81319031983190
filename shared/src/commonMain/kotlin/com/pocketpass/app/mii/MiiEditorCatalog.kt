@@ -37,6 +37,7 @@ enum class MiiColorField {
     Glasses,
     Favorite,
     Hat,
+    HatSecondary,
     FacePaint,
 }
 
@@ -175,6 +176,7 @@ object MiiEditorCatalog {
             colors = listOf(
                 MiiColorDescriptor(MiiColorField.Hair, 100, figmaPrimary = true),
                 MiiColorDescriptor(MiiColorField.Hat, 12),
+                MiiColorDescriptor(MiiColorField.HatSecondary, 12),
             ),
             toggles = listOf(MiiToggleField.FlipHair),
         ),

@@ -21,6 +21,10 @@ import {
   getPocketPassFFL,
   preparePocketPassFFL
 } from "./RendererFFL";
+import {
+  FAVORITE_COLOR_COUNT,
+  hatColourLayout
+} from "./RendererHatColours";
 
 type Command = {
   id?: string;
@@ -69,6 +73,7 @@ const initialCanonical =
   new URLSearchParams(location.search).get("mii") || DEFAULT_MII;
 
 let mii = new Mii(initialCanonical);
+let hatSecondaryColor = -1;
 let scene: Mii3DScene | null = null;
 let ready = false;
 let operation = Promise.resolve();
@@ -171,6 +176,7 @@ const APPEARANCE_FIELDS = new Set([
   "hairType",
   "hatCommonColor",
   "hatFavoriteColor",
+  "hatSecondaryColor",
   "hatType",
   "height",
   "moleScale",
@@ -190,6 +196,17 @@ const APPEARANCE_FIELDS = new Set([
   "noseY"
 ]);
 const BODY_SCALE_FIELDS = new Set(["height", "build"]);
+const HAT_SECONDARY_COLOR_FIELD = "hatSecondaryColor";
+
+function withHatSecondaryColor(target: Mii): Mii {
+  (target as any).hatSecondaryColor = hatSecondaryColor;
+  return target;
+}
+
+function hatColourLayouts() {
+  const models: { scene: THREE.Object3D }[] = (scene as any)?.hatModels ?? [];
+  return models.map((model) => hatColourLayout(model.scene));
+}
 
 function emit(value: Record<string, unknown>) {
   const message = JSON.stringify(value);
@@ -242,7 +259,7 @@ async function rebuild(
   const activeScene = scene!;
   const wasAtPreset =
     activePreset !== null && cameraMatchesPreset(activePreset);
-  activeScene.mii = mii;
+  activeScene.mii = withHatSecondaryColor(mii);
   if (renderPart === PocketPassRenderPart.Body) {
     await activeScene.updateBody(bodyUpdate);
     activeScene.animators.get("head_bone")?.(0, 0);
@@ -811,7 +828,7 @@ async function capturePortrait(id: string | undefined, requestedSize?: number) {
       module: getPocketPassFFL(),
       renderer: iconRenderer(),
       texResolution: Math.min(1024, Math.max(256, size)),
-      additionalInfo: getAdditionalInfoFromMii(mii),
+      additionalInfo: getAdditionalInfoFromMii(withHatSecondaryColor(mii)),
       drawBody: true,
       size
     });
@@ -852,6 +869,7 @@ async function execute(command: Command) {
     case "setMii": {
       if (!command.canonicalBase64) throw new Error("Missing canonical Mii data");
       mii = new Mii(command.canonicalBase64);
+      hatSecondaryColor = -1;
       await rebuild(
         PocketPassRenderPart.Head,
         PocketPassBodyUpdate.ClothingUpdate
@@ -900,7 +918,23 @@ async function execute(command: Command) {
 
       const candidate = new Mii(mii.export("miic"));
       let bodyScaleOnly = true;
+      let nextHatSecondaryColor = hatSecondaryColor;
       for (const [field, value] of entries) {
+        if (field === HAT_SECONDARY_COLOR_FIELD) {
+          if (
+            typeof value !== "number" ||
+            !Number.isInteger(value) ||
+            value < -1 ||
+            value >= FAVORITE_COLOR_COUNT
+          ) {
+            throw new Error("Invalid Mii appearance field");
+          }
+          if (value !== hatSecondaryColor) {
+            bodyScaleOnly = false;
+          }
+          nextHatSecondaryColor = value;
+          continue;
+        }
         if (
           !APPEARANCE_FIELDS.has(field) ||
           !Object.prototype.hasOwnProperty.call(candidate, field) ||
@@ -920,6 +954,7 @@ async function execute(command: Command) {
       }
 
       mii = candidate;
+      hatSecondaryColor = nextHatSecondaryColor;
       await rebuild(
         bodyScaleOnly
           ? PocketPassRenderPart.Body
@@ -1018,7 +1053,8 @@ async function boot() {
     emit({
       type: "state",
       state: "ready",
-      canonicalBase64: base64FromBytes(mii.export("miic"))
+      canonicalBase64: base64FromBytes(mii.export("miic")),
+      hatColours: hatColourLayouts()
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

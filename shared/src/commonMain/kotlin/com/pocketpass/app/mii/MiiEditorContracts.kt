@@ -83,6 +83,7 @@ data class MiiEditorUiState(
     val wearHatError: String? = null,
     val wearHatInProgress: Boolean = false,
     val pretendoImport: PretendoImportState? = null,
+    val hatColourLayouts: List<MiiHatColourLayout> = emptyList(),
 ) {
     val descriptor: MiiCategoryDescriptor
         get() = MiiEditorCatalog.descriptor(selectedCategory)
@@ -94,7 +95,14 @@ data class MiiEditorUiState(
         get() = traitPageByCategory[selectedCategory] ?: 0
 
     val selectedColorIndex: Int?
-        get() = activeColorField?.let(draft::colorValue)
+        get() = when (activeColorField) {
+            null -> null
+            MiiColorField.HatSecondary -> draft.resolvedHatColour2(hatColourLayouts)
+            else -> draft.colorValue(activeColorField)
+        }
+
+    val selectedHatHasSecondColour: Boolean
+        get() = hatColourLayouts.forHat(draft.extHatType)?.hasSecondColour == true
 
     val activeAdjustmentValue: Int?
         get() = activeAdjustment?.let(draft::adjustmentValue)
@@ -131,6 +139,8 @@ sealed interface MiiEditorEvent {
         val index: Int,
     ) : MiiEditorEvent
 
+    data class SelectColorField(val field: MiiColorField) : MiiEditorEvent
+
     data class SetToggle(
         val field: MiiToggleField,
         val enabled: Boolean,
@@ -159,7 +169,10 @@ sealed interface MiiEditorEvent {
     data class SelectPretendoImportSlot(val slot: Int) : MiiEditorEvent
     data object ConfirmPretendoImport : MiiEditorEvent
 
-    data class RendererReady(val rendererVersion: String) : MiiEditorEvent
+    data class RendererReady(
+        val rendererVersion: String,
+        val hatColours: List<MiiHatColourLayout> = emptyList(),
+    ) : MiiEditorEvent
     data object RendererAppearanceLoaded : MiiEditorEvent
     data class RendererError(val message: String) : MiiEditorEvent
     data class RendererSaveReady(

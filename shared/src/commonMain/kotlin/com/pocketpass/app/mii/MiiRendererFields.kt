@@ -51,6 +51,7 @@ fun MiiAppearance.toNativeRendererFields(): Map<String, Int> {
         "moleY" to appearance.moleYPosition,
         "hatType" to appearance.extHatType,
         "hatFavoriteColor" to appearance.extHatColor,
+        "hatSecondaryColor" to appearance.extHatSecondaryColor,
         "hatCommonColor" to -1,
         "facePaintColor" to appearance.extFacePaintColor,
     )

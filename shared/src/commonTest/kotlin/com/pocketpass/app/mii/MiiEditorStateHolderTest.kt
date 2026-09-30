@@ -791,6 +791,51 @@ class MiiEditorStateHolderTest {
     }
 
     @Test
+    fun twoColourHatsOfferASecondColourThatStartsAtTheModelDefault() = runTest {
+        val holder = MiiEditorStateHolder(
+            persistence = InMemoryMiiEditorPersistence(),
+            scope = this,
+            ownedHatTypes = flowOf(setOf(1, 2)),
+        )
+        holder.activateAccount(ACCOUNT)
+        advanceUntilIdle()
+        holder.dispatch(
+            MiiEditorEvent.RendererReady(
+                "test-renderer",
+                listOf(
+                    MiiHatColourLayout(),
+                    MiiHatColourLayout(),
+                    MiiHatColourLayout(colours = 2, colour2 = 11),
+                ),
+            ),
+        )
+        runCurrent()
+        holder.dispatch(MiiEditorEvent.SelectCategory(MiiCategory.Hair))
+        holder.dispatch(MiiEditorEvent.SelectTraitField(MiiTraitField.HatType))
+
+        holder.dispatch(MiiEditorEvent.SelectTrait(MiiTraitField.HatType, 1))
+        assertFalse(holder.state.value.selectedHatHasSecondColour)
+        holder.dispatch(MiiEditorEvent.SelectColorField(MiiColorField.HatSecondary))
+        assertEquals(MiiColorField.Hat, holder.state.value.activeColorField)
+
+        holder.dispatch(MiiEditorEvent.SelectTrait(MiiTraitField.HatType, 2))
+        assertTrue(holder.state.value.selectedHatHasSecondColour)
+        holder.dispatch(MiiEditorEvent.SelectColorField(MiiColorField.HatSecondary))
+        assertEquals(MiiColorField.HatSecondary, holder.state.value.activeColorField)
+        assertEquals(-1, holder.state.value.draft.extHatSecondaryColor)
+        assertEquals(11, holder.state.value.selectedColorIndex)
+
+        holder.dispatch(MiiEditorEvent.SelectColor(MiiColorField.HatSecondary, 5))
+        assertEquals(5, holder.state.value.draft.extHatSecondaryColor)
+        assertEquals(5, holder.state.value.selectedColorIndex)
+        assertEquals(5, holder.state.value.draft.toNativeRendererFields()["hatSecondaryColor"])
+
+        holder.dispatch(MiiEditorEvent.SelectTrait(MiiTraitField.HatType, 1))
+        assertEquals(MiiColorField.Hat, holder.state.value.activeColorField)
+        assertEquals(5, holder.state.value.draft.extHatSecondaryColor)
+    }
+
+    @Test
     fun lockedHatIsStrippedFromTheDraftWhenTheEntitlementLapses() = runTest {
         val persistence = InMemoryMiiEditorPersistence()
         persistence.save(

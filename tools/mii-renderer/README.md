@@ -12,7 +12,7 @@ surface.
 - Upstream commit: `1cd6b7d1d09e75fffd5c116a10e3e162647ecb78`
 - Bundler: Bun `1.3.14`
 - Reproducible bundle SHA-256:
-  `f9935943358f0bc34bfcec2f678bd3bf4fa74aa057dbd1e15ddc705b225cec18`
+  `9b656dc3d0185ea3b63295e168d8cca9eaf5d4aea4c1cae8e62bdab448b766d6`
 
 `provenance.json` is the machine-readable source of truth for the pinned
 commit, PocketPass source hashes, upstream runtime-asset hashes, build command,
@@ -25,14 +25,17 @@ file's own hash, and `-UpdateBundle` never overwrites them.
 ## What is vendored
 
 - `src/`: the small PocketPass renderer entrypoint and adapters.
-- `patches/pocketpass-renderer.patch`: the three narrowly scoped upstream source
+  `RendererHatColours.ts` reads the two-colour hat properties; see
+  `docs/two-colour-hats.md`.
+- `patches/pocketpass-renderer.patch`: the narrowly scoped upstream source
   changes needed to detach the renderer from the upstream editor/audio/global
   settings, keep PocketPass's fixed full-body camera from being reset to the
   upstream head view, preserve PocketPass's virtual full-screen viewport
   through renderer rebuilds, enable deterministic profile portraits using
   the upstream dedicated `ViewType.Face` icon renderer, and register the
   PocketPass hats in the upstream hat table (the Halo keeps the hair; the
-  Hijab renders the hairless face-only head).
+  Hijab renders the hairless face-only head), and give hats marked as
+  two-colour a second colour in the 3D view and in portraits.
 - `build.ps1`: a clean-checkout build and checksum verifier.
 
 The complete upstream source tree is deliberately not copied into PocketPass.

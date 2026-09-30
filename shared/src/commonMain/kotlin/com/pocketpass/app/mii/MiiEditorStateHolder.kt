@@ -368,6 +368,7 @@ class MiiEditorStateHolder(
             is MiiEditorEvent.SelectTraitField -> selectTraitField(event.field)
             is MiiEditorEvent.SelectTrait -> selectTrait(event.field, event.index)
             is MiiEditorEvent.SelectColor -> selectColor(event.field, event.index)
+            is MiiEditorEvent.SelectColorField -> selectColorField(event.field)
             is MiiEditorEvent.SetToggle -> setToggle(event.field, event.enabled)
             is MiiEditorEvent.SetTraitPage -> setTraitPage(event.page)
             is MiiEditorEvent.OpenAdjustment -> openAdjustment(event.field)
@@ -394,7 +395,7 @@ class MiiEditorStateHolder(
             MiiEditorEvent.LookupPretendoMii -> lookupPretendoMii()
             is MiiEditorEvent.SelectPretendoImportSlot -> selectPretendoImportSlot(event.slot)
             MiiEditorEvent.ConfirmPretendoImport -> confirmPretendoImport()
-            is MiiEditorEvent.RendererReady -> rendererReady(event.rendererVersion)
+            is MiiEditorEvent.RendererReady -> rendererReady(event.rendererVersion, event.hatColours)
             MiiEditorEvent.RendererAppearanceLoaded -> {
                 if (quickWear) save() else presentEditor()
             }
@@ -511,11 +512,25 @@ class MiiEditorStateHolder(
         val first = if (descriptor.optional) -1 else 0
         if (index !in first until descriptor.optionCount || index in descriptor.hiddenOptions) return
         if (field == MiiTraitField.HatType && index >= 0 && index !in current.ownedHatTypes) return
+        val keepsSecondColour = field != MiiTraitField.HatType ||
+            current.hatColourLayouts.forHat(index)?.hasSecondColour == true
         updateDraft(
             current.draft.withTrait(field, index),
             activeTraitField = field,
+            activeColorField = MiiColorField.Hat.takeIf {
+                !keepsSecondColour && current.activeColorField == MiiColorField.HatSecondary
+            },
             traitPage = index.coerceAtLeast(0) / TRAITS_PER_PAGE,
         )
+    }
+
+    private fun selectColorField(field: MiiColorField) {
+        val current = mutableState.value
+        if (!current.acceptsEditorInput) return
+        if (MiiEditorCatalog.color(current.selectedCategory, field) == null) return
+        if (field == MiiColorField.HatSecondary && !current.selectedHatHasSecondColour) return
+        mutableState.update { it.copy(activeColorField = field, colorPaletteField = null) }
+        persistDraftSoon()
     }
 
     private fun selectColor(field: MiiColorField, index: Int) {
@@ -820,11 +835,12 @@ class MiiEditorStateHolder(
         persistNow(draft = null)
     }
 
-    private fun rendererReady(version: String) {
+    private fun rendererReady(version: String, hatColours: List<MiiHatColourLayout>) {
         val current = mutableState.value
         if (!current.isEditorVisible) return
         val readyState = current.copy(
             rendererStatus = MiiRendererStatus.Ready(version),
+            hatColourLayouts = hatColours,
             saveState = if (current.saveState is MiiSaveState.Error) {
                 MiiSaveState.Idle
             } else {

@@ -37,6 +37,7 @@ fun MiiAppearance.withColor(
     MiiColorField.Eyes -> copy(eyeColor = index)
     MiiColorField.Favorite -> copy(favoriteColor = index)
     MiiColorField.Hat -> copy(extHatColor = index)
+    MiiColorField.HatSecondary -> copy(extHatSecondaryColor = index)
     MiiColorField.FacePaint -> copy(extFacePaintColor = index)
     MiiColorField.Hair -> foldCommon(
         index,
@@ -148,6 +149,7 @@ fun MiiAppearance.colorValue(field: MiiColorField): Int = when (field) {
     MiiColorField.Eyes -> eyeColor
     MiiColorField.Favorite -> favoriteColor
     MiiColorField.Hat -> extHatColor
+    MiiColorField.HatSecondary -> extHatSecondaryColor
     MiiColorField.FacePaint -> extFacePaintColor
     MiiColorField.Hair -> hairCommonColor
     MiiColorField.Eyebrows -> eyebrowCommonColor

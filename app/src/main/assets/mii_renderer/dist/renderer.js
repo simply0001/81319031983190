@@ -36724,6 +36724,52 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
   });
 }
 
+// src/pocketpass/RendererHatColours.ts
+var HAT_COLOURS_PROPERTY = "pocketpass_colours";
+var HAT_COLOUR_2_PROPERTY = "pocketpass_colour_2";
+var FAVORITE_COLOR_COUNT = 12;
+var WHITE_FAVORITE_COLOR = 10;
+var UNCOLOURED = [1, 1, 1];
+function isFavoriteColor(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < FAVORITE_COLOR_COUNT;
+}
+function materialsOf(mesh) {
+  return Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+}
+function modelColour2(material) {
+  const value = Number(material.userData?.[HAT_COLOUR_2_PROPERTY]);
+  return isFavoriteColor(value) ? value : WHITE_FAVORITE_COLOR;
+}
+function isTwoColourHatMaterial(material) {
+  return Number(material?.userData?.[HAT_COLOURS_PROPERTY]) === 2;
+}
+function hatColourLayout(model) {
+  const layout = {
+    colours: 1,
+    colour2: WHITE_FAVORITE_COLOR
+  };
+  model.traverse((node) => {
+    const mesh = node;
+    if (!mesh.isMesh)
+      return;
+    for (const material of materialsOf(mesh)) {
+      if (!isTwoColourHatMaterial(material))
+        continue;
+      layout.colours = 2;
+      layout.colour2 = modelColour2(material);
+    }
+  });
+  return layout;
+}
+function hatLayerColours(material, colour1, chosenColour2) {
+  const colour2 = isFavoriteColor(chosenColour2) ? chosenColour2 : modelColour2(material);
+  return [
+    [colour1[0], colour1[1], colour1[2]],
+    [...MiiFavoriteColorVec3Table[colour2]],
+    UNCOLOURED
+  ];
+}
+
 // src/class/3d/shader/fflShaderConst.ts
 var THREE3 = _THREE();
 var FFLToonMaterial = {
@@ -38679,8 +38725,9 @@ async function traverseMesh(node, shaderType) {
     modulateType,
     lightEnable: shaderSetting === "lightDisabled" /* LightDisabled */ ? false : true
   } : {};
+  const layerColours = userData.modulateColors;
   const params = {
-    color: new THREE7.Color(...modulateColor),
+    color: isUsingShader && Array.isArray(layerColours) ? layerColours.map((c) => new THREE7.Color(c[0], c[1], c[2])) : new THREE7.Color(...modulateColor),
     ...modulate,
     map: originalMaterial.map || undefined,
     side
@@ -42221,10 +42268,13 @@ class Mii3DScene {
                     map: mat.map
                   });
                   m.material.needsUpdate = true;
+                  const hatColor = this.mii.hatCommonColor !== -1 && this.mii.hatCommonColor < 100 ? SwitchMiiColorTableSRGB[this.mii.hatCommonColor] : MiiFavoriteColorVec3Table[this.mii.hatFavoriteColor !== -1 ? this.mii.hatFavoriteColor : this.mii.favoriteColor];
+                  const layered = isTwoColourHatMaterial(mat);
                   m.geometry.userData = {
                     cullMode: 0,
-                    modulateColor: this.mii.hatCommonColor !== -1 && this.mii.hatCommonColor < 100 ? SwitchMiiColorTableSRGB[this.mii.hatCommonColor] : MiiFavoriteColorVec3Table[this.mii.hatFavoriteColor !== -1 ? this.mii.hatFavoriteColor : this.mii.favoriteColor],
-                    modulateMode: 5,
+                    modulateColor: hatColor,
+                    modulateColors: layered ? hatLayerColours(mat, hatColor, this.mii.hatSecondaryColor) : undefined,
+                    modulateMode: layered ? 2 : 5,
                     modulateType: 5
                   };
                   i2++;
@@ -42470,6 +42520,7 @@ function parallelTraverse(a, b, callback) {
 var getAdditionalInfoFromMii = (miiData) => ({
   hatCommonColor: miiData.hatCommonColor,
   hatFavoriteColor: miiData.hatFavoriteColor,
+  hatSecondaryColor: miiData.hatSecondaryColor ?? -1,
   hatType: miiData.hatType,
   pantsColor: miiData.pantsColor,
   shirtColor: miiData.shirtColor,
@@ -42586,14 +42637,16 @@ function createMiiRender(request) {
       console.log("additional info:", request.additionalInfo, "hat model:", hatModel);
       hatModel.traverse((m) => {
         if (m.isMesh) {
+          const originalMaterial = m.material;
           const oldMat = m.material.map;
+          const layered = isUsingShader && isTwoColourHatMaterial(originalMaterial);
           let modulate = isUsingShader ? {
             modulateType: 5 /* FFL_MODULATE_TYPE_SHAPE_CAP */,
             modulateMode: 2
           } : {};
           m.material = new shaderMaterial({
             ...modulate,
-            color: new THREE15.Color(...hatColor),
+            color: layered ? hatLayerColours(originalMaterial, hatColor, request.additionalInfo.hatSecondaryColor).map((c) => new THREE15.Color(...c)) : new THREE15.Color(...hatColor),
             opacity: 1,
             map: oldMat
           });
@@ -42807,6 +42860,7 @@ var DEFAULT_MII = "BAXGigDvV8wSNID/cJl869TJwxYAAAAAAAAAAAAAAAAAAAAAAAAAAE0AaQBpA
 var root2 = document.getElementById("mii-render-root");
 var initialCanonical = new URLSearchParams(location.search).get("mii") || DEFAULT_MII;
 var mii = new Mii(initialCanonical);
+var hatSecondaryColor = -1;
 var scene = null;
 var ready = false;
 var operation = Promise.resolve();
@@ -42902,6 +42956,7 @@ var APPEARANCE_FIELDS = new Set([
   "hairType",
   "hatCommonColor",
   "hatFavoriteColor",
+  "hatSecondaryColor",
   "hatType",
   "height",
   "moleScale",
@@ -42921,6 +42976,15 @@ var APPEARANCE_FIELDS = new Set([
   "noseY"
 ]);
 var BODY_SCALE_FIELDS = new Set(["height", "build"]);
+var HAT_SECONDARY_COLOR_FIELD = "hatSecondaryColor";
+function withHatSecondaryColor(target) {
+  target.hatSecondaryColor = hatSecondaryColor;
+  return target;
+}
+function hatColourLayouts() {
+  const models = scene?.hatModels ?? [];
+  return models.map((model) => hatColourLayout(model.scene));
+}
 function emit(value) {
   const message = JSON.stringify(value);
   const nativeBridge = globalThis.PocketPassNative;
@@ -42956,7 +43020,7 @@ function applyVirtualViewport(activeScene) {
 async function rebuild(renderPart = 0 /* Head */, bodyUpdate = 0 /* None */) {
   const activeScene = scene;
   const wasAtPreset = activePreset !== null && cameraMatchesPreset(activePreset);
-  activeScene.mii = mii;
+  activeScene.mii = withHatSecondaryColor(mii);
   if (renderPart === 2 /* Body */) {
     await activeScene.updateBody(bodyUpdate);
     activeScene.animators.get("head_bone")?.(0, 0);
@@ -43378,7 +43442,7 @@ async function capturePortrait(id, requestedSize) {
       module: getPocketPassFFL(),
       renderer: iconRenderer(),
       texResolution: Math.min(1024, Math.max(256, size)),
-      additionalInfo: getAdditionalInfoFromMii(mii),
+      additionalInfo: getAdditionalInfoFromMii(withHatSecondaryColor(mii)),
       drawBody: true,
       size
     });
@@ -43416,6 +43480,7 @@ async function execute(command) {
       if (!command.canonicalBase64)
         throw new Error("Missing canonical Mii data");
       mii = new Mii(command.canonicalBase64);
+      hatSecondaryColor = -1;
       await rebuild(0 /* Head */, 1 /* ClothingUpdate */);
       setCamera(command.camera === "fullBody" ? "fullBody" : "head", 0);
       result(command.id, base64FromBytes(mii.export("miic")));
@@ -43445,7 +43510,18 @@ async function execute(command) {
       }
       const candidate = new Mii(mii.export("miic"));
       let bodyScaleOnly = true;
+      let nextHatSecondaryColor = hatSecondaryColor;
       for (const [field, value] of entries) {
+        if (field === HAT_SECONDARY_COLOR_FIELD) {
+          if (typeof value !== "number" || !Number.isInteger(value) || value < -1 || value >= FAVORITE_COLOR_COUNT) {
+            throw new Error("Invalid Mii appearance field");
+          }
+          if (value !== hatSecondaryColor) {
+            bodyScaleOnly = false;
+          }
+          nextHatSecondaryColor = value;
+          continue;
+        }
         if (!APPEARANCE_FIELDS.has(field) || !Object.prototype.hasOwnProperty.call(candidate, field) || typeof value !== "number" || !Number.isSafeInteger(value)) {
           throw new Error("Invalid Mii appearance field");
         }
@@ -43459,6 +43535,7 @@ async function execute(command) {
         throw new Error("Invalid Mii appearance values");
       }
       mii = candidate;
+      hatSecondaryColor = nextHatSecondaryColor;
       await rebuild(bodyScaleOnly ? 2 /* Body */ : 0 /* Head */, 1 /* ClothingUpdate */);
       result(command.id, base64FromBytes(mii.export("miic")));
       return;
@@ -43537,7 +43614,8 @@ async function boot() {
     emit({
       type: "state",
       state: "ready",
-      canonicalBase64: base64FromBytes(mii.export("miic"))
+      canonicalBase64: base64FromBytes(mii.export("miic")),
+      hatColours: hatColourLayouts()
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
