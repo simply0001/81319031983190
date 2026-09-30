@@ -47,6 +47,7 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.requiresAccountSetup
 import com.pocketpass.app.ui.requiresForcedUpdate
 import com.pocketpass.app.ui.requiresMiiGate
+import com.pocketpass.app.ui.showsAccountBan
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.domain.state.showsPocketPassApp
 import com.pocketpass.app.ui.theme.BackgroundPair
@@ -73,6 +74,7 @@ fun PhoneRoot(
         }
         when {
             state.integrityCompromised -> IntegrityBlockScreen()
+            state.showsAccountBan() -> state.accountBan?.let { ban -> PhoneAccountBanScreen(metrics, ban, dispatch) }
             state.requiresForcedUpdate() -> PhoneForceUpdateScreen(metrics, state, dispatch)
             state.requiresAccountSetup() -> PhoneAccountSetupScreen(metrics, state.accountSetup) {
                 dispatch(PocketPassEvent.AccountSetup(it))

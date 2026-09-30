@@ -126,6 +126,13 @@ class PocketPassStore(
     }
 
     fun dispatch(event: PocketPassEvent) {
+        if (
+            _state.value.accountBan != null &&
+            event != PocketPassEvent.SignOut &&
+            event !is PocketPassEvent.StatusChanged
+        ) {
+            return
+        }
         if (event == PocketPassEvent.ConfirmDeleteMiiSlot && _state.value.miiDeleteInProgress) return
         if (event == PocketPassEvent.ConfirmDeleteAccount && _state.value.deleteAccountInProgress) return
         soundEffectFor(event, _state.value.rootDestination)?.let(container.soundEffects::play)
@@ -765,9 +772,9 @@ class PocketPassStore(
 
     fun handleAuthCallback(callbackUri: String) {
         scope.launch {
-            val result = container.handleAuthCallback(callbackUri)
-            if (result is RepositoryResult.Success) {
-                container.auth.clearTemporaryStateAfterAuthentication()
+            when (val result = container.handleAuthCallback(callbackUri)) {
+                is RepositoryResult.Success -> container.auth.clearTemporaryStateAfterAuthentication()
+                is RepositoryResult.Failure -> container.auth.showAuthCallbackFailure(result.error)
             }
         }
     }
@@ -1101,6 +1108,11 @@ class PocketPassStore(
                         sessionState = session, messagePrivacySaving = false, messagePrivacyError = null, invitesPrivacySaving = false, invitesPrivacyError = null, chatColourSaving = false, chatColourSaveError = null, messageAuthorColours = emptyMap(),
                     ) else current.copy(sessionState = session)
                 }
+            }
+        }
+        scope.launch {
+            container.accountBan.collect { ban ->
+                _state.update { it.copy(accountBan = ban) }
             }
         }
         scope.launch {

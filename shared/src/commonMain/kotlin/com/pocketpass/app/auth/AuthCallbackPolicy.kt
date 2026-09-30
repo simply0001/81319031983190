@@ -42,10 +42,6 @@ object AuthCallbackPolicy {
         if (link.path != SupabaseBackendConfig.AUTH_CALLBACK_PATH) {
             return ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedPath)
         }
-        if (rawUri.contains('#')) {
-            return ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedFragment)
-        }
-
         val parameters = parseQueryParameters(link.rawQuery)
         val error = parameters["error"]?.firstOrNull()
         if (!error.isNullOrBlank()) {
@@ -55,6 +51,9 @@ object AuthCallbackPolicy {
                     ?.firstOrNull()
                     ?.take(MAX_DESCRIPTION_LENGTH),
             )
+        }
+        if (rawUri.contains('#')) {
+            return ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedFragment)
         }
 
         val code = parameters["code"]?.firstOrNull()

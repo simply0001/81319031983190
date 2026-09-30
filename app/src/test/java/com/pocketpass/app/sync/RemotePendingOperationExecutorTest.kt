@@ -33,6 +33,7 @@ import com.pocketpass.app.domain.model.ShopPurchaseRejection
 import com.pocketpass.app.domain.model.UpdateProfileCommand
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
+import com.pocketpass.app.domain.model.accountBannedFailure
 import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
@@ -165,6 +166,19 @@ class RemotePendingOperationExecutorTest {
                 RepositoryFailure(kind = RepositoryFailureKind.Offline, retryable = true),
             ),
         )
+        val reconciler = RecordingReconciler()
+        val executor = executor(RecordingProfileRemote(profile()), reconciler, shopRemote)
+
+        val result = executor.execute(purchaseOperation(purchaseCommand()))
+
+        assertTrue(result is OutboxExecutionResult.RetryableFailure)
+        assertTrue(reconciler.acknowledgedPurchases.isEmpty())
+        assertTrue(reconciler.rejectedPurchases.isEmpty())
+    }
+
+    @Test
+    fun bannedPurchaseStaysQueuedWithoutRollback() = runTest {
+        val shopRemote = RecordingShopRemote(RepositoryResult.Failure(accountBannedFailure()))
         val reconciler = RecordingReconciler()
         val executor = executor(RecordingProfileRemote(profile()), reconciler, shopRemote)
 

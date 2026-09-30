@@ -18,6 +18,7 @@ import com.pocketpass.app.data.local.PocketPassDatabase
 import com.pocketpass.app.data.local.buildPocketPassDatabase
 import com.pocketpass.app.data.local.clearAllPocketPassTables
 import com.pocketpass.app.data.pretendo.KtorPretendoMiiSource
+import com.pocketpass.app.data.repository.FixtureAccountBanSource
 import com.pocketpass.app.data.repository.FixtureData
 import com.pocketpass.app.data.repository.FixtureRepositoryBundle
 import com.pocketpass.app.data.repository.ProductionRepositoryBundle
@@ -31,6 +32,7 @@ import com.pocketpass.app.data.supabase.PocketPassSupabaseClientFactory
 import com.pocketpass.app.data.supabase.SupabaseBackendConfig
 import com.pocketpass.app.data.supabase.SupabaseProductionRemoteDataSources
 import com.pocketpass.app.data.supabase.realtime.SupabaseRealtimeGateway
+import com.pocketpass.app.domain.model.AccountBanNotice
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.EncounterId
 import com.pocketpass.app.domain.model.UserId
@@ -39,6 +41,8 @@ import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.accountIdOrNull
+import com.pocketpass.app.domain.state.AccountBanSignal
+import com.pocketpass.app.feature.AccountBanStateHolder
 import com.pocketpass.app.feature.AccountSecurityStateHolder
 import com.pocketpass.app.feature.AccountSetupStateHolder
 import com.pocketpass.app.feature.AchievementsStateHolder
@@ -110,6 +114,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -161,6 +166,26 @@ class IosAppContainer(
                     initialValue = null,
                 )
         }
+
+    private val foregroundState = MutableStateFlow(true)
+    override val appForeground: StateFlow<Boolean> get() = foregroundState
+
+    private val accountBanHolder = AccountBanStateHolder(
+        source = backend?.remote ?: FixtureAccountBanSource,
+        sessionState = repositories.session.sessionState,
+        appForeground = foregroundState,
+        banReports = AccountBanSignal.detected,
+        scope = applicationScope,
+    )
+    override val accountBan: StateFlow<AccountBanNotice?> = accountBanHolder.state
+
+    private val nearbyAccountId: StateFlow<UserId?> =
+        combine(activeAccountId, accountBan) { accountId, ban -> accountId.takeIf { ban == null } }
+            .stateIn(
+                scope = applicationScope,
+                started = SharingStarted.Eagerly,
+                initialValue = null,
+            )
 
     override val soundEffects = IosSoundEffectPlayer()
     val backgroundMusic = IosBackgroundMusicPlayer()
@@ -348,7 +373,7 @@ class IosAppContainer(
             scope = applicationScope,
             settingsRepository = settingsRepository,
             settings = settings.settings,
-            activeAccountId = activeAccountId,
+            activeAccountId = nearbyAccountId,
             credentialPool = components.nearbyCredentialPool,
             deviceTags = components.nearbyDeviceTags,
             submitProof = { accountId, proof -> submitNearbyProof(accountId, proof) },
@@ -392,8 +417,6 @@ class IosAppContainer(
         sink = IosWidgetSnapshotSink(),
     )
 
-    private val foregroundState = MutableStateFlow(true)
-    override val appForeground: StateFlow<Boolean> get() = foregroundState
     private val networkMonitor = IosNetworkMonitor()
 
     private val messagePush = backend?.takeIf { messagePushSupported }?.let { components ->
@@ -426,6 +449,7 @@ class IosAppContainer(
             observeSelfTyping = { messages.observeSelfTyping(it) },
             onAppUpdateSignal = {},
             onNearbyEncounterNotification = { _, _ -> },
+            onAccountBanned = accountBanHolder::requestCheck,
         )
     }
 

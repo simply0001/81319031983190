@@ -136,6 +136,13 @@ import com.pocketpass.app.domain.model.ConnectedApp
 import com.pocketpass.app.domain.model.OAuthConsentRequest
 import com.pocketpass.app.domain.model.OAuthConsentScope
 import com.pocketpass.app.domain.repository.ConnectedAppsSource
+import com.pocketpass.app.domain.repository.AccountBanSource
+import com.pocketpass.app.domain.model.ACCOUNT_BANNED_HINT
+import com.pocketpass.app.domain.model.AccountBanNotice
+import com.pocketpass.app.domain.model.accountBannedFailure
+import com.pocketpass.app.domain.model.isAccountBanned
+import com.pocketpass.app.domain.state.AccountBanSignal
+import com.pocketpass.app.data.supabase.dto.decodeAccountBan
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.ktor.client.HttpClient
@@ -206,7 +213,8 @@ class SupabaseProductionRemoteDataSources(
     PassingStatsRemoteDataSource,
     StepRewardsRemoteDataSource,
     FriendProfileStatsSource,
-    ConnectedAppsSource {
+    ConnectedAppsSource,
+    AccountBanSource {
     val sources: ProductionRemoteDataSources = ProductionRemoteDataSources(
         profiles = this,
         friends = this,
@@ -949,6 +957,13 @@ class SupabaseProductionRemoteDataSources(
             .decodeList<FriendRequestDto>()
         val profiles = fetchProfiles(friendSnapshotPeerIds(accountId, friendships, requests))
         buildFriendSnapshot(accountId, friendships, requests, profiles)
+    }
+
+    override suspend fun fetchAccountBan(
+        accountId: UserId,
+    ): RepositoryResult<AccountBanNotice?> = remoteResult {
+        requireActiveSession(accountId)
+        decodeAccountBan(client.postgrest.rpc(function = "get_my_account_ban").data)
     }
 
     override suspend fun fetchMyFriendCode(
@@ -1840,7 +1855,11 @@ private suspend fun <T> remoteResult(
         "Remote adapter failure: ${error::class.qualifiedName ?: "unknown"}; " +
             "cause=${error.cause?.let { it::class.qualifiedName } ?: "none"}",
     )
-    RepositoryResult.Failure(error.toRemoteFailure())
+    RepositoryResult.Failure(
+        error.toRemoteFailure().also { failure ->
+            if (failure.isAccountBanned()) AccountBanSignal.report()
+        },
+    )
 }
 
 private const val PURCHASE_ALREADY_OWNED = "ALREADY_OWNED"
@@ -1902,13 +1921,19 @@ private fun Int.toRemoteFailureKind(): RepositoryFailureKind = when (this) {
     else -> RepositoryFailureKind.Unknown
 }
 
-private fun Throwable.toRemoteFailure(): RepositoryFailure {
-    if (this is PostgrestRestException && hint == "BOARD_TEXT_REJECTED") return RepositoryFailure(
+internal fun postgrestHintFailure(hint: String?, error: String): RepositoryFailure? = when (hint) {
+    ACCOUNT_BANNED_HINT -> accountBannedFailure()
+    "BOARD_TEXT_REJECTED" -> RepositoryFailure(
         RepositoryFailureKind.Validation, error, retryable = false)
-    if (this is PostgrestRestException && hint == "GROUP_MESSAGES_BLOCKED") return RepositoryFailure(
+    "GROUP_MESSAGES_BLOCKED" -> RepositoryFailure(
         RepositoryFailureKind.Forbidden, com.pocketpass.app.domain.model.GROUP_MESSAGES_BLOCKED, retryable = false)
-    if (this is PostgrestRestException && hint == "DIRECT_MESSAGES_BLOCKED") return RepositoryFailure(
+    "DIRECT_MESSAGES_BLOCKED" -> RepositoryFailure(
         RepositoryFailureKind.Forbidden, "This person has Block all messages turned on.", retryable = false)
+    else -> null
+}
+
+private fun Throwable.toRemoteFailure(): RepositoryFailure {
+    if (this is PostgrestRestException) postgrestHintFailure(hint, error)?.let { return it }
 
     val kind = when (this) {
         is RestException -> statusCode.toRemoteFailureKind()

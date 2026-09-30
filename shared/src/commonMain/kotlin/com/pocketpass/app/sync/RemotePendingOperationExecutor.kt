@@ -22,6 +22,7 @@ import com.pocketpass.app.domain.model.NearbyEncounter
 import com.pocketpass.app.domain.model.SubmitNearbyEncounterCommand
 import com.pocketpass.app.domain.model.ShopPurchaseOutcome
 import com.pocketpass.app.domain.model.UserId
+import com.pocketpass.app.domain.model.isAccountBanned
 import com.pocketpass.app.nearby.NearbyProofOutboxStore
 import com.pocketpass.app.nearby.NearbyProofPayloadCodec
 import com.pocketpass.app.security.SecureStringStore
@@ -584,7 +585,7 @@ private fun RepositoryResult<Unit>.toOutboxResult(): OutboxExecutionResult = whe
 }
 
 private fun RepositoryFailure.toOutboxResult(): OutboxExecutionResult =
-    if (retryable) {
+    if (retryable || isAccountBanned()) {
         OutboxExecutionResult.RetryableFailure(
             code = kind.name,
             message = message,

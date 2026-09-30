@@ -66,6 +66,7 @@ import com.pocketpass.app.auth.FORGOT_PASSWORD_MESSAGE
 import com.pocketpass.app.auth.NO_PASSWORD_RESET_MESSAGE
 import com.pocketpass.app.auth.filterPocketPassOtp
 import com.pocketpass.app.domain.state.SessionState
+import com.pocketpass.app.domain.model.AccountBanNotice
 import com.pocketpass.app.domain.model.PROFILE_NAME_MAX_LENGTH
 import com.pocketpass.app.feature.AccountSetupEvent
 import com.pocketpass.app.feature.AccountSetupStep
@@ -88,12 +89,19 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.TOP_DESIGN_HEIGHT
 import com.pocketpass.app.ui.TOP_DESIGN_WIDTH
+import com.pocketpass.app.ui.auth.ACCOUNT_BAN_APPEAL_LABEL
+import com.pocketpass.app.ui.auth.ACCOUNT_BAN_APPEAL_TAG
+import com.pocketpass.app.ui.auth.ACCOUNT_BAN_SIGN_OUT_LABEL
+import com.pocketpass.app.ui.auth.ACCOUNT_BAN_SIGN_OUT_TAG
+import com.pocketpass.app.ui.auth.ACCOUNT_BAN_TITLE
 import com.pocketpass.app.ui.auth.PocketBorder
 import com.pocketpass.app.ui.auth.PocketGreenBorder
 import com.pocketpass.app.ui.auth.PocketGreenButton
 import com.pocketpass.app.ui.auth.PocketGreenText
 import com.pocketpass.app.ui.auth.PocketTeal
 import com.pocketpass.app.ui.auth.PocketWhitePanel
+import com.pocketpass.app.ui.auth.endsLine
+import com.pocketpass.app.ui.auth.rememberAccountBanAppeal
 import com.pocketpass.app.ui.components.FigmaAsset
 import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.mii.MiiEditorBottomScreen
@@ -1016,6 +1024,73 @@ private fun PermissionRow(metrics: DesignMetrics, icon: PocketAsset, title: Stri
                 fontSize = metrics.sp(29f),
                 maxLines = 3,
             )
+        }
+    }
+}
+
+@Composable
+internal fun PhoneAccountBanScreen(
+    metrics: DesignMetrics,
+    ban: AccountBanNotice,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
+    val appeal = rememberAccountBanAppeal()
+    PhoneOnboarding(metrics) {
+        AuthCard(metrics) {
+            Text(
+                text = ACCOUNT_BAN_TITLE,
+                modifier = Modifier.fillMaxWidth(),
+                color = pocketPalette.ink(PocketTeal),
+                fontFamily = Rubik,
+                fontWeight = FontWeight.Bold,
+                fontSize = metrics.sp(60f),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+            )
+            if (ban.reason.isNotBlank()) {
+                Spacer(Modifier.height(metrics.dp(24f)))
+                Text(
+                    text = ban.reason,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = pocketPalette.ink(PocketGreenText),
+                    fontFamily = Rubik,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = metrics.sp(36f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Spacer(Modifier.height(metrics.dp(24f)))
+            Text(
+                text = ban.endsLine(),
+                modifier = Modifier.fillMaxWidth(),
+                color = pocketPalette.ink(PocketTeal),
+                fontFamily = Rubik,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = metrics.sp(34f),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(metrics.dp(44f)))
+            PhoneButton(
+                metrics = metrics,
+                label = ACCOUNT_BAN_APPEAL_LABEL,
+                modifier = Modifier.fillMaxWidth(),
+                fill = DiscordButton,
+                borderColor = DiscordBorder,
+                height = 150f,
+                tag = ACCOUNT_BAN_APPEAL_TAG,
+                onClick = appeal,
+            )
+            Spacer(Modifier.height(metrics.dp(28f)))
+            PhoneButton(
+                metrics = metrics,
+                label = ACCOUNT_BAN_SIGN_OUT_LABEL,
+                modifier = Modifier.fillMaxWidth(),
+                fill = PocketWhitePanel,
+                borderColor = PocketBorder,
+                textColor = pocketPalette.ink(PocketTeal),
+                height = 150f,
+                tag = ACCOUNT_BAN_SIGN_OUT_TAG,
+            ) { dispatch(PocketPassEvent.SignOut) }
         }
     }
 }

@@ -3,6 +3,7 @@ package com.pocketpass.app.state
 import com.pocketpass.app.PocketPassRepositoryGraph
 import com.pocketpass.app.audio.SoundEffectSink
 import com.pocketpass.app.auth.AuthStateHolder
+import com.pocketpass.app.domain.model.AccountBanNotice
 import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.RepositoryResult
@@ -43,6 +44,7 @@ interface PocketPassStoreContainer {
     val encounterLedSupported: Boolean
     val messagePushSupported: Boolean get() = false
     val activeAccountId: StateFlow<UserId?>
+    val accountBan: StateFlow<AccountBanNotice?>
     val appForeground: StateFlow<Boolean> get() = AlwaysForeground
     val repositories: PocketPassRepositoryGraph
     val auth: AuthStateHolder

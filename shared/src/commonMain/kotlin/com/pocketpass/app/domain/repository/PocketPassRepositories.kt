@@ -114,6 +114,12 @@ fun interface AccountDeleter {
     suspend fun deleteAccount(accountId: UserId): RepositoryResult<Unit>
 }
 
+fun interface AccountBanSource {
+    suspend fun fetchAccountBan(
+        accountId: UserId,
+    ): RepositoryResult<com.pocketpass.app.domain.model.AccountBanNotice?>
+}
+
 interface FriendProfileStatsSource {
     suspend fun fetchFriendProfileStats(
         friendUserId: UserId,

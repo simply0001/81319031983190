@@ -9,6 +9,14 @@ import io.github.jan.supabase.exceptions.RestException
 import kotlinx.io.IOException
 
 fun Throwable.toRepositoryFailure(): RepositoryFailure {
+    if (carriesSignUpBan()) {
+        return RepositoryFailure(
+            kind = RepositoryFailureKind.Forbidden,
+            message = SIGN_UP_BANNED_MESSAGE,
+            retryable = false,
+        )
+    }
+
     if (this is AuthRestException) {
         val kind = when (errorCode) {
             AuthErrorCode.SessionNotFound,
@@ -87,6 +95,20 @@ fun Throwable.toRepositoryFailure(): RepositoryFailure {
         retryable = kind == RepositoryFailureKind.Offline,
     )
 }
+
+fun RepositoryFailure.isSignUpBan(): Boolean =
+    kind == RepositoryFailureKind.Forbidden && message == SIGN_UP_BANNED_MESSAGE
+
+internal fun isSignUpBanText(text: String?): Boolean =
+    text?.contains(SIGN_UP_BAN_MARKER, ignoreCase = true) == true
+
+private fun Throwable.carriesSignUpBan(): Boolean = when (this) {
+    is RestException -> isSignUpBanText(error) || isSignUpBanText(description)
+    is AuthProviderCallbackException -> isSignUpBanText(providerDescription)
+    else -> false
+}
+
+private const val SIGN_UP_BAN_MARKER = "because of a ban"
 
 private fun Int.toFailureKind(): RepositoryFailureKind =
     when (this) {

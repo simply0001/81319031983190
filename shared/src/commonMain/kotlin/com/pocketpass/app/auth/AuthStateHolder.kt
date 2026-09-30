@@ -97,6 +97,19 @@ class AuthStateHolder(
         }
     }
 
+    fun showAuthCallbackFailure(failure: RepositoryFailure) {
+        if (!failure.isSignUpBan()) return
+        mutableState.update {
+            val landing = it.step == AuthStep.Landing
+            it.copy(
+                step = if (landing) AuthStep.Method else it.step,
+                intent = if (landing) AuthIntent.SignUp else it.intent,
+                isSubmitting = false,
+                error = signUpBannedError(),
+            )
+        }
+    }
+
     fun clearTemporaryStateAfterAuthentication() {
         resendCountdownJob?.cancel()
         resendDeadlineMillis = 0L
@@ -304,6 +317,7 @@ class AuthStateHolder(
         when (kind) {
             RepositoryFailureKind.Conflict -> usernameTakenError()
             RepositoryFailureKind.Validation -> AuthUiError(PASSWORD_RULE_MESSAGE, ERROR_WEAK_PASSWORD)
+            RepositoryFailureKind.Forbidden if isSignUpBan() -> signUpBannedError()
             RepositoryFailureKind.Unavailable,
             RepositoryFailureKind.Unknown,
             -> {
@@ -414,6 +428,7 @@ class AuthStateHolder(
             RepositoryFailureKind.RateLimited -> rateLimitedError()
             RepositoryFailureKind.Offline -> offlineError()
             RepositoryFailureKind.Misconfigured -> configurationError()
+            RepositoryFailureKind.Forbidden if isSignUpBan() -> signUpBannedError()
             else -> serviceUnavailableError()
         }
 
@@ -456,6 +471,7 @@ class AuthStateHolder(
             RepositoryFailureKind.Offline -> offlineError()
             RepositoryFailureKind.Misconfigured -> configurationError()
             RepositoryFailureKind.RateLimited -> rateLimitedError()
+            RepositoryFailureKind.Forbidden if isSignUpBan() -> signUpBannedError()
             else -> AuthUiError(
                 message = "Discord sign-in could not start. Please try again.",
                 code = ERROR_DISCORD_OAUTH,
@@ -468,6 +484,11 @@ class AuthStateHolder(
             RepositoryFailureKind.Misconfigured -> configurationError()
             else -> serviceUnavailableError()
         }
+
+    private fun signUpBannedError() = AuthUiError(
+        message = SIGN_UP_BANNED_MESSAGE,
+        code = ERROR_SIGN_UP_BANNED,
+    )
 
     private fun usernameTakenError() = AuthUiError(
         message = USERNAME_TAKEN_MESSAGE,

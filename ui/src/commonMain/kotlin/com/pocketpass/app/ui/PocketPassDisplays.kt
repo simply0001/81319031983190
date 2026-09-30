@@ -37,6 +37,7 @@ import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.hasDismissableLayer
+import com.pocketpass.app.ui.auth.AccountBanBottomScreen
 import com.pocketpass.app.ui.auth.AuthBottomScreen
 import com.pocketpass.app.ui.auth.AuthTopScreen
 import com.pocketpass.app.ui.auth.NearbyPermissionBottomScreen
@@ -105,6 +106,14 @@ fun TopDisplayContent(
         }
         if (state.integrityCompromised) {
             IntegrityBlockScreen()
+        } else if (state.showsAccountBan()) {
+            DesignSurface(
+                designWidth = TOP_DESIGN_WIDTH,
+                designHeight = TOP_DESIGN_HEIGHT,
+                modifier = Modifier.fillMaxSize(),
+            ) { metrics ->
+                AuthTopScreen(metrics, state.status)
+            }
         } else if (state.requiresForcedUpdate()) {
             DesignSurface(
                 designWidth = TOP_DESIGN_WIDTH,
@@ -223,6 +232,14 @@ fun BottomDisplayContent(
         }
         if (state.integrityCompromised) {
             IntegrityBlockScreen()
+        } else if (state.showsAccountBan()) {
+            DesignSurface(
+                designWidth = BOTTOM_DESIGN_WIDTH,
+                designHeight = BOTTOM_DESIGN_HEIGHT,
+                modifier = Modifier.fillMaxSize(),
+            ) { metrics ->
+                state.accountBan?.let { ban -> AccountBanBottomScreen(metrics, ban, dispatch) }
+            }
         } else if (state.requiresForcedUpdate()) {
             DesignSurface(
                 designWidth = BOTTOM_DESIGN_WIDTH,
@@ -332,6 +349,9 @@ internal fun PocketPassUiState.requiresAccountSetup(): Boolean {
     if (!sessionState.showsPocketPassApp()) return false
     return !accountSetup.resolved || accountSetup.required
 }
+
+internal fun PocketPassUiState.showsAccountBan(): Boolean =
+    accountBan != null && sessionState.showsPocketPassApp()
 
 internal fun PocketPassUiState.requiresForcedUpdate(): Boolean =
     appUpdate.enabled && appUpdate.updateRequired

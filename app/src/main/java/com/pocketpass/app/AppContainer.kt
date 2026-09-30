@@ -25,6 +25,7 @@ import com.pocketpass.app.data.repository.FixtureData
 import com.pocketpass.app.data.pretendo.OkHttpPretendoMiiSource
 import com.pocketpass.app.data.repository.FixtureRepositoryBundle
 import com.pocketpass.app.data.repository.FixtureEncounterRemoteDataSource
+import com.pocketpass.app.data.repository.FixtureAccountBanSource
 import com.pocketpass.app.data.repository.PendingOperationScheduler
 import com.pocketpass.app.data.repository.ProductionRepositoryBundle
 import com.pocketpass.app.data.repository.RealtimePresenceRepository
@@ -45,6 +46,7 @@ import com.pocketpass.app.domain.model.ConversationId
 import com.pocketpass.app.domain.model.EncounterId
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.repository.AccountDeleter
+import com.pocketpass.app.domain.repository.AccountBanSource
 import com.pocketpass.app.domain.repository.AchievementsRepository
 import com.pocketpass.app.domain.repository.BingoRepository
 import com.pocketpass.app.domain.repository.LeaderboardRepository
@@ -66,6 +68,8 @@ import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.domain.state.RepositoryResult
 import com.pocketpass.app.domain.state.SessionState
 import com.pocketpass.app.domain.state.accountIdOrNull
+import com.pocketpass.app.domain.state.AccountBanSignal
+import com.pocketpass.app.feature.AccountBanStateHolder
 import com.pocketpass.app.feature.AccountSecurityStateHolder
 import com.pocketpass.app.feature.AccountSetupStateHolder
 import com.pocketpass.app.feature.ActivitiesStateHolder
@@ -238,6 +242,14 @@ class AppContainer(
                     initialValue = null,
                 )
         }
+
+    val accountBan = AccountBanStateHolder(
+        source = productionComponents?.accountBanSource ?: FixtureAccountBanSource,
+        sessionState = repositories.session.sessionState,
+        appForeground = appForeground,
+        banReports = AccountBanSignal.detected,
+        scope = applicationScope,
+    )
 
     val miiEditorEnabled: Boolean = !fixtureMode
     val pretendoImportEnabled: Boolean = !fixtureMode
@@ -503,6 +515,7 @@ class AppContainer(
         settingsRepository = settingsRepository,
         settings = settings.settings,
         sessionState = repositories.session.sessionState,
+        accountBan = accountBan.state,
         scope = applicationScope,
     )
     val stepSource = AndroidPreferredStepSource(context, applicationScope)
@@ -539,6 +552,7 @@ class AppContainer(
                     notificationKey = notificationKey,
                 )
             },
+            onAccountBanned = accountBan::requestCheck,
         )
     }
 
@@ -1003,6 +1017,7 @@ class AppContainer(
             friendStats = remote,
             connectedApps = remote,
             profileRemote = remote,
+            accountBanSource = remote,
         )
     }
 
@@ -1077,6 +1092,7 @@ class AppContainer(
         val friendStats: FriendProfileStatsSource,
         val connectedApps: ConnectedAppsSource,
         val profileRemote: ProfileRemoteDataSource,
+        val accountBanSource: AccountBanSource,
     )
 
     private data class BackendComponents(

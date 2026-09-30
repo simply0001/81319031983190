@@ -334,6 +334,21 @@ class AuthCallbackPolicyTest {
     }
 
     @Test
+    fun reportsAProviderErrorThatIsRepeatedInTheFragment() {
+        assertEquals(
+            AuthCallbackDecision.ProviderError(
+                "access_denied",
+                "This sign-up is blocked because of a ban.",
+            ),
+            AuthCallbackPolicy.evaluate(
+                "pocketpass://auth/callback" +
+                    "?error=access_denied&error_description=This+sign-up+is+blocked+because+of+a+ban." +
+                    "#error=access_denied&error_description=This+sign-up+is+blocked+because+of+a+ban.",
+            ),
+        )
+    }
+
+    @Test
     fun rejectsAFragmentOnTheMobileSchemeCallback() {
         assertEquals(
             ignored(AuthCallbackDecision.Ignored.Reason.UnexpectedFragment),

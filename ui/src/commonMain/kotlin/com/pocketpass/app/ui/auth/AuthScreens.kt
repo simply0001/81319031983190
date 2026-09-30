@@ -71,7 +71,7 @@ import com.pocketpass.app.model.PocketPassDestination
 import kotlinx.coroutines.delay
 import kotlin.math.min
 
-private const val AUTH_PRIMARY_SHADOW = 0.17f
+internal const val AUTH_PRIMARY_SHADOW = 0.17f
 private const val AUTH_FIELD_SHADOW = 0.18f
 private const val AUTH_SECONDARY_SHADOW = 0.3f
 private const val AUTH_FIELD_X = 50f
@@ -91,7 +91,7 @@ val PocketTeal = Color(0xFF1D596B)
 val PocketGreenText = Color(0xFF26706A)
 val PocketBorder = Color(0xFF5A96A9)
 val PocketGreenBorder = Color(0xFF55C24B)
-private val PocketDiscordBorder = Color(0xFF4D4BC2)
+internal val PocketDiscordBorder = Color(0xFF4D4BC2)
 private val AuthErrorRed = Color(0xFF9B3434)
 private val AuthSecondaryBorder = Color(0xFF9F9F9F)
 private val AuthSecondaryText = Color(0xFF5B5B5B)
@@ -103,7 +103,7 @@ val PocketGreenButton = Brush.verticalGradient(
         1f to Color(0xFF29BC2B),
     ),
 )
-private val PocketDiscordButton = Brush.verticalGradient(
+internal val PocketDiscordButton = Brush.verticalGradient(
     colorStops = arrayOf(
         0.19f to Color(0xFF5765E2),
         0.51f to Color(0xFF5E63ED),
@@ -1099,7 +1099,7 @@ private fun AuthConfirmButton(
 }
 
 @Composable
-private fun AuthSecondaryButton(
+internal fun AuthSecondaryButton(
     metrics: DesignMetrics,
     y: Float,
     label: String,

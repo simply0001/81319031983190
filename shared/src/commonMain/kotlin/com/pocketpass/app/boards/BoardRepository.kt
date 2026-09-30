@@ -1,5 +1,7 @@
 package com.pocketpass.app.boards
 
+import com.pocketpass.app.domain.model.ACCOUNT_BANNED_HINT
+import com.pocketpass.app.domain.state.AccountBanSignal
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
@@ -59,6 +61,7 @@ class SupabaseBoardApi(private val client: SupabaseClient) : BoardApi {
             return BoardJson.parseToJsonElement(client.postgrest.rpc(name, args).data)
         } catch (e: CancellationException) { throw e
         } catch (e: PostgrestRestException) {
+            if (e.hint == ACCOUNT_BANNED_HINT) AccountBanSignal.report()
             throw BoardFailure(e.error, e.statusCode >= 500 || e.statusCode == 429 || e.hint == "BOARD_RATE_LIMIT", e.statusCode == 403 || e.statusCode == 404, e.hint)
         } catch (_: Exception) { throw BoardFailure("Couldn't reach Boards. Your draft is saved. Try again when you're online.", true) }
     }

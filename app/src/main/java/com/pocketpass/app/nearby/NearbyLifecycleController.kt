@@ -11,6 +11,7 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.pocketpass.app.data.LocalSettings
 import com.pocketpass.app.data.SettingsRepository
+import com.pocketpass.app.domain.model.AccountBanNotice
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.state.SessionState
 import kotlin.time.Instant
@@ -42,6 +43,7 @@ class NearbyLifecycleController(
     private val settingsRepository: SettingsRepository,
     settings: StateFlow<LocalSettings>,
     private val sessionState: StateFlow<SessionState>,
+    accountBan: StateFlow<AccountBanNotice?>,
     private val scope: CoroutineScope,
 ) {
     private val runtime = MutableStateFlow(NearbyRuntimeState())
@@ -49,6 +51,7 @@ class NearbyLifecycleController(
     private val permissionRequestEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     @Volatile private var latestSettings = settings.value
     @Volatile private var latestSession = sessionState.value
+    @Volatile private var latestAccountBanned = accountBan.value != null
     private var appOpenRepairCheck: Job? = null
     private val serviceHandshake = Any()
     private var startInFlight = false
@@ -82,11 +85,13 @@ class NearbyLifecycleController(
             combine(
                 settingsRepository.settings,
                 sessionState,
-            ) { localSettings, session ->
-                localSettings to session
-            }.distinctUntilChanged().collect { (localSettings, session) ->
+                accountBan,
+            ) { localSettings, session, ban ->
+                Triple(localSettings, session, ban != null)
+            }.distinctUntilChanged().collect { (localSettings, session, banned) ->
                 latestSettings = localSettings
                 latestSession = session
+                latestAccountBanned = banned
                 evaluate()
             }
         }
@@ -212,6 +217,7 @@ class NearbyLifecycleController(
         latestSettings.nearbyEnabled &&
             latestSettings.nearbyOnboardingCompleted &&
             activeAccountId() != null &&
+            !latestAccountBanned &&
             NearbyPermissionPolicy.missingBlePermissions(context).isEmpty() &&
             NearbyPermissionPolicy.supportsBle(context) &&
             NearbyPermissionPolicy.isLegacyLocationEnabled(context)
@@ -232,9 +238,13 @@ class NearbyLifecycleController(
         if (latestSession is SessionState.Initializing) return
         val accountId = activeAccountId()
         when {
-            accountId == null || !latestSettings.nearbyEnabled -> {
+            accountId == null || !latestSettings.nearbyEnabled || latestAccountBanned -> {
                 stopService(
-                    if (accountId == null) "session ${latestSession::class.simpleName}" else "disabled",
+                    when {
+                        accountId == null -> "session ${latestSession::class.simpleName}"
+                        latestAccountBanned -> "account banned"
+                        else -> "disabled"
+                    },
                 )
                 runtime.value = NearbyRuntimeState(NearbyRuntimeStatus.Disabled)
             }
@@ -371,6 +381,7 @@ class NearbyLifecycleController(
             !latestSettings.nearbyEnabled ||
             !latestSettings.nearbyOnboardingCompleted ||
             activeAccountId() == null ||
+            latestAccountBanned ||
             !hasOperationalProblem()
         ) {
             return

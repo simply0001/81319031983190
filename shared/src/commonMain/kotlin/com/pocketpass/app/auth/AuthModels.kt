@@ -98,6 +98,7 @@ const val ERROR_INVALID_USERNAME = "PP-AUTH-301"
 const val ERROR_WEAK_PASSWORD = "PP-AUTH-302"
 const val ERROR_PASSWORD_MISMATCH = "PP-AUTH-303"
 const val ERROR_INVALID_CREDENTIALS = "PP-AUTH-401"
+const val ERROR_SIGN_UP_BANNED = "PP-AUTH-403"
 const val ERROR_USERNAME_TAKEN = "PP-AUTH-409"
 const val ERROR_RATE_LIMITED = "PP-AUTH-429"
 const val ERROR_OFFLINE = "PP-NET-001"
@@ -109,6 +110,7 @@ const val USERNAME_RULE_MESSAGE = "Usernames are 3-12 lowercase letters, numbers
 const val PASSWORD_RULE_MESSAGE = "Passwords need at least 8 characters."
 const val PASSWORD_MISMATCH_MESSAGE = "The passwords do not match."
 const val USERNAME_TAKEN_MESSAGE = "That username is taken."
+const val SIGN_UP_BANNED_MESSAGE = "This sign-up is blocked because of a ban."
 const val INVALID_CREDENTIALS_MESSAGE =
     "Wrong username or password. If you linked an email address to this account, sign in with that email."
 const val FORGOT_PASSWORD_MESSAGE =

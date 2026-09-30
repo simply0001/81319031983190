@@ -150,6 +150,7 @@ data class PocketPassUiState(
     val auth: AuthUiState = AuthUiState(),
     val accountSecurity: AccountSecurityUiState = AccountSecurityUiState(),
     val sessionState: SessionState = SessionState.Initializing,
+    val accountBan: com.pocketpass.app.domain.model.AccountBanNotice? = null,
     val syncState: SyncState = SyncState.Idle,
     val integrityCompromised: Boolean = false,
     val miiEditorEnabled: Boolean = false,
@@ -535,6 +536,7 @@ fun PocketPassUiState.blocksShoulderTabs(): Boolean {
 }
 
 fun PocketPassUiState.hasDismissableLayer(): Boolean =
+    accountBan != null ||
     (rootDestination == PocketPassDestination.Messages) ||
     (accountSetup.resolved && accountSetup.required) ||
         profileViewer.visible ||

@@ -334,6 +334,58 @@ class AuthStateHolderTest {
         assertEquals(AuthStep.Method, holder.state.value.step)
     }
 
+    @Test
+    fun banBlockedSignUpsShowTheBanMessage() = runTest {
+        val repository = FakeSessionRepository()
+        val holder = AuthStateHolder(repository, backgroundScope) { 0L }
+        val banned = AuthProviderCallbackException(
+            providerError = "access_denied",
+            providerDescription = SIGN_UP_BANNED_MESSAGE,
+        ).toRepositoryFailure()
+        val expected = AuthUiError(SIGN_UP_BANNED_MESSAGE, ERROR_SIGN_UP_BANNED)
+
+        holder.dispatch(AuthEvent.ChooseSignUp)
+        holder.dispatch(AuthEvent.ContinueWithEmail)
+        holder.dispatch(AuthEvent.EmailChanged("person@example.com"))
+        repository.requestResult = RepositoryResult.Failure(banned)
+        holder.dispatch(AuthEvent.SubmitEmail)
+        runCurrent()
+        assertEquals(expected, holder.state.value.error)
+        assertEquals(AuthStep.Email, holder.state.value.step)
+
+        holder.dispatch(AuthEvent.Back)
+        holder.dispatch(AuthEvent.ContinueWithCredentials)
+        holder.dispatch(AuthEvent.IdentifierChanged("simply"))
+        holder.dispatch(AuthEvent.PasswordChanged("hunter22"))
+        holder.dispatch(AuthEvent.PasswordRepeatChanged("hunter22"))
+        repository.signUpResult = RepositoryResult.Failure(banned)
+        holder.dispatch(AuthEvent.SubmitCredentials)
+        runCurrent()
+        assertEquals(1, repository.signUpCalls)
+        assertEquals(expected, holder.state.value.error)
+    }
+
+    @Test
+    fun oauthCallbackBanShowsTheBanMessage() = runTest {
+        val repository = FakeSessionRepository()
+        val holder = AuthStateHolder(repository, backgroundScope) { 0L }
+
+        holder.showAuthCallbackFailure(RepositoryFailure(RepositoryFailureKind.Unauthorized))
+        assertEquals(AuthUiState(), holder.state.value)
+
+        holder.showAuthCallbackFailure(
+            AuthProviderCallbackException(
+                providerError = "access_denied",
+                providerDescription = "This Sign-Up Is Blocked Because Of A Ban.",
+            ).toRepositoryFailure(),
+        )
+
+        assertEquals(AuthStep.Method, holder.state.value.step)
+        assertEquals(AuthIntent.SignUp, holder.state.value.intent)
+        assertEquals(ERROR_SIGN_UP_BANNED, holder.state.value.error?.code)
+        assertEquals(SIGN_UP_BANNED_MESSAGE, holder.state.value.error?.message)
+    }
+
     private suspend fun advanceToOtp(holder: AuthStateHolder) {
         holder.dispatch(AuthEvent.ContinueWithEmail)
         holder.dispatch(AuthEvent.EmailChanged("person@example.com"))

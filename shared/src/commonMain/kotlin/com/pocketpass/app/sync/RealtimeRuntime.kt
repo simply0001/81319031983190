@@ -76,6 +76,7 @@ class RealtimeRuntime(
     private val observeSelfTyping: (ConversationId) -> Flow<Boolean>,
     private val onAppUpdateSignal: () -> Unit,
     private val onNearbyEncounterNotification: (displayName: String, notificationKey: String) -> Unit,
+    private val onAccountBanned: () -> Unit,
 ) {
     private var lastSeenRefreshJob: Job? = null
     private val postedNearbyNotificationIds = mutableSetOf<String>()
@@ -444,6 +445,10 @@ class RealtimeRuntime(
                     .collect { change ->
                         if (change == NotificationChange.Boards) {
                             repositories.boards?.invalidate()
+                            return@collect
+                        }
+                        if (change == NotificationChange.AccountBanned) {
+                            onAccountBanned()
                             return@collect
                         }
                         if (change == NotificationChange.Inserted) {
