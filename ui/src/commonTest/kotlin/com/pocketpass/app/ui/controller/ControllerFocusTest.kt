@@ -389,4 +389,21 @@ class ControllerFocusTest {
         touched.previousFor(null, hidden = true, nowNanos = 10L)
         assertNull(touched.previousFor(b, hidden = false, nowNanos = 20L))
     }
+
+    @Test
+    fun anOpenedPageStartsOnItsTopRowOnThatScreen() {
+        val focus = ControllerFocus()
+        focus.register("top_screen_card", 0, FocusDisplay.Top) {}
+        focus.updateBounds("top_screen_card", Rect(0f, 0f, 100f, 60f))
+        focus.register("second_row", 0, FocusDisplay.Bottom) {}
+        focus.updateBounds("second_row", Rect(50f, 500f, 1190f, 720f))
+        focus.register("first_row", 0, FocusDisplay.Bottom) {}
+        focus.updateBounds("first_row", Rect(50f, 250f, 1190f, 470f))
+        focus.register("first_row_action", 0, FocusDisplay.Bottom, parentId = "first_row") {}
+        focus.updateBounds("first_row_action", Rect(900f, 200f, 1100f, 240f))
+        focus.register("not_laid_out", 0, FocusDisplay.Bottom) {}
+
+        assertEquals("first_row", focus.firstTarget(FocusDisplay.Bottom))
+        assertNull(focus.focusId)
+    }
 }

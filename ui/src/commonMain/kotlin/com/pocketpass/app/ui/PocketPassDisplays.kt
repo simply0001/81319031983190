@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,6 +50,7 @@ import com.pocketpass.app.ui.components.PatternBackground
 import com.pocketpass.app.ui.components.StatusPills
 import com.pocketpass.app.ui.components.Text
 import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalFocusDisplay
 import com.pocketpass.app.ui.controller.ControllerSwapHint
 import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.ui.mii.MiiEditorBottomScreen
@@ -83,6 +85,8 @@ import com.pocketpass.app.ui.theme.LocalPocketPalette
 import com.pocketpass.app.ui.theme.paletteFor
 import com.pocketpass.app.ui.theme.pocketPalette
 import com.pocketpass.app.ui.theme.resolveDarkTheme
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun TopDisplayContent(
@@ -285,10 +289,9 @@ fun BottomDisplayContent(
                         },
                     )
                 } else if (state.sessionState.showsPocketPassApp()) {
-                    val currentRoute = state.routes.last()
                     BottomDestinationBackground(metrics, state.rootDestination)
                     BottomRouteStack(
-                        route = currentRoute,
+                        routes = state.routes,
                         root = { RootBottomContent(metrics, state, dispatch) },
                         pushed = { route ->
                             BottomScreen(
@@ -566,26 +569,27 @@ private fun SocialBottomOverlays(
 
 @Composable
 private fun BottomRouteStack(
-    route: PocketPassRoute,
+    routes: List<PocketPassRoute>,
     root: @Composable () -> Unit,
     pushed: @Composable (PocketPassRoute) -> Unit,
 ) {
-    val pushedRoute = route.takeUnless { it is PocketPassRoute.Root }
+    val pushedRoute = routes.last().takeUnless { it is PocketPassRoute.Root }
     val focus = LocalControllerFocus.current
+    val display = LocalFocusDisplay.current
     val reveal = remember { RouteRevealTracker() }
     remember(pushedRoute) {
-        if (pushedRoute != null) {
-            reveal.rootFocusId = focus?.focusId
-        } else if (reveal.presented) {
-            reveal.generation++
-        }
+        reveal.arrive(routes.size, focus?.focusId)
+        if (pushedRoute == null && reveal.presented) reveal.generation++
         reveal.presented = pushedRoute != null
         reveal
     }
     LaunchedEffect(pushedRoute) {
-        if (pushedRoute == null) {
-            reveal.rootFocusId?.let { focus?.focus(it, reveal = false) }
-            reveal.rootFocusId = null
+        val returnFocusId = reveal.returnFocusId
+        reveal.returnFocusId = null
+        returnFocusId?.let { focus?.focus(it, reveal = false) }
+        if (focus != null && returnFocusId == null && pushedRoute?.opensOnFirstRow() == true) {
+            val first = snapshotFlow { focus.firstTarget(display) }.filterNotNull().first()
+            if (focus.focusId == null) focus.focus(first, reveal = false)
         }
     }
     val presenting = pushedRoute != null
@@ -614,5 +618,21 @@ private fun BottomRouteStack(
 private class RouteRevealTracker {
     var generation = 0
     var presented = false
-    var rootFocusId: String? = null
+    var returnFocusId: String? = null
+    private var depth = 0
+    private val openerFocusByDepth = mutableMapOf<Int, String>()
+
+    fun arrive(newDepth: Int, focusedId: String?) {
+        if (newDepth > depth) {
+            if (depth > 0 && focusedId != null) openerFocusByDepth[depth] = focusedId
+            returnFocusId = null
+        } else {
+            returnFocusId = openerFocusByDepth[newDepth]
+        }
+        openerFocusByDepth.keys.removeAll { it >= newDepth }
+        depth = newDepth
+    }
 }
+
+private fun PocketPassRoute.opensOnFirstRow(): Boolean =
+    this !is PocketPassRoute.MessageDetail && this != PocketPassRoute.NewGroup

@@ -166,7 +166,11 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.controller.FocusDirection
 import com.pocketpass.app.ui.controller.LocalControllerFocus
 import com.pocketpass.app.ui.controller.ControllerFocusViewport
+import com.pocketpass.app.ui.controller.ControllerRestFrame
 import com.pocketpass.app.ui.controller.LocalControllerFocusViewport
+import com.pocketpass.app.ui.controller.LocalControllerRestFrame
+import com.pocketpass.app.ui.controller.controllerRestFrameInside
+import com.pocketpass.app.ui.controller.controllerRestFrameOutside
 import com.pocketpass.app.ui.controller.controllerFocusBarrier
 import com.pocketpass.app.ui.controller.controllerFocusViewport
 import com.pocketpass.app.ui.controller.controllerTarget
@@ -7573,8 +7577,7 @@ internal fun SubpagePanelPop(
     order: Int,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    MotionLayer(
-        modifier = Modifier.fillMaxSize(),
+    RestingFocusMotionLayer(
         entrance = EntranceMotion.OverlayPop,
         delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + order * OVERLAY_POP_STAGGER_MILLIS,
         transformOrigin = TransformOrigin(0.5f, (y + height / 2f) / BOTTOM_DESIGN_HEIGHT),
@@ -7591,14 +7594,38 @@ private fun SettingsRowReveal(
     totalHeight: Float,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    MotionLayer(
-        modifier = Modifier.fillMaxSize(),
+    RestingFocusMotionLayer(
         entrance = if (reveal == 0) EntranceMotion.None else EntranceMotion.OverlayPop,
         delayMillis = OVERLAY_POP_BASE_DELAY_MILLIS + order * OVERLAY_POP_STAGGER_MILLIS,
         transformOrigin = TransformOrigin(0.5f, (y + height / 2f) / totalHeight),
         replayKey = reveal,
         content = content,
     )
+}
+
+@Composable
+private fun RestingFocusMotionLayer(
+    entrance: EntranceMotion,
+    delayMillis: Int,
+    transformOrigin: TransformOrigin,
+    replayKey: Any? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val frame = remember { ControllerRestFrame() }
+    Box(Modifier.fillMaxSize().controllerRestFrameOutside(frame)) {
+        MotionLayer(
+            modifier = Modifier.fillMaxSize(),
+            entrance = entrance,
+            delayMillis = delayMillis,
+            transformOrigin = transformOrigin,
+            replayKey = replayKey,
+        ) {
+            Box(Modifier.matchParentSize().controllerRestFrameInside(frame))
+            CompositionLocalProvider(LocalControllerRestFrame provides frame) {
+                content()
+            }
+        }
+    }
 }
 
 private const val SUBPAGE_HEADER_PIVOT_X = 541.5f

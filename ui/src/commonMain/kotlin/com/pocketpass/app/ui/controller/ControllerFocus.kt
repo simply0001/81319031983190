@@ -46,7 +46,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -415,6 +417,13 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
 
     fun hasTargets(): Boolean = activeEntries().isNotEmpty()
 
+    fun firstTarget(display: FocusDisplay): String? {
+        val candidates = topLayerEntries().filter {
+            it.focusable && it.parentId == null && it.display == display && it.isRevealed()
+        }
+        return chooseNextFocus(candidates, null, FocusDirection.Down)
+    }
+
     private fun otherDisplayEntries(): List<FocusEntry> {
         val current = currentDisplay()
         return topLayerEntries().filter { it.focusable && it.parentId == null && it.display != current }
@@ -444,10 +453,38 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
     fun keyboardCanEscape(): Boolean = keyboardActive() && keyboardEscape != null
 }
 
+class ControllerRestFrame {
+    private var outside: LayoutCoordinates? = null
+    private var inside: LayoutCoordinates? = null
+
+    internal fun placeOutside(coordinates: LayoutCoordinates) {
+        outside = coordinates
+    }
+
+    internal fun placeInside(coordinates: LayoutCoordinates) {
+        inside = coordinates
+    }
+
+    internal fun restingWindowBounds(target: LayoutCoordinates): Rect? {
+        val outside = outside?.takeIf { it.isAttached } ?: return null
+        val inside = inside?.takeIf { it.isAttached } ?: return null
+        if (inside.findRootCoordinates() != target.findRootCoordinates()) return null
+        val local = inside.localBoundingBoxOf(target, clipBounds = false)
+        return Rect(outside.localToWindow(local.topLeft), outside.localToWindow(local.bottomRight))
+    }
+}
+
 val LocalControllerFocus = staticCompositionLocalOf<ControllerFocus?> { null }
 val LocalFocusDisplay = staticCompositionLocalOf { FocusDisplay.Bottom }
 val LocalControllerFocusViewport = staticCompositionLocalOf<ControllerFocusViewport?> { null }
 val LocalControllerFocusGroup = staticCompositionLocalOf<String?> { null }
+val LocalControllerRestFrame = staticCompositionLocalOf<ControllerRestFrame?> { null }
+
+fun Modifier.controllerRestFrameOutside(frame: ControllerRestFrame): Modifier =
+    onPlaced { frame.placeOutside(it) }
+
+fun Modifier.controllerRestFrameInside(frame: ControllerRestFrame): Modifier =
+    onPlaced { frame.placeInside(it) }
 
 private fun LayoutCoordinates.windowBounds(): Rect {
     val topLeft = localToWindow(Offset.Zero)
@@ -475,6 +512,7 @@ fun Modifier.controllerTarget(
     val display = LocalFocusDisplay.current
     val viewport = LocalControllerFocusViewport.current
     val group = LocalControllerFocusGroup.current
+    val restFrame = LocalControllerRestFrame.current
     val latestActivate = rememberUpdatedState(onActivate)
     val latestAdjust = rememberUpdatedState(onAdjust)
     val bringIntoView = remember { BringIntoViewRequester() }
@@ -509,7 +547,7 @@ fun Modifier.controllerTarget(
         .bringIntoViewRequester(bringIntoView)
         .onGloballyPositioned { coordinates ->
             val size = coordinates.size
-            val bounds = coordinates.windowBounds()
+            val bounds = restFrame?.restingWindowBounds(coordinates) ?: coordinates.windowBounds()
             val scale = if (size.width > 0) bounds.width / size.width else 1f
             geometry.size = Size(size.width.toFloat(), size.height.toFloat())
             focus.updateBounds(id, bounds, scale)

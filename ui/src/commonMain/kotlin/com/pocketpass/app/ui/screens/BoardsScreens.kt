@@ -111,8 +111,14 @@ fun BoardsContent(metrics: DesignMetrics, state: PocketPassUiState, dispatch: (P
     val s = state.boards
     val send: (BoardAction) -> Unit = { dispatch(PocketPassEvent.Boards(it)) }
     var options by remember(s.screen) { mutableStateOf(false) }
+    val focus = LocalControllerFocus.current
     val inlineBack = remember(s.screen, s.board?.id, s.thread?.id, options) { BoardInlineBackStack() }
-    val back: () -> Unit = { if(!inlineBack.back()) { if(options) options = false else send(BoardAction.Back) } }
+    val back: () -> Unit = { if(!inlineBack.back()) {
+        if(options) {
+            options = false
+            focus?.focus("boards_options", reveal = false)
+        } else send(BoardAction.Back)
+    } }
     LaunchedEffect(state.routes) { options = false }
     val handleInlineBack = !LocalBoardKeyboardOpen.current && (options || inlineBack.canGoBack)
     PlatformBackHandler(handleInlineBack, back)
@@ -137,7 +143,10 @@ fun BoardsContent(metrics: DesignMetrics, state: PocketPassUiState, dispatch: (P
             hub && !options && rail && !inlineBack.canGoBack -> null
             hub && !options && !inlineBack.canGoBack -> ({ dispatch(PocketPassEvent.SelectDestination(PocketPassDestination.Home)) })
             else -> back
-        }, options = if(hub && !options) ({ options = true }) else null, exit = hub && !options && !inlineBack.canGoBack)
+        }, options = if(hub && !options) ({
+            options = true
+            focus?.focus("boards_drafts", reveal = false)
+        }) else null, exit = hub && !options && !inlineBack.canGoBack)
         if(!rail && (hub || s.screen in listOf(BoardsScreen.Board, BoardsScreen.Thread)) && !options) {
             Spacer(Modifier.height(metrics.dp(22f)))
             BoardHubNavigation(metrics, state, send)
