@@ -122,6 +122,30 @@ else
   fail "anon or authenticated can execute push worker or branding commit RPCs (${worker_rpc_exposure:-query failed} grants; re-apply the migration grants, see the README)"
 fi
 
+ban_functions_ready="$(
+  compose exec -T db     psql --username postgres --dbname postgres --tuples-only --no-align       --command "
+        select
+          has_function_privilege('anon', 'public.pocketpass_request_guard()', 'execute')
+          and has_function_privilege('authenticated', 'public.pocketpass_request_guard()', 'execute')
+          and has_function_privilege('service_role', 'public.pocketpass_request_guard()', 'execute')
+          and has_function_privilege('supabase_auth_admin', 'public.pocketpass_before_user_created(jsonb)', 'execute')
+          and not has_function_privilege('authenticated', 'public.pocketpass_before_user_created(jsonb)', 'execute')
+      "     </dev/null | tr -d '[:space:]'
+)"
+
+if [[ "${ban_functions_ready}" == "t" ]]; then
+  pass 'account ban guard and sign-up check have the right grants'
+else
+  fail "account ban guard or sign-up check grants are wrong (${ban_functions_ready:-query failed}; re-apply 20260927000400_account_bans, see the README)"
+fi
+
+rest_container_id="$(compose ps -q rest 2>/dev/null | head -n 1)"
+if [[ -n "${rest_container_id}" ]]   && docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${rest_container_id}"     | grep -qx 'PGRST_DB_PRE_REQUEST=public.pocketpass_request_guard'; then
+  pass 'PostgREST runs the account ban guard on every request'
+else
+  fail 'PostgREST is not running the account ban guard (PGRST_DB_PRE_REQUEST)'
+fi
+
 if curl --fail --silent --show-error \
   --max-time 10 \
   https://api.pocketpass.xyz/healthz \

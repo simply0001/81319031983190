@@ -186,6 +186,7 @@ input:focus { outline: none; border-color: var(--green-border); box-shadow: inse
 .app-logo-fallback { display: grid; place-items: center; font-size: 2rem; font-weight: 800; color: var(--teal); }
 .app-name { font-size: 1.7rem; margin-bottom: 0; overflow-wrap: anywhere; }
 .app-site { font-size: 0.95rem; overflow-wrap: anywhere; }
+.app-description { margin: 0; text-align: center; overflow-wrap: anywhere; }
 .owner-line { margin-bottom: 0; }
 
 .notice {

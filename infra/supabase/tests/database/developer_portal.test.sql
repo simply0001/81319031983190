@@ -969,7 +969,7 @@ select extensions.is(
   jsonb_build_object(
     'email', 'your email address',
     'phone', 'your phone number',
-    'profile', 'your account name and picture'
+    'profile', 'your PocketPass username'
   ),
   'api_app_info carries the OIDC scope descriptions'
 );

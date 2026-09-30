@@ -712,7 +712,7 @@ select
   date_trunc('second', clock_timestamp()) + make_interval(secs => offsets.n),
   1000
 from generate_series(0, 10) as offsets(n)
-on conflict (client_id, bucket) do update set requests = 1000;
+on conflict (client_id, bucket, shard) do update set requests = 1000;
 
 set local role api_client;
 select pg_catalog.set_config(

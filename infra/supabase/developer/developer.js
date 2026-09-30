@@ -538,13 +538,12 @@
       limitFacts.append(el("dt", { text: label }));
       limitFacts.append(el("dd", { text: value }));
     };
-    const realtimeLabel = (value) => (value === null || value === undefined ? "Shared pool" : fmtNumber(value));
     limitFact("Per user, per minute", fmtNumber(limits.user_per_minute));
     limitFact("Per app, per minute", fmtNumber(limits.app_per_minute));
     limitFact("Per app, per second (burst)", fmtNumber(limits.app_per_second));
-    limitFact("Realtime connections", realtimeLabel(limits.realtime_connections));
+    limitFact("Realtime connections", "Shared pool");
     const limitSummary = (values) => (values
-      ? `${fmtNumber(values.user_per_minute)} / user / min · ${fmtNumber(values.app_per_minute)} / app / min · ${fmtNumber(values.app_per_second)} / app / s · Realtime ${realtimeLabel(values.realtime_connections).toLowerCase()}`
+      ? `${fmtNumber(values.user_per_minute)} / user / min · ${fmtNumber(values.app_per_minute)} / app / min · ${fmtNumber(values.app_per_second)} / app / s`
       : "—");
     const limitRequests = Array.isArray(state.app.limitRequests) ? state.app.limitRequests : [];
     const pendingRequest = limitRequests.find((row) => row.status === "pending");
@@ -566,7 +565,6 @@
       limitsForm.elements.user_per_minute.value = limits.user_per_minute ?? "";
       limitsForm.elements.app_per_minute.value = limits.app_per_minute ?? "";
       limitsForm.elements.app_per_second.value = limits.app_per_second ?? "";
-      limitsForm.elements.realtime_connections.value = limits.realtime_connections ?? "";
       limitsForm.elements.reason.focus();
     });
     limitsForm.querySelector(".limits-cancel").addEventListener("click", () => {
@@ -586,7 +584,7 @@
             user_per_minute: number("user_per_minute"),
             app_per_minute: number("app_per_minute"),
             app_per_second: number("app_per_second"),
-            realtime_connections: number("realtime_connections"),
+            realtime_connections: null,
           },
           p_reason: limitsForm.elements.reason.value.trim(),
         });

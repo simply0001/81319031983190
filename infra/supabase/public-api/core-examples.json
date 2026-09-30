@@ -277,6 +277,7 @@
     "scope": "privacy:write",
     "fields": [
       "block_messages",
+      "block_invites",
       "operation_id"
     ]
   }

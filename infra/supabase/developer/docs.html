@@ -179,7 +179,7 @@
             <p class="section-examples"><a href="#example-last-seen">Kotlin &amp; JavaScript examples →</a></p>
             <p>There are two kinds of scopes and it is important not to mix them up.</p>
             <h3>PocketPass scopes (chosen in the portal)</h3>
-            <p>These decide what your app may do through <code>/v1/…</code>. You pick them when you register the app; they apply to every user of the app and are listed on the consent screen. They are <strong>not</strong> sent in the <code>scope=</code> parameter — the authorization server ignores them there.</p>
+            <p>These decide what your app may do through <code>/v1/…</code>. You pick them when you register the app; they apply to every user of the app and are listed on the consent screen. They are <strong>not</strong> sent in the <code>scope=</code> parameter — the consent screen refuses a request whose <code>scope=</code> contains anything other than <code>openid</code>, <code>email</code>, <code>profile</code> or <code>phone</code>.</p>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Scope</th><th>Shown to the user as</th><th>Unlocks</th></tr></thead>
@@ -206,25 +206,26 @@
                   <tr><td><code>boards:purchase</code></td><td>Spend your PocketPass tokens on permanent stationery purchases</td><td><code>boards.buy_stationery</code><br><a class="endpoint-example" href="#example-boards-buy_stationery">Kotlin / JavaScript</a></td></tr>
                   <tr><td><code>blocks:read</code></td><td>See the accounts you have blocked</td><td><code>blocks.list</code> and <code>blocks:</code> Realtime</td></tr>
                   <tr><td><code>blocks:write</code></td><td>Block and unblock accounts as you</td><td><code>blocks.set</code><br><a class="endpoint-example" href="#example-blocks-set">Kotlin / JavaScript</a></td></tr>
-                  <tr><td><code>privacy:read</code></td><td>See whether you have Block Messages enabled</td><td><code>privacy.get</code> and <code>privacy:</code> Realtime</td></tr>
-                  <tr><td><code>privacy:write</code></td><td>Enable or disable Block Messages on your account</td><td><code>privacy.set</code><br><a class="endpoint-example" href="#example-privacy-set">Kotlin / JavaScript</a></td></tr>
+                  <tr><td><code>privacy:read</code></td><td>See whether you have Block Messages and Block Invites enabled</td><td><code>privacy.get</code> and <code>privacy:</code> Realtime</td></tr>
+                  <tr><td><code>privacy:write</code></td><td>Enable or disable Block Messages and Block Invites on your account</td><td><code>privacy.set</code><br><a class="endpoint-example" href="#example-privacy-set">Kotlin / JavaScript</a></td></tr>
                 </tbody>
               </table>
             </div>
             <p><code>session.get</code> and <code>session.revoke</code> need no scope. Calling an endpoint your app does not have the scope for returns <code>PT403 SCOPE_REQUIRED</code>.</p>
             <h3>OpenID scopes (the <code>scope=</code> parameter)</h3>
-            <p>The <code>scope=</code> parameter of the authorization request is OpenID Connect only. Send <code>scope=openid</code>. Add <code>email</code>, <code>profile</code> or <code>phone</code> <strong>only</strong> if you need those claims in an ID token or from <code>/auth/v1/oauth/userinfo</code> — each one is shown to the user as an extra thing you will see ("your email address", "your account name and picture", "your phone number"), and the consent screen refuses the request if you ask for an OpenID scope the user cannot grant. Email is not available through <code>me.get</code> or ordinary profile requests. For almost every app <code>me.get</code> gives you what you need without asking for OpenID claims.</p>
+            <p>The <code>scope=</code> parameter of the authorization request is OpenID Connect only. Send <code>scope=openid</code>. Add <code>email</code>, <code>profile</code> or <code>phone</code> <strong>only</strong> if you need those claims in an ID token or from <code>/auth/v1/oauth/userinfo</code> — each one is shown to the user as an extra thing you will see ("your email address", "your PocketPass username", "your phone number"). The consent screen refuses a request with any other scope, including PocketPass scopes. Email is not available through <code>me.get</code> or ordinary profile requests. For almost every app <code>me.get</code> gives you what you need without asking for OpenID claims.</p>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>OpenID scope</th><th>Shown to the user as</th><th>Userinfo claims</th></tr></thead>
                 <tbody>
                   <tr><td><code>openid</code></td><td>(always)</td><td><code>sub</code> — the PocketPass user id</td></tr>
                   <tr><td><code>email</code></td><td>your email address</td><td><code>email</code>, <code>email_verified</code></td></tr>
-                  <tr><td><code>profile</code></td><td>your account name and picture</td><td><code>name</code>, <code>picture</code>, <code>preferred_username</code>, <code>updated_at</code></td></tr>
+                  <tr><td><code>profile</code></td><td>your PocketPass username</td><td><code>name</code> and <code>preferred_username</code> (both the PocketPass username), <code>updated_at</code>, and <code>user_metadata</code> with only <code>username</code> and <code>name</code></td></tr>
                   <tr><td><code>phone</code></td><td>your phone number</td><td><code>phone</code>, <code>phone_verified</code></td></tr>
                 </tbody>
               </table>
             </div>
+            <p>The <code>profile</code> scope never includes an email address, a picture or anything from Discord. An account that has not picked a username yet has <code>name</code> set to <code>PocketPass user</code> and no <code>preferred_username</code>. For the display name and Piip, use <code>profile.get</code> or <code>me.get</code>.</p>
           </section>
 
           <section class="panel">
@@ -238,9 +239,9 @@
             </ul>
             <h3>Refreshing</h3>
             <p>Send <code>grant_type=refresh_token</code> and the <code>refresh_token</code> to the same token endpoint, with your <code>client_id</code> for a public client or HTTP Basic for a confidential one.</p>
-            <p>Refresh a little before expiry (for example when fewer than 60 seconds remain) or on the first <code>401</code>, then retry the request once. A refresh that answers <code>400</code> with <code>"error": "invalid_grant"</code> means the grant is gone — the user disconnected your app, PocketPass suspended it, you changed the app's scopes, or the refresh token was already rotated. Drop the stored tokens and offer the user the connect flow again. <code>invalid_client</code> means your client id, secret or client type is wrong.</p>
+            <p>Refresh a little before expiry (for example when fewer than 60 seconds remain) or on the first <code>401</code>, then retry the request once. A refresh that answers <code>400</code> with <code>"error": "invalid_grant"</code> means the grant is gone — the user disconnected your app, PocketPass suspended it, you changed the app's scopes, or the refresh token was already rotated. Drop the stored tokens and offer the user the connect flow again. <code>invalid_client</code> means your client id, secret or client type is wrong. While the user's account is banned, the token endpoint answers <code>403</code>; see <code>ACCOUNT_BANNED</code> under <a href="#errors">Errors</a>.</p>
             <h3>Revocation</h3>
-            <p>Three things end a connection, and all of them take effect within one request:</p>
+            <p>Three things end a connection. API calls stop at the next request. A Realtime channel that is already open keeps receiving until its access token expires (at most one hour), and signed URLs work until they expire (at most 15 minutes).</p>
             <ul>
               <li><strong>The user disconnects you</strong> on <code>https://links.pocketpass.xyz/oauth/apps</code>. Existing access tokens answer <code>PT401 CONSENT_REVOKED</code>, refresh fails with <code>invalid_grant</code>.</li>
               <li><strong>Your app calls <code>session.revoke</code></strong> (the "disconnect" button in your own UI). Same effect, scoped to that user. Discard the tokens afterwards; the call is idempotent, so retrying is safe.</li>
@@ -257,13 +258,13 @@
             <p>Rules that hold everywhere:</p>
             <ul>
               <li>Only <code>POST</code> (and <code>OPTIONS</code> for CORS preflight). A <code>GET</code> is a 404.</li>
-              <li>The body must be a JSON object. Unknown keys are rejected with <code>PT400 UNKNOWN_FIELD</code>, so typos fail loudly instead of silently doing nothing.</li>
+              <li>The body must be a JSON object; anything else, including invalid JSON, is <code>PT400 INVALID_FIELD</code>. Unknown keys are rejected with <code>PT400 UNKNOWN_FIELD</code>, so typos fail loudly instead of silently doing nothing.</li>
               <li>Every response body is a JSON object. Successful responses are <code>200</code>. Errors carry a <code>4xx</code>/<code>5xx</code> status <strong>and</strong> a body <code>{ "code", "message", "hint" }</code> — branch on <code>hint</code>, show <code>message</code> to a developer, never to an end user.</li>
               <li>Lists return <code>{ "items": [...], "next_cursor": null | "…" }</code>. Pass <code>next_cursor</code> back as <code>cursor</code> to get the next page; <code>null</code> means you have everything. Cursors are opaque strings — do not build or parse them.</li>
               <li><code>limit</code> is clamped to 1…100 and defaults to 50.</li>
               <li>Single objects come wrapped in their resource name: <code>{ "profile": {…} }</code>, <code>{ "conversation": {…} }</code>, <code>{ "message": {…} }</code>.</li>
               <li>Timestamps are ISO 8601 with a timezone offset; ids are UUIDs.</li>
-              <li>An unknown path under <code>/v1/</code> answers <code>404</code> with <code>{ "code": "PT404", "hint": "UNKNOWN_ENDPOINT" }</code>.</li>
+              <li>An unknown path under <code>/v1/</code>, such as <code>/v1/friends.nope</code>, answers <code>404</code> with <code>{ "code": "PT404", "message": "Unknown endpoint", "hint": "UNKNOWN_ENDPOINT" }</code>.</li>
             </ul>
           </section>
 
@@ -277,7 +278,7 @@
                 <tbody>
                   <tr>
                     <td><code>session.get</code><br><a class="endpoint-example" href="#example-session-get">Kotlin / JavaScript</a></td><td>none</td><td><code>{}</code></td>
-                    <td><code>{ user_id, client_id, app: { name }, scopes: [...], rate_limit: { per_minute, remaining, reset_at }, unread_total }</code></td>
+                    <td><code>{ user_id, client_id, app: { name }, scopes: [...], rate_limit: { per_minute, app_per_minute, per_second, remaining, reset_at }, unread_total }</code> — <code>per_minute</code> is the per-user limit, <code>app_per_minute</code> and <code>per_second</code> the app-wide limits; <code>remaining</code> is what is left of the tighter per-minute budget until <code>reset_at</code></td>
                   </tr>
                   <tr>
                     <td><code>session.revoke</code><br><a class="endpoint-example" href="#example-session-revoke">Kotlin / JavaScript</a></td><td>none</td><td><code>{}</code></td>
@@ -285,7 +286,7 @@
                   </tr>
                   <tr>
                     <td><code>me.get</code><br><a class="endpoint-example" href="#example-me-get">Kotlin / JavaScript</a></td><td><code>profile:read</code></td><td><code>{}</code></td>
-                    <td><code>{ profile }</code> — the connected user's own profile, including <code>setup_complete</code></td>
+                    <td><code>{ profile }</code> — the connected user's own profile</td>
                   </tr>
                   <tr>
                     <td><code>profiles.get</code><br><a class="endpoint-example" href="#example-profiles-get">Kotlin / JavaScript</a></td><td><code>profile:read</code></td><td><code>{ user_id }</code></td>
@@ -325,7 +326,7 @@
                   </tr>
                   <tr>
                     <td><code>friends.code_resolve</code><br><a class="endpoint-example" href="#example-friends-code_resolve">Kotlin / JavaScript</a></td><td><code>friends:write</code></td><td><code>{ code }</code></td>
-                    <td><code>{ profile }</code> of the person behind an 8-digit code, ready for <code>friends.request_send</code>. <code>PT404 CODE_NOT_FOUND</code> covers unused codes, the user's own code and people either side has blocked. Limited to 50 lookups per user per hour (<code>PT429 FRIEND_CODE_RATE_LIMITED</code>).</td>
+                    <td><code>{ profile }</code> of the person behind an 8-digit code, ready for <code>friends.request_send</code>. <code>PT404 CODE_NOT_FOUND</code> covers unused codes, the user's own code and people either side has blocked. Every lookup counts toward a limit of 50 per user per hour, including codes that don't exist; past it you get <code>PT429 FRIEND_CODE_RATE_LIMITED</code> with <code>Retry-After</code> in seconds.</td>
                   </tr>
                   <tr>
                     <td><code>conversations.list</code><br><a class="endpoint-example" href="#example-conversations-list">Kotlin / JavaScript</a></td><td><code>messages:read</code></td><td><code>{ limit?, cursor?, updated_after? }</code></td>
@@ -369,7 +370,7 @@
                   </tr>
                   <tr>
                     <td><code>messages.send</code><br><a class="endpoint-example" href="#example-messages-send">Kotlin / JavaScript</a></td><td><code>messages:write</code></td><td><code>{ conversation_id, body?, client_operation_id, reply_to_id?, attachment? }</code></td>
-                    <td><code>{ message }</code> — <code>body</code> is 1…4000 characters after trimming (<code>PT400 BODY_LENGTH</code>) and may be omitted only with an <code>attachment</code>; <code>attachment</code> is <code>{ path, mime_type }</code> of an image you uploaded first (see <a href="#media">Media</a>); <code>client_operation_id</code> is required (see <a href="#idempotency">Idempotency</a>)</td>
+                    <td><code>{ message }</code> — <code>body</code> is 1…4000 characters after trimming (<code>PT400 BODY_LENGTH</code>) and may be omitted only with an <code>attachment</code>; <code>attachment</code> is <code>{ path, mime_type }</code> of an image you uploaded first (see <a href="#media">Media</a>); <code>client_operation_id</code> is required, and a retry with it returns the message as it is now, even after an edit or deletion (see <a href="#idempotency">Idempotency</a>)</td>
                   </tr>
                   <tr>
                     <td><code>messages.edit</code><br><a class="endpoint-example" href="#example-messages-edit">Kotlin / JavaScript</a></td><td><code>messages:write</code></td><td><code>{ message_id, body }</code></td>
@@ -380,8 +381,8 @@
                     <td><code>{ message }</code> with <code>deleted_at</code> set — own messages only</td>
                   </tr>
                   <tr>
-                    <td><code>notifications.list</code><br><a class="endpoint-example" href="#example-notifications-list">Kotlin / JavaScript</a></td><td><code>notifications:read</code></td><td><code>{ limit?, cursor? }</code></td>
-                    <td><code>{ items: [notification, ...], next_cursor }</code> — most recently updated first</td>
+                    <td><code>notifications.list</code><br><a class="endpoint-example" href="#example-notifications-list">Kotlin / JavaScript</a></td><td><code>notifications:read</code></td><td><code>{ limit?, cursor?, updated_after? }</code></td>
+                    <td><code>{ items: [notification, ...], next_cursor }</code> — most recently updated first; <code>updated_after</code> (timestamp) keeps only notifications updated after it</td>
                   </tr>
                   <tr>
                     <td><code>notifications.mark_read</code><br><a class="endpoint-example" href="#example-notifications-mark_read">Kotlin / JavaScript</a></td><td><code>notifications:read</code></td><td><code>{ notification_id }</code></td>
@@ -406,7 +407,7 @@
                 </tbody>
               </table>
             </div>
-            <p>Every endpoint checks, in this order: that the token is an app token (<code>PT401 API_TOKEN_REQUIRED</code>), the rate limit (<code>PT429</code>), that the app exists and is active (<code>PT404 APP_NOT_FOUND</code>, <code>PT403 APP_SUSPENDED</code>), that the app has the scope (<code>PT403 SCOPE_REQUIRED</code>) and that the user's grant is still live (<code>PT401 CONSENT_REVOKED</code>). Only then does it look at the body.</p>
+            <p>Every endpoint checks, in this order: that the token is a valid app token (<code>PT401 API_TOKEN_REQUIRED</code>) for an account that is not banned (<code>PT403 ACCOUNT_BANNED</code>), the rate limit (<code>PT429</code>), that the app exists and is active (<code>PT404 APP_NOT_FOUND</code>, <code>PT403 APP_SUSPENDED</code>), that the app has the scope (<code>PT403 SCOPE_REQUIRED</code>) and that the user's grant is still live (<code>PT401 CONSENT_REVOKED</code>). Only then does it look at the body.</p>
           </section>
 
           <section class="panel">
@@ -500,11 +501,23 @@
             <h3>Board artwork and stationery</h3>
             <p>For a drawn icon or cover, use <code>boards.draw_branding</code>. Imported branding uses <code>POST /v1/boards.artwork_upload</code>, with <code>boards:manage</code> and a JSON body of <code>board_id</code>, <code>kind: "icon"</code>, one new <code>operation_id</code> per upload and <code>image</code> (base64 PNG, JPEG, WebP or GIF bytes, without a data URL prefix).</p>
             <p>Use <code>kind: "cover"</code> for a cover. The input must be at most 10 MiB (14 MiB for the whole JSON request). The service checks ownership before decoding pixels, strips metadata, flattens animation, limits dimensions to 2048 pixels and stores a WebP up to 2 MiB. It rechecks consent, scope and board ownership before committing. Success returns <code>{ ok, board_id, asset_id }</code>; fetch the bytes through <code>boards.asset</code>. Keep the same operation ID and exact source bytes on retries. Incomplete uploads never appear as board artwork.</p>
+            <p>Upload errors use the usual <code>{ code, message, hint }</code> body:</p>
+            <ul>
+              <li><code>401 PT401 API_TOKEN_REQUIRED</code>: the bearer token is missing or invalid.</li>
+              <li><code>400 PT400 MISSING_FIELD</code>: <code>board_id</code>, <code>kind</code>, <code>operation_id</code> or <code>image</code> is missing.</li>
+              <li><code>400 PT400 UNKNOWN_FIELD</code>: the body has any other field.</li>
+              <li><code>400 PT400 INVALID_FIELD</code>: the JSON, the base64 or the image is invalid.</li>
+              <li><code>413 PT413 MEDIA_TOO_LARGE</code>: the image or the request is too large.</li>
+              <li><code>503 PT503 MEDIA_BUSY</code>: the processor is busy. Retry later.</li>
+              <li><code>403 PT403 BOARD_ACCESS_DENIED</code>: ownership or permission was lost after the upload was prepared.</li>
+              <li><code>503 PT503 MEDIA_UNCONFIRMED</code>: the commit could not be confirmed. Retry with the same operation ID and bytes.</li>
+            </ul>
+            <p>The usual API errors also apply, such as <code>SCOPE_REQUIRED</code>, <code>API_RATE_LIMITED</code> and <code>ACCOUNT_BANNED</code>.</p>
             <p><code>boards.prepare_branding</code> is the processor's scoped preparation endpoint: it accepts <code>board_id</code>, <code>kind</code>, <code>operation_id</code> and a lowercase SHA-256 <code>source_hash</code>, and returns <code>{ ticket }</code>. A ticket cannot be committed by a connected app or reused across apps. Use <code>boards.artwork_upload</code> for a complete upload.</p>
             <p>Stationery starts with plain paper. Catalogue entries include versioned artwork, access rules, token price, <code>available</code> and <code>owned</code>. Active supporters can use all active stationery and can still buy permanent ownership through <code>boards.buy_stationery</code>. A purchase requires <code>boards:purchase</code> and never charges twice on a retry. Owned items remain owned after rule changes or supporter expiry; published notes keep their original stationery snapshot. Reading token balances separately requires <code>tokens:read</code>.</p>
             <h3>Board errors and rate limits</h3>
             <p>Boards requests use the normal app/user API budget, plus shared per-account burst limits: 30 submissions/edits, 120 reaction changes and 10 invitations/reports per minute by default. Staff can change these limits. <code>PT429 BOARD_RATE_LIMIT</code> carries <code>Retry-After</code>. <code>PT403 BOARDS_DISABLED</code> means the emergency switch is off; stored data remains and <code>boards.settings</code> is still available. Do not discard drafts.</p>
-            <p>Other hints include <code>BOARD_ACCESS_DENIED</code>, <code>BOARD_DRAFT_BASE_EXPIRED</code>, <code>BOARD_INVITATIONS_BLOCKED</code>, <code>INVALID_CURSOR</code>, <code>UNKNOWN_FIELD</code>, <code>MISSING_FIELD</code>, <code>INVALID_FIELD</code>, <code>ALREADY_EXISTS</code> and <code>DUPLICATE_OPERATION_ID</code>. Display the supplied reason for a word-filter or moderation rejection. Uploads can also return HTTP 413 for size or 503 while processing is busy or the result cannot be confirmed.</p>
+            <p>Other hints include <code>BOARD_ACCESS_DENIED</code>, <code>BOARD_DRAFT_BASE_EXPIRED</code>, <code>BOARD_INVITATIONS_BLOCKED</code>, <code>INVALID_CURSOR</code>, <code>UNKNOWN_FIELD</code>, <code>MISSING_FIELD</code>, <code>INVALID_FIELD</code>, <code>ALREADY_EXISTS</code> and <code>DUPLICATE_OPERATION_ID</code>. Display the supplied reason for a word-filter or moderation rejection. Artwork upload errors are listed under Board artwork and stationery.</p>
           </section>
 
           <section class="panel">
@@ -515,16 +528,16 @@
               <table>
                 <thead><tr><th>Endpoint</th><th>Scope</th><th>JSON body</th><th>Response</th></tr></thead>
                 <tbody>
-                  <tr><td><code>blocks.list</code><br><a class="endpoint-example" href="#example-blocks-list">Kotlin / JavaScript</a></td><td><code>blocks:read</code></td><td><code>{ limit?, cursor? }</code></td><td><code>{ items: [{ user_id, display_name, avatar_path, blocked_at }], next_cursor }</code>; newest first, default 30, maximum 100</td></tr>
+                  <tr><td><code>blocks.list</code><br><a class="endpoint-example" href="#example-blocks-list">Kotlin / JavaScript</a></td><td><code>blocks:read</code></td><td><code>{ limit?, cursor? }</code></td><td><code>{ items: [{ user_id, display_name, avatar_path, blocked_at }], next_cursor }</code>; newest first, default 30, maximum 100. An over-long or malformed cursor is <code>PT400 INVALID_CURSOR</code>.</td></tr>
                   <tr><td><code>blocks.set</code><br><a class="endpoint-example" href="#example-blocks-set">Kotlin / JavaScript</a></td><td><code>blocks:write</code></td><td><code>{ user_id, blocked, operation_id }</code></td><td><code>{ user_id, blocked }</code></td></tr>
-                  <tr><td><code>privacy.get</code><br><a class="endpoint-example" href="#example-privacy-get">Kotlin / JavaScript</a></td><td><code>privacy:read</code></td><td><code>{}</code></td><td><code>{ block_messages }</code></td></tr>
-                  <tr><td><code>privacy.set</code><br><a class="endpoint-example" href="#example-privacy-set">Kotlin / JavaScript</a></td><td><code>privacy:write</code></td><td><code>{ block_messages, operation_id }</code></td><td><code>{ block_messages }</code></td></tr>
+                  <tr><td><code>privacy.get</code><br><a class="endpoint-example" href="#example-privacy-get">Kotlin / JavaScript</a></td><td><code>privacy:read</code></td><td><code>{}</code></td><td><code>{ block_messages, block_invites }</code></td></tr>
+                  <tr><td><code>privacy.set</code><br><a class="endpoint-example" href="#example-privacy-set">Kotlin / JavaScript</a></td><td><code>privacy:write</code></td><td><code>{ block_messages?, block_invites?, operation_id }</code></td><td><code>{ block_messages, block_invites }</code> with both current values. Send at least one setting; sending neither is <code>PT400 MISSING_FIELD</code>.</td></tr>
                 </tbody>
               </table>
             </div>
-            <p><code>blocked</code> and <code>block_messages</code> are booleans; <code>user_id</code> and <code>operation_id</code> are UUIDs. Generate an operation ID once per change and reuse it with identical fields on retry. The list shows only accounts this user has blocked, not who has blocked them.</p>
+            <p><code>blocked</code>, <code>block_messages</code> and <code>block_invites</code> are booleans; <code>user_id</code> and <code>operation_id</code> are UUIDs. Generate an operation ID once per change and reuse it with identical fields on retry. The list shows only accounts this user has blocked, not who has blocked them.</p>
             <p>Blocking removes the friendship and pending friend requests. Unblocking does not restore them. In Boards, each person's content is hidden from the other and direct replies, reactions and invitations between them are refused. Local moderator review is available only with the extra moderation scope and a valid board role.</p>
-            <p><strong>Block Messages</strong> prevents incoming direct messages and edits, including from friends. <strong>Block Invites</strong>, a separate setting that only the PocketPass app can change, prevents new friend requests, new group-chat additions by other people and direct board invitations. Existing group chats and board memberships remain; sending in an existing group and voluntarily joining with a board code still work. A refusal returns HTTP 403 with <code>DIRECT_MESSAGES_BLOCKED</code>, <code>FRIEND_REQUESTS_BLOCKED</code>, <code>GROUP_MESSAGES_BLOCKED</code> or <code>BOARD_INVITATIONS_BLOCKED</code>, so show the supplied explanation instead of retrying.</p>
+            <p><strong>Block Messages</strong> prevents incoming direct messages and edits, including from friends. <strong>Block Invites</strong>, a separate setting, prevents new friend requests, new group-chat additions by other people and direct board invitations. Existing group chats and board memberships remain; sending in an existing group and voluntarily joining with a board code still work. A refusal returns HTTP 403 with <code>DIRECT_MESSAGES_BLOCKED</code>, <code>FRIEND_REQUESTS_BLOCKED</code>, <code>GROUP_MESSAGES_BLOCKED</code> or <code>BOARD_INVITATIONS_BLOCKED</code>, so show the supplied explanation instead of retrying.</p>
           </section>
 
           <section class="panel">
@@ -540,7 +553,7 @@
               <dt><code>age</code></dt><dd>Integer or <code>null</code>.</dd>
               <dt><code>country_code</code></dt><dd>Two-letter ISO 3166-1 code or <code>null</code>.</dd>
               <dt><code>created_at</code>, <code>updated_at</code></dt><dd>Timestamps.</dd>
-              <dt><code>setup_complete</code></dt><dd><code>me.get</code> only: whether the user finished account setup in the app.</dd>
+              <dt><code>setup_complete</code></dt><dd>Whether the user finished account setup in the app.</dd>
             </dl>
             <p><code>last_seen_at</code> is conditionally included in full profile objects with <code>presence:read</code>; see <a href="#presence">Presence</a> for visibility and timestamp semantics.</p>
             <h3>friend</h3>
@@ -566,7 +579,7 @@
             <dl class="facts">
               <dt><code>id</code></dt><dd>UUID. For messages your app sent, it is derived from the <code>client_operation_id</code>.</dd>
               <dt><code>conversation_id</code>, <code>sender_id</code></dt><dd>UUIDs.</dd>
-              <dt><code>body</code></dt><dd>The text. Empty once the message is deleted.</dd>
+              <dt><code>body</code></dt><dd>The text. <code>"Message deleted"</code> once the message is deleted.</dd>
               <dt><code>reply_to_id</code></dt><dd>Id of the message being replied to, or <code>null</code>.</dd>
               <dt><code>attachment</code></dt><dd><code>{ path, mime_type }</code> for an image attachment (path inside the <code>message-media</code> bucket), or <code>null</code>. An image-only message has the body <code>"📷"</code>, which is what PocketPass itself sends.</dd>
               <dt><code>created_at</code></dt><dd>Timestamp.</dd>
@@ -598,13 +611,13 @@
           <section class="panel">
             <h2 id="errors">Errors</h2>
             <p class="section-examples"><a href="#example-http">Kotlin &amp; JavaScript examples →</a></p>
-            <p>Every error is <code>{ "code": "PTxxx", "message": "…", "hint": "…" }</code> with a matching HTTP status. The <code>code</code> tells you the class, the <code>hint</code> the exact reason. Both are stable; the <code>message</code> is not.</p>
+            <p>Every error is <code>{ "code": "PTxxx", "message": "…", "hint": "…" }</code> with a matching HTTP status. The <code>code</code> tells you the class, the <code>hint</code> the exact reason. Both are stable; the <code>message</code> is not. This includes a missing or expired token, an unknown endpoint and a body that is not JSON.</p>
             <div class="table-wrap">
               <table>
                 <thead><tr><th>Status / code</th><th>Hint</th><th>Meaning</th><th>What to do</th></tr></thead>
                 <tbody>
-                  <tr><td rowspan="13"><code>400 PT400</code></td><td><code>MISSING_FIELD</code></td><td>A required body key is absent.</td><td>Fix the request.</td></tr>
-                  <tr><td><code>INVALID_FIELD</code></td><td>A key has the wrong type or value (not a UUID, not a timestamp, list too long…).</td><td>Fix the request.</td></tr>
+                  <tr><td rowspan="13"><code>400 PT400</code></td><td><code>MISSING_FIELD</code></td><td>A required body key is absent, or <code>privacy.set</code> got neither setting.</td><td>Fix the request.</td></tr>
+                  <tr><td><code>INVALID_FIELD</code></td><td>A key has the wrong type or value (not a UUID, not a timestamp, list too long…), or the body is not a JSON object.</td><td>Fix the request.</td></tr>
                   <tr><td><code>UNKNOWN_FIELD</code></td><td>The body contains a key the endpoint does not know.</td><td>Check the spelling against the reference.</td></tr>
                   <tr><td><code>INVALID_CURSOR</code></td><td>The <code>cursor</code> was not one this endpoint issued.</td><td>Restart from the first page.</td></tr>
                   <tr><td><code>BODY_LENGTH</code></td><td>Message body is empty or longer than 4000 characters after trimming.</td><td>Validate before sending.</td></tr>
@@ -616,18 +629,24 @@
                   <tr><td><code>INVALID_CODE</code></td><td>A friend code that is not eight digits.</td><td>Validate before sending.</td></tr>
                   <tr><td><code>UNSUPPORTED_MEDIA</code></td><td><code>attachment.mime_type</code> is not <code>image/jpeg</code>, <code>image/png</code>, <code>image/webp</code> or <code>image/gif</code>.</td><td>Convert the image first.</td></tr>
                   <tr><td><code>INVALID_ATTACHMENT_PATH</code></td><td><code>attachment.path</code> is not <code>&lt;user id&gt;/&lt;conversation id&gt;/&lt;file&gt;</code> for this user and conversation.</td><td>Upload to the documented path and send that exact path back.</td></tr>
-                  <tr><td rowspan="2"><code>401 PT401</code></td><td><code>API_TOKEN_REQUIRED</code></td><td>No bearer token, an expired one, or a token that is not an app token.</td><td>Refresh and retry once; then reconnect.</td></tr>
+                  <tr><td rowspan="2"><code>401 PT401</code></td><td><code>API_TOKEN_REQUIRED</code></td><td>No bearer token, an expired or invalid one, or a token that is not a connected-app token.</td><td>Refresh and retry once; then reconnect.</td></tr>
                   <tr><td><code>CONSENT_REVOKED</code></td><td>The user disconnected your app, or its scopes changed since they approved it.</td><td>Delete the stored tokens and offer the connect flow again.</td></tr>
-                  <tr><td rowspan="9"><code>403 PT403</code></td><td><code>APP_SUSPENDED</code></td><td>PocketPass suspended your app.</td><td>Stop calling; contact PocketPass.</td></tr>
+                  <tr><td rowspan="14"><code>403 PT403</code></td><td><code>APP_SUSPENDED</code></td><td>PocketPass suspended your app.</td><td>Stop calling; contact PocketPass.</td></tr>
+                  <tr><td><code>ACCOUNT_BANNED</code></td><td>The user's PocketPass account is banned. Every call, Realtime join and upload fails while the ban lasts, and the token endpoint refuses new tokens with <code>403</code>.</td><td>Stop and show the user as signed out. Do not retry.</td></tr>
                   <tr><td><code>SCOPE_REQUIRED</code></td><td>Your app was not registered with the scope this endpoint needs.</td><td>Add the scope in the portal (this disconnects users) or stop calling the endpoint.</td></tr>
                   <tr><td><code>NOT_A_MEMBER</code></td><td>The user is not an active member of that conversation (including after being removed from a group).</td><td>Refresh your conversation list.</td></tr>
                   <tr><td><code>BLOCKED</code></td><td>One of the two users blocked the other. Blocks stop direct messaging, friend requests and adding someone to a group; messages inside a group are not block-gated.</td><td>Show "unavailable".</td></tr>
+                  <tr><td><code>DIRECT_MESSAGES_BLOCKED</code></td><td>The other person has Block Messages on.</td><td>Tell the user this person is not accepting messages. Do not retry.</td></tr>
+                  <tr><td><code>GROUP_MESSAGES_BLOCKED</code></td><td>Someone being added to a group has Block Invites on and is not accepting group invitations.</td><td>Leave them out and tell the user. Do not retry.</td></tr>
+                  <tr><td><code>FRIEND_REQUESTS_BLOCKED</code></td><td>The person has Block Invites on and is not accepting friend requests.</td><td>Tell the user. Do not retry.</td></tr>
+                  <tr><td><code>BOARD_INVITATIONS_BLOCKED</code></td><td>The person has Block Invites on and is not accepting Board invitations.</td><td>Tell the user. Do not retry.</td></tr>
                   <tr><td><code>NOT_FRIENDS</code></td><td><code>conversations.open</code>, <code>conversations.create</code> or <code>conversations.add_members</code> with users who are not the user's friends.</td><td>Only pick people from <code>friends.list</code>.</td></tr>
                   <tr><td><code>NOT_OWNER</code></td><td>Renaming a group or removing a member without owning the group.</td><td>Only offer rename/remove when the user is the first entry in <code>members</code>.</td></tr>
                   <tr><td><code>NOT_SENDER</code></td><td>Editing or deleting someone else's message.</td><td>Only offer edit/delete on messages whose <code>sender_id</code> is the user.</td></tr>
                   <tr><td><code>NOT_ADDRESSEE</code></td><td>Answering a friend request that was not sent to the user.</td><td>Only offer accept/decline on <code>incoming</code> requests.</td></tr>
                   <tr><td><code>NOT_REQUESTER</code></td><td>Cancelling a friend request the user did not send.</td><td>Only offer cancel on <code>outgoing</code> requests.</td></tr>
-                  <tr><td rowspan="8"><code>404 PT404</code></td><td><code>APP_NOT_FOUND</code></td><td>The app in the token no longer exists.</td><td>The app was deleted; nothing to retry.</td></tr>
+                  <tr><td rowspan="9"><code>404 PT404</code></td><td><code>APP_NOT_FOUND</code></td><td>The app in the token no longer exists.</td><td>The app was deleted; nothing to retry.</td></tr>
+                  <tr><td><code>UNKNOWN_ENDPOINT</code></td><td>No such endpoint, such as <code>/v1/friends.nope</code>, or a method other than <code>POST</code>.</td><td>Check the path against the reference.</td></tr>
                   <tr><td><code>PROFILE_NOT_FOUND</code></td><td>No such user, or the connected user may not see them.</td><td>Treat as unavailable.</td></tr>
                   <tr><td><code>CONVERSATION_NOT_FOUND</code></td><td>No such conversation, or the user is not in it.</td><td>Refresh your conversation list.</td></tr>
                   <tr><td><code>MESSAGE_NOT_FOUND</code></td><td>No such message in a conversation the user can see.</td><td>Refresh the message list.</td></tr>
@@ -642,14 +661,14 @@
                   <tr><td><code>ALREADY_FRIENDS</code></td><td><code>friends.request_send</code> to someone who is already a friend.</td><td>Refresh <code>friends.list</code>.</td></tr>
                   <tr><td><code>REQUEST_CLOSED</code></td><td>The friend request was already accepted, declined or cancelled.</td><td>Refresh <code>friends.requests_list</code>.</td></tr>
                   <tr><td rowspan="2"><code>429 PT429</code></td><td><code>API_RATE_LIMITED</code></td><td>Too many requests for this app + user (or for the app as a whole).</td><td>Wait for the <code>Retry-After</code> seconds, then resume. See <a href="#rate-limits">Rate limits</a>.</td></tr>
-                  <tr><td><code>FRIEND_CODE_RATE_LIMITED</code></td><td>More than 50 <code>friends.code_resolve</code> lookups for this user in an hour.</td><td>Wait an hour; do not resolve codes on every keystroke.</td></tr>
+                  <tr><td><code>FRIEND_CODE_RATE_LIMITED</code></td><td>More than 50 <code>friends.code_resolve</code> lookups for this user in an hour. Every lookup counts, including codes that don't exist.</td><td>Wait for the <code>Retry-After</code> seconds; do not resolve codes on every keystroke.</td></tr>
                   <tr><td><code>500 PT500</code></td><td><code>INTERNAL</code></td><td>Something failed on our side; the message is deliberately generic.</td><td>Retry with backoff. If it persists, tell us the time and endpoint.</td></tr>
                 </tbody>
               </table>
             </div>
             <h3>Errors without a <code>code</code></h3>
             <ul>
-              <li><strong>Gateway rate limit:</strong> a <code>429</code> whose body has no <code>code</code> field (it looks like <code>{ "message": "API rate limit exceeded" }</code>). This is the per-IP backstop in front of the API; back off exactly as for <code>PT429</code>.</li>
+              <li><strong>Gateway rate limit:</strong> a <code>429</code> whose body has no <code>code</code> field (it looks like <code>{ "message": "API rate limit exceeded" }</code>). This is the per-IP backstop of 1,000,000 requests a minute in front of the API, so you should not meet it; back off exactly as for <code>PT429</code>.</li>
               <li><strong>Token endpoint:</strong> OAuth errors use the standard shape <code>{ "error": "invalid_grant", "error_description": "…" }</code>.</li>
               <li><strong>Blocked endpoints:</strong> an app token used on anything outside <code>/v1/…</code>, the OAuth token and userinfo endpoints, Storage and Realtime gets <code>403</code> with <code>{ "error": "oauth_client_forbidden", "error_description": "…" }</code>.</li>
               <li><strong>Media:</strong> Storage answers with its own error objects (for example <code>{ "statusCode": "404", "error": "not_found", "message": "Object not found" }</code>). A file the user may not see is a 404 or 400, never a 403.</li>
@@ -660,12 +679,12 @@
             <h2 id="rate-limits">Rate limits</h2>
             <p class="section-examples"><a href="#example-http">Kotlin &amp; JavaScript examples →</a></p>
             <ul>
-              <li><strong>120 requests per minute per app and user</strong> by default. This is the limit you will normally meet. It is a rolling one-minute bucket keyed on your client id plus the user id.</li>
+              <li><strong>120 requests per minute per app and user</strong> by default. This is the limit you will normally meet. It is a fixed window that resets at the start of each clock minute, keyed on your client id plus the user id.</li>
               <li><strong>A per-app ceiling of 600 requests per minute across all users</strong> and <strong>a burst cap of 100 requests per second per app</strong> by default. The burst cap answers <code>PT429</code> with <code>Retry-After: 1</code>.</li>
               <li><strong>Need more?</strong> Open the app in the portal and use <em>Request higher limits</em> under Limits: say what the app does, how many users you expect and which limit you are hitting. Requests are reviewed by hand; an approval applies to the app immediately and the decision, with any note, shows on the same page. <code>session.get</code> always reports the limits that apply to your app.</li>
-              <li><strong>Failed requests count.</strong> A <code>PT400</code>, a <code>PT403</code>, a <code>PT401 CONSENT_REVOKED</code> and even a call for a suspended app all consume budget, and denied calls are reported as "denied" in the portal's usage table. A retry loop against a broken token will rate-limit itself.</li>
-              <li>A <code>PT429</code> response carries a <code>Retry-After</code> header in seconds. <code>session.get</code> returns <code>rate_limit.remaining</code> and <code>rate_limit.reset_at</code> for the current user so you can pace yourself before hitting the limit.</li>
-              <li>The gateway also enforces a generous per-IP backstop (thousands of requests per minute) and exposes <code>RateLimit-Remaining</code> / <code>RateLimit-Reset</code> headers for it; a shared egress IP that trips it gets the code-less <code>429</code> described under <a href="#errors">Errors</a>.</li>
+              <li><strong>Failed requests count.</strong> A <code>PT400</code>, a <code>PT403</code>, a <code>PT401 CONSENT_REVOKED</code> and even a call for a suspended app all consume budget, and denied calls are reported as "denied" in the portal's usage table. A retry loop against a broken token will rate-limit itself. Calls refused with <code>API_TOKEN_REQUIRED</code> or <code>ACCOUNT_BANNED</code> are stopped before the limit and don't count.</li>
+              <li>A <code>PT429</code> response carries a <code>Retry-After</code> header in seconds. Every call that gets past the token check also returns <code>RateLimit-Remaining</code> and <code>RateLimit-Reset</code> (seconds until the minute resets) for the tighter of the two per-minute limits above. <code>session.get</code> returns <code>rate_limit.remaining</code> and <code>rate_limit.reset_at</code> for the current user so you can pace yourself before hitting the limit.</li>
+              <li>The gateway's per-IP backstop is 1,000,000 requests a minute with no hourly cap, so in practice the per-app and per-user limits above are the ones that apply. <code>RateLimit-Remaining</code>, <code>RateLimit-Reset</code> and <code>Retry-After</code> come only from PocketPass's own limits.</li>
             </ul>
             <p>Media downloads and the token endpoint have their own limits (the token endpoint is 30 requests per minute per IP) and do not count against the API budget.</p>
           </section>
@@ -677,10 +696,12 @@
             <ol>
               <li><strong>Poll <code>conversations.list</code> with <code>updated_after</code></strong> set to the newest <code>updated_at</code> you have seen. The response contains only conversations that received a message since then, together with their <code>last_message</code> and <code>unread_count</code>. An empty <code>items</code> array is the common, cheap case.</li>
               <li><strong>For the conversation that is open on screen, poll <code>messages.list</code> with <code>changed_since</code></strong> set to the newest of <code>created_at</code>, <code>edited_at</code> and <code>deleted_at</code> you have seen. This returns new messages <em>and</em> messages that were edited or deleted after that instant, which <code>updated_after</code> on the conversation does not surface because edits and deletions do not bump a conversation's <code>updated_at</code>.</li>
+              <li><strong>With <code>notifications:read</code>, poll <code>notifications.list</code> with <code>updated_after</code></strong> set to the newest <code>updated_at</code> you have seen.</li>
               <li><strong>With <code>encounters:read</code>, poll <code>encounters.list</code> with <code>updated_after</code></strong> set to the newest <code>updated_at</code> you have seen; a confirmation bumps it, so an encounter comes back once more when the other side confirms. <code>tokens.get</code> is one cheap call: re-fetch it on any <code>tokens:</code> event, or once a minute while a balance is on screen.</li>
             </ol>
             <p>Recommended cadence: every <strong>5 seconds</strong> while your app is in the foreground and a chat is visible, every <strong>60 seconds</strong> in the background or when only the conversation list is showing. At 5 seconds a user with one open conversation uses 24 requests per minute — well inside the 120 per minute budget, with room for their own actions. Stop polling entirely when the window is hidden or the device is idle, and after a <code>PT401</code>, <code>PT403</code> or <code>PT429</code>.</p>
             <p>Keep the timestamps you pass back exactly as the API returned them (do not round to seconds). Because <code>changed_since</code> and <code>updated_after</code> are strict "after" comparisons, a message you already have will not be returned again, and a message with the same timestamp as your watermark is impossible in practice.</p>
+            <p><strong>Catch-up pass.</strong> Items can change while you walk the pages of a list, and their timestamps come from when the change started. After a full walk, run the list again with <code>updated_after</code> set to the time the walk started minus one minute, and de-duplicate by <code>id</code>.</p>
             <p>Unread state: call <code>conversations.mark_read</code> when the user actually sees the conversation, not on every poll — it is a write, it needs <code>messages:write</code>, and PocketPass uses it to clear the user's badge.</p>
           </section>
 
@@ -692,9 +713,9 @@
               <table>
                 <thead><tr><th>Topic</th><th>Scope</th><th>Events</th><th>Fires when</th></tr></thead>
                 <tbody>
-                  <tr><td><code>conversation:&lt;conversation id&gt;</code></td><td><code>messages:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>membership</code>, <code>conversation</code></td><td>A message in that conversation is sent, edited or deleted (<code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code>, <code>table: "messages"</code>); someone is added, removed, leaves or becomes the owner (<code>membership</code>, a <code>conversation_members</code> row); the group is renamed (<code>conversation</code>). The user must be an active member; re-fetch with <code>conversations.get</code> on the last two.</td></tr>
-                  <tr><td><code>notifications:&lt;user id&gt;</code></td><td><code>notifications:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code></td><td>A notification for the connected user is created, changes (marked read, folded, answered) or is removed.</td></tr>
-                  <tr><td><code>friends:&lt;user id&gt;</code></td><td><code>friends:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code></td><td>A friendship or a friend request involving the connected user changes.</td></tr>
+                  <tr><td><code>conversation:&lt;conversation id&gt;</code></td><td><code>messages:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>membership</code>, <code>conversation</code>, <code>chat_colour</code></td><td>A message in that conversation is sent, edited or deleted (<code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code>, <code>table: "messages"</code>); someone is added, removed, leaves or becomes the owner (<code>membership</code>, a <code>conversation_members</code> row); the group is renamed (<code>conversation</code>); a member changes their chat bubble colour (<code>chat_colour</code>, payload <code>{ operation: "UPDATE", schema: "public", table: "profile_chat_colours", record: { user_id, conversation_id } }</code>). The user must be an active member; re-fetch with <code>conversations.get</code> on the last three.</td></tr>
+                  <tr><td><code>notifications:&lt;user id&gt;</code></td><td><code>notifications:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>ACCOUNT_BANNED</code>, <code>BOARDS</code></td><td>A notification for the connected user is created, changes (marked read, folded, answered) or is removed. <code>ACCOUNT_BANNED</code> (payload <code>{}</code>; Realtime also adds an <code>id</code>) means the user's ban status just changed, on a ban and on an unban; while banned, every call fails with <code>PT403 ACCOUNT_BANNED</code>. <code>BOARDS</code> (payload <code>{}</code>) is the legacy Boards signal described below.</td></tr>
+                  <tr><td><code>friends:&lt;user id&gt;</code></td><td><code>friends:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code></td><td>A friendship or a friend request involving the connected user changes. An <code>UPDATE</code> whose payload is only <code>{ user_id }</code> (Realtime also adds an <code>id</code>) arrives when the user or a friend changes their name, bio, avatar, age or country, when the user changes their chat colour or privacy settings, and when a friend or someone with a pending friend request is banned or unbanned. Treat it as a signal to re-fetch <code>friends.list</code> or <code>profiles.get</code>.</td></tr>
                   <tr><td><code>tokens:&lt;user id&gt;</code></td><td><code>tokens:read</code></td><td><code>INSERT</code>, <code>UPDATE</code>, <code>supporter_status</code></td><td>The connected user's token balance changes (<code>table: "token_balances"</code>, the <code>record</code> carries <code>balance</code>) or their supporter status changes (<code>supporter_status</code>, payload <code>{ user_id, active_until }</code>). Re-fetch with <code>tokens.get</code>.</td></tr>
                   <tr><td><code>encounters:&lt;user id&gt;</code></td><td><code>encounters:read</code></td><td><code>INSERT</code>, <code>UPDATE</code></td><td>The connected user meets someone (<code>INSERT</code>) or the other side confirms an encounter (<code>UPDATE</code>). The payload carries <code>encounter_id</code>, <code>occurred_at</code> and <code>confirmed_at</code>; re-fetch with <code>encounters.list</code> and <code>updated_after</code>.</td></tr>
                 </tbody>
@@ -708,7 +729,7 @@
                   <tr><td><code>boards:&lt;user id&gt;</code></td><td><code>boards:read</code></td><td><code>BOARDS</code></td><td>Visible feeds, memberships, invitations, proposals, notices and activity</td></tr>
                   <tr><td><code>board-drafts:&lt;user id&gt;</code></td><td><code>boards:drafts</code></td><td><code>DRAFTS</code></td><td>Your cloud draft heads</td></tr>
                   <tr><td><code>blocks:&lt;user id&gt;</code></td><td><code>blocks:read</code></td><td><code>BLOCKS</code></td><td>Your block list and visible content</td></tr>
-                  <tr><td><code>privacy:&lt;user id&gt;</code></td><td><code>privacy:read</code></td><td><code>PRIVACY</code></td><td>Your Block Messages setting; also sent when Block Invites changes</td></tr>
+                  <tr><td><code>privacy:&lt;user id&gt;</code></td><td><code>privacy:read</code></td><td><code>PRIVACY</code></td><td>Your Block Messages and Block Invites settings</td></tr>
                 </tbody>
               </table>
             </div>
@@ -726,11 +747,11 @@
             <h3>Connecting</h3>
             <p>Connect to <code>wss://api.pocketpass.xyz/realtime/v1/websocket?apikey=&lt;publishable key&gt;&amp;vsn=1.0.0</code>. The publishable key is public and the same for every app: <code data-publishable-key>see https://developer.pocketpass.xyz/config.js</code>. The user's access token goes into every join message, never into the URL.</p>
             <p>Without a library, speak the Phoenix channel protocol over the socket: join, heartbeat every 30 seconds, and hand over each refreshed token before the previous one expires.</p>
-            <p>The join is answered with a <code>phx_reply</code> whose <code>payload.status</code> is <code>"ok"</code> or <code>"error"</code>. Events then arrive as broadcast frames whose payload mirrors the database change.</p>
+            <p>The join is answered with a <code>phx_reply</code> whose <code>payload.status</code> is <code>"ok"</code> or <code>"error"</code>. Events then arrive as broadcast frames. Row events carry the database change; the other payloads are described above.</p>
             <ul>
               <li><strong><code>private: true</code> is mandatory.</strong> A public channel with the same name joins happily and never receives anything.</li>
               <li><strong>The join is refused</strong> (a <code>phx_reply</code> with <code>"status": "error"</code>) when your app lacks the scope, the user is not in that conversation, the topic belongs to someone else, or the user disconnected your app. Treat it like <code>PT403</code> / <code>PT401</code> on the API: do not retry in a loop.</li>
-              <li><code>record</code> and <code>old_record</code> are the raw table rows, not the API objects, and their columns are not part of the API contract. The robust pattern is to treat an event as a signal and re-fetch through the API: <code>messages.list</code> with <code>changed_since</code>, <code>conversations.list</code> with <code>updated_after</code>, <code>notifications.list</code>, <code>friends.list</code> / <code>friends.requests_list</code>, <code>tokens.get</code>, <code>encounters.list</code> with <code>updated_after</code>.</li>
+              <li><code>record</code> and <code>old_record</code> are the raw table rows, not the API objects, and their columns are not part of the API contract. The robust pattern is to treat an event as a signal and re-fetch through the API: <code>messages.list</code> with <code>changed_since</code>, <code>conversations.list</code> with <code>updated_after</code>, <code>notifications.list</code> with <code>updated_after</code>, <code>friends.list</code> / <code>friends.requests_list</code>, <code>tokens.get</code>, <code>encounters.list</code> with <code>updated_after</code>.</li>
               <li>Send a heartbeat every 30 seconds or the server drops the socket. Access tokens last one hour: push the refreshed token with the <code>access_token</code> message, otherwise the channel closes when the old one expires.</li>
               <li>Realtime does not count against the request budget, but it is a shared resource. Subscribe to the conversation on screen plus the user's <code>notifications:</code> topic, not to every conversation in the list; leave channels you no longer show.</li>
               <li>Presence needs <code>presence:read</code>, and <code>presence:write</code> to appear online. The <code>app_updates</code> topic stays first-party, and connected apps cannot send Broadcast messages of their own.</li>
@@ -757,7 +778,8 @@
             <h3>Sending images</h3>
             <p>Upload the file first, then send the message that references it. Both steps use the same token and need <code>messages:write</code>. Upload with <code>POST /storage/v1/object/message-media/&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;</code> and the image's <code>Content-Type</code>, then call <code>messages.send</code> with a <code>client_operation_id</code> and <code>attachment: { path, mime_type }</code>.</p>
             <ul>
-              <li>The path is exactly <code>&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;</code>: the connected user's id (<code>user_id</code> from <code>session.get</code>), a conversation they are an active member of, and a file name of 1…128 characters made of letters, digits, <code>.</code>, <code>_</code> and <code>-</code> that starts with a letter or digit. Use a fresh UUID as the name: an app can neither overwrite nor delete uploads, so a reused name fails.</li>
+              <li>The path is exactly <code>&lt;user id&gt;/&lt;conversation id&gt;/&lt;file name&gt;</code>: the connected user's id (<code>user_id</code> from <code>session.get</code>), a conversation they are an active member of, and a file name of 1…128 characters made of letters, digits, <code>.</code>, <code>_</code> and <code>-</code> that starts with a letter or digit. Use a fresh UUID per message as the name, and keep the same path on retries.</li>
+              <li>An app can neither overwrite nor delete uploads. Uploading to the same name again gets a 409 from Storage (the HTTP status, or <code>"statusCode": "409"</code> in a 400 body): the file is already there. Continue to <code>messages.send</code> with the same <code>client_operation_id</code>.</li>
               <li><code>image/jpeg</code>, <code>image/png</code>, <code>image/webp</code> and <code>image/gif</code> up to 10 MiB. Storage refuses other types and larger files; <code>messages.send</code> refuses a <code>mime_type</code> outside that list with <code>PT400 UNSUPPORTED_MEDIA</code>.</li>
               <li>The upload is refused (a 400 or 403 from Storage) for another user's folder, for a conversation the user is not in, without <code>messages:write</code>, and after the user disconnects your app. <code>messages.send</code> double-checks the path (<code>PT400 INVALID_ATTACHMENT_PATH</code>) and that the file exists (<code>PT404 ATTACHMENT_NOT_FOUND</code>).</li>
               <li>Omit <code>body</code> for an image-only message; it is stored as <code>"📷"</code>, which is what PocketPass itself sends. A caption of 1…4000 characters is kept as the body.</li>
@@ -782,12 +804,13 @@
             <h2 id="idempotency">Idempotency</h2>
             <p class="section-examples"><a href="#example-boards">Kotlin &amp; JavaScript examples →</a></p>
             <p>Every Boards mutation, artwork upload, <code>blocks.set</code> and <code>privacy.set</code> uses the field <code>operation_id</code>, with the same once-per-action retry rules below. Existing messaging/friendship endpoints retain <code>client_operation_id</code>.</p>
-            <p>Networks drop responses. To make retries safe, every endpoint that changes something a second time would duplicate requires a <code>client_operation_id</code>: <code>messages.send</code>, <code>conversations.open</code>, <code>friends.request_send</code>, <code>friends.request_respond</code> and <code>friends.remove</code>.</p>
+            <p>Networks drop responses. To make retries safe, these endpoints require a <code>client_operation_id</code>: <code>messages.send</code>, <code>conversations.open</code>, <code>conversations.create</code>, <code>conversations.add_members</code>, <code>conversations.remove_member</code>, <code>conversations.leave</code>, <code>conversations.rename</code>, <code>friends.request_send</code>, <code>friends.request_respond</code> and <code>friends.remove</code>.</p>
             <ul>
               <li>Generate a fresh UUID <strong>once per user action</strong> — when the user presses "Send", not when you build the HTTP request.</li>
               <li>Keep it with the pending action and <strong>reuse the same id on every retry</strong> of that action, including after a restart if you queue outgoing messages.</li>
-              <li>A retry with the same id and the same content returns the same result: for <code>messages.send</code> the same message (its <code>id</code> is derived from the operation id, so there is never a duplicate row); for <code>conversations.open</code> the same conversation; for the friend endpoints the same request or the same <code>removed</code> answer.</li>
-              <li>The same id with <strong>different</strong> content — another body, another conversation — is refused with <code>PT409 DUPLICATE_OPERATION_ID</code>. That is a bug in the caller, not something to retry.</li>
+              <li>A retry with the same id and the same content returns the same result: for <code>conversations.open</code> and <code>conversations.create</code> the same conversation; for the friend endpoints the same request or the same <code>removed</code> answer.</li>
+              <li>For <code>messages.send</code> a retry returns the message as it is now, also after it was edited or deleted, after the sender left or was removed from the chat, and after a block. Its <code>id</code> is derived from the operation id, so there is never a duplicate row.</li>
+              <li>The same id with <strong>different</strong> content is refused with <code>PT409 DUPLICATE_OPERATION_ID</code>. For <code>messages.send</code> that means the id was already used for a message with another conversation, reply target or content that has never been edited or deleted. That is a bug in the caller, not something to retry.</li>
             </ul>
             <p>Retry on network failures and on <code>PT500</code>, <code>PT429</code> (after <code>Retry-After</code>) and HTTP 502/503/504. Do not retry <code>PT400</code>, <code>PT401</code>, <code>PT403</code>, <code>PT404</code> or <code>PT409</code> — the answer will not change.</p>
           </section>
@@ -799,7 +822,7 @@
             <ul>
               <li>Recording and confirming encounters (listing them is <code>encounters.list</code>).</li>
               <li>Changing the avatar and uploads other than message media or board branding.</li>
-              <li>Account settings other than the documented Block Messages and board preferences; email and Discord links; deleting the account; shop purchases other than board stationery; buying puzzle pieces; granting achievements; and Piip editing. Balances and Puzzle Swap progress remain readable through <code>tokens.get</code> and <code>puzzles.get</code>.</li>
+              <li>Account settings other than the documented Block Messages, Block Invites and board preferences; email and Discord links; deleting the account; shop purchases other than board stationery; buying puzzle pieces; granting achievements; and Piip editing. Balances and Puzzle Swap progress remain readable through <code>tokens.get</code> and <code>puzzles.get</code>.</li>
               <li>The <code>app_updates</code> Realtime topic, and sending Broadcast messages.</li>
               <li>The standard Supabase surface: tables under <code>/rest/v1/</code>, first-party RPCs, GraphQL, <code>/auth/v1/user</code>. All of it answers <code>403</code> or <code>404</code> to an app token by design.</li>
             </ul>
@@ -874,7 +897,7 @@ fun form(values: Map&lt;String, String&gt;): String = values.entries.joinToStrin
 }
 val session = api("session.get")
 // Use session.getJSONArray("scopes") to decide which features to show.</code></pre></details></details>
-<details class="api-example" id="example-oauth"><summary>OAuth PKCE: connect, verify the callback, exchange code</summary><p>Use a registered redirect URI exactly. Persist state, verifier and redirect URI through the round trip, validate state before exchanging, and clear the pending attempt after success. On Android, open the authorization URL in the system browser and handle your registered app link/custom scheme; localhost is for desktop loopback listeners. Confidential client secrets belong only on a server. The preserved Node example shows a loopback listener.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const clientId = "YOUR_CLIENT_ID";
+<details class="api-example" id="example-oauth"><summary>OAuth PKCE: connect, verify the callback, exchange code</summary><p>Use a registered redirect URI exactly. Persist state, verifier and redirect URI through the round trip, validate state before exchanging, and clear the pending attempt after success. On Android, open the authorization URL in the system browser and handle your registered app link/custom scheme; localhost is for desktop loopback listeners. Confidential client secrets belong only on a server.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const clientId = "YOUR_CLIENT_ID";
 const redirectUri = "https://your-app.example/callback";
 const base64url = bytes =&gt; btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
@@ -944,27 +967,41 @@ currentAccessToken = refreshed.getString("access_token")
 // When the user explicitly disconnects:
 api("session.revoke")
 // Clear local tokens and leave all Realtime channels.</code></pre></details></details>
-<details class="api-example" id="example-pagination"><summary>Pagination and incremental sync</summary><p>Treat cursors as opaque. Use the documented timestamp filters for incremental messages/conversations/encounters. Realtime is an invalidation signal: refetch through the scoped API and discard private caches when access is lost.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>let cursor = null;
-do {
-  const page = await api("conversations.list", { limit: 50, ...(cursor ? { cursor } : {}) });
-  for (const conversation of page.items) renderConversation(conversation);
-  cursor = page.next_cursor;
-} while (cursor);
+<details class="api-example" id="example-pagination"><summary>Pagination and incremental sync</summary><p>Treat cursors as opaque. Use the documented timestamp filters for incremental messages, conversations, notifications and encounters. After a full walk, run a catch-up pass with updated_after set to one minute before the walk started, and de-duplicate by id. Realtime is an invalidation signal: refetch through the scoped API and discard private caches when access is lost.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>async function walk(endpoint, filters, byId) {
+  let cursor = null;
+  do {
+    const page = await api(endpoint, { ...filters, limit: 50, ...(cursor ? { cursor } : {}) });
+    for (const item of page.items) byId.set(item.id, item);
+    cursor = page.next_cursor;
+  } while (cursor);
+}
+const catchUpFrom = new Date(Date.now() - 60000).toISOString();
+const conversations = new Map();
+await walk("conversations.list", {}, conversations);
+await walk("conversations.list", { updated_after: catchUpFrom }, conversations);
+for (const conversation of conversations.values()) renderConversation(conversation);
 // For message edits/deletions since your saved watermark:
 const changes = await api("messages.list", { conversation_id: conversationId, changed_since: savedWatermark });
-// Continue through changes.next_cursor too; apply deleted_at markers to your cache.</code></pre></details><details class="language-example"><summary>Kotlin (Android / JVM)</summary><pre class="code-block"><code>var cursor: String? = null
-do {
-    val body = JSONObject().put("limit", 50)
-    cursor?.let { body.put("cursor", it) }
-    val page = api("conversations.list", body)
-    val items = page.getJSONArray("items")
-    for (i in 0 until items.length()) renderConversation(items.getJSONObject(i))
-    cursor = if (page.isNull("next_cursor")) null else page.getString("next_cursor")
-} while (cursor != null)
+// Continue through changes.next_cursor too; apply deleted_at markers to your cache.</code></pre></details><details class="language-example"><summary>Kotlin (Android / JVM)</summary><pre class="code-block"><code>fun walk(endpoint: String, filters: JSONObject, byId: MutableMap&lt;String, JSONObject&gt;) {
+    var cursor: String? = null
+    do {
+        val body = JSONObject(filters.toString()).put("limit", 50)
+        cursor?.let { body.put("cursor", it) }
+        val page = api(endpoint, body)
+        val items = page.getJSONArray("items")
+        for (i in 0 until items.length()) items.getJSONObject(i).let { byId[it.getString("id")] = it }
+        cursor = if (page.isNull("next_cursor")) null else page.getString("next_cursor")
+    } while (cursor != null)
+}
+val catchUpFrom = java.time.Instant.now().minusSeconds(60).toString()
+val conversations = LinkedHashMap&lt;String, JSONObject&gt;()
+walk("conversations.list", JSONObject(), conversations)
+walk("conversations.list", JSONObject().put("updated_after", catchUpFrom), conversations)
+conversations.values.forEach { renderConversation(it) }
 val changes = api("messages.list", JSONObject()
     .put("conversation_id", conversationId).put("changed_since", savedWatermark))
 // Continue through next_cursor too; apply deleted_at markers to your cache.</code></pre></details></details>
-<details class="api-example" id="example-presence"><summary>Realtime presence and sorted friend topics</summary><p>These snippets construct the raw Phoenix join for your WebSocket client; they are not complete transport implementations. Use the documented WebSocket URL and a unique ref for each frame, maintain Phoenix heartbeats, handle presence_state/presence_diff, and rejoin after reconnecting. Set presence.enabled explicitly. Never log the access token. The original SDK example is preserved below.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const [low, high] = [myUserId.toLowerCase(), friendUserId.toLowerCase()].sort();
+<details class="api-example" id="example-presence"><summary>Realtime presence and sorted friend topics</summary><p>These snippets construct the raw Phoenix join for your WebSocket client; they are not complete transport implementations. Use the documented WebSocket URL and a unique ref for each frame, maintain Phoenix heartbeats, handle presence_state/presence_diff, and rejoin after reconnecting. Set presence.enabled explicitly. Never log the access token.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const [low, high] = [myUserId.toLowerCase(), friendUserId.toLowerCase()].sort();
 const topic = `friend-presence:${low}:${high}`;
 const join = {
   topic: `realtime:${topic}`, event: "phx_join", ref: "1", join_ref: "1",
@@ -1033,16 +1070,16 @@ val reaction = JSONObject().put("board_id", boardId).put("post_id", published.ge
     .put("yeah", true).put("operation_id", java.util.UUID.randomUUID().toString())
 // Send only when the user presses Yeah:
 api("boards.react", reaction)</code></pre></details></details>
-<details class="api-example" id="example-blocking"><summary>Block accounts and block incoming messages</summary><p>These are separate settings. Account blocking removes the friendship; unblocking does not restore it. Block Messages prevents incoming DMs. Friend requests, board invitations and group additions follow Block Invites, which only the PocketPass app can change. Neither setting leaves existing groups or boards.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const block = { user_id: selectedUserId, blocked: true, operation_id: crypto.randomUUID() };
+<details class="api-example" id="example-blocking"><summary>Block accounts and block incoming messages</summary><p>These are separate settings. Account blocking removes the friendship; unblocking does not restore it. Block Messages blocks new direct messages. Block Invites blocks friend requests, group additions and Board invitations. privacy.set changes either or both. Neither setting removes the user from existing groups or boards.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const block = { user_id: selectedUserId, blocked: true, operation_id: crypto.randomUUID() };
 await api("blocks.set", block); // Requires blocks:write.
-const privacy = { block_messages: true, operation_id: crypto.randomUUID() };
+const privacy = { block_messages: true, block_invites: true, operation_id: crypto.randomUUID() };
 await api("privacy.set", privacy); // Requires privacy:write.</code></pre></details><details class="language-example"><summary>Kotlin (Android / JVM)</summary><pre class="code-block"><code>val block = JSONObject().put("user_id", selectedUserId).put("blocked", true)
     .put("operation_id", java.util.UUID.randomUUID().toString())
 api("blocks.set", block) // Requires blocks:write.
-val privacy = JSONObject().put("block_messages", true)
+val privacy = JSONObject().put("block_messages", true).put("block_invites", true)
     .put("operation_id", java.util.UUID.randomUUID().toString())
 api("privacy.set", privacy) // Requires privacy:write.</code></pre></details></details>
-<details class="api-example" id="example-media"><summary>Download, sign and upload message media</summary><p>Use the existing media limits and allowed MIME types from the Media reference. Upload bytes first, then send the message with its attachment path. On retries reuse the same path and operation ID; do not blindly overwrite a conflicting object. Avatar signing uses profile:read; message media uses the relevant messaging scope.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>// A short-lived avatar URL:
+<details class="api-example" id="example-media"><summary>Download, sign and upload message media</summary><p>Use the existing media limits and allowed MIME types from the Media reference. Upload bytes first, then send the message with its attachment path. On a retry, upload to the same path again. A 409 from Storage means the file is already there, so continue to messages.send with the same client_operation_id. Avatar signing uses profile:read; message media uses the relevant messaging scope.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>// A short-lived avatar URL:
 const signed = await requestJson("https://api.pocketpass.xyz/storage/v1/object/sign/avatars",
   { paths: [avatarPath], expiresIn: 300 });
 // Render only the returned permitted URL; signed URLs expire.
@@ -1052,7 +1089,11 @@ const path = `${myUserId}/${conversationId}/${operationId}.png`;
 const upload = await fetch(`https://api.pocketpass.xyz/storage/v1/object/message-media/${path}`, {
   method: "POST", headers: { Authorization: `Bearer ${currentAccessToken}`, "Content-Type": "image/png" }, body: imageBlob
 });
-if (!upload.ok) throw new Error(`Upload failed: ${upload.status}`);
+if (!upload.ok) {
+  const failure = await upload.json().catch(() =&gt; ({}));
+  const alreadyUploaded = upload.status === 409 || failure.statusCode === "409";
+  if (!alreadyUploaded) throw new Error(`Upload failed: ${upload.status}`);
+}
 const pending = { conversation_id: conversationId, client_operation_id: operationId,
   attachment: { path, mime_type: "image/png" } };
 await api("messages.send", pending);</code></pre></details><details class="language-example"><summary>Kotlin (Android / JVM)</summary><pre class="code-block"><code>// Encode each path segment, retaining slash separators.
@@ -1070,7 +1111,11 @@ try {
     connection.setRequestProperty("Authorization", "Bearer $currentAccessToken")
     connection.setRequestProperty("Content-Type", "image/png")
     connection.outputStream.use { it.write(imageBytes) }
-    check(connection.responseCode in 200..299) { "Upload failed: ${connection.responseCode}" }
+    val status = connection.responseCode
+    val failure = if (status in 200..299) "" else connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+    val alreadyUploaded = status == 409 ||
+        runCatching { JSONObject(failure).optString("statusCode") == "409" }.getOrDefault(false)
+    check(status in 200..299 || alreadyUploaded) { "Upload failed: $status" }
 } finally { connection.disconnect() }
 val pending = JSONObject().put("conversation_id", conversationId).put("client_operation_id", operationId)
     .put("attachment", JSONObject().put("path", path).put("mime_type", "image/png"))
@@ -1562,6 +1607,7 @@ val result = api("privacy.get", request)
 // Render result in your app; handle ApiError without discarding pending work.</code></pre></details></details>
 <details class="api-example" id="example-privacy-set"><summary>privacy.set</summary><p>Scope: <code>privacy:write</code>. <a href="#blocking-api">Endpoint reference</a>.</p><details class="language-example"><summary>JavaScript</summary><pre class="code-block"><code>const request = {
   "block_messages": true,
+  "block_invites": true,
   "operation_id": "97000000-0000-4000-8000-000000000001"
 };
 // Generate once per user action; persist request before sending.
@@ -1570,6 +1616,7 @@ const result = await api("privacy.set", request);
 // Render result in your app; handle ApiError without discarding pending work.</code></pre></details><details class="language-example"><summary>Kotlin (Android / JVM)</summary><pre class="code-block"><code>val request = JSONObject("""
 {
   "block_messages": true,
+  "block_invites": true,
   "operation_id": "97000000-0000-4000-8000-000000000001"
 }
 """)

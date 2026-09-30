@@ -128,9 +128,11 @@
       logo.addEventListener("error", () => logo.replaceWith(fallback));
     }
     const website = httpsOnly(client.uri || (info && info.website));
+    const description = String((info && info.description) || "").trim();
     return el("div", { class: "app-identity" }, [
       logo,
       el("h1", { class: "auth-title app-name", text: name }),
+      description ? el("p", { class: "auth-copy app-description", text: description }) : null,
       website ? el("a", { class: "app-site", href: website, rel: "noopener noreferrer", target: "_blank", text: website }) : null,
     ]);
   };

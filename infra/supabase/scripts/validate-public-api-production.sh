@@ -318,10 +318,19 @@ if ((auth_only == 0)); then
       --data '{}' \
       "${API_URL}/v1/session.get"
   )"
-  if [[ "${status}" != 200 ]] && grep -q '"code"' "${body_file}"; then
-    pass "POST /v1/session.get without a token answers ${status} with a JSON error envelope"
+  if [[ "${status}" == 401 ]] && grep -q '"hint":"API_TOKEN_REQUIRED"' "${body_file}"; then
+    pass 'POST /v1/session.get without a token answers 401 API_TOKEN_REQUIRED'
   else
     fail "POST /v1/session.get without a token answered ${status}: $(body_excerpt)"
+  fi
+
+  status="$(
+    request --request POST       --header 'Content-Type: application/json'       --data '{}'       "${API_URL}/v1/session.nope"
+  )"
+  if [[ "${status}" == 404 ]] && grep -q '"hint":"UNKNOWN_ENDPOINT"' "${body_file}"; then
+    pass 'POST /v1/session.nope answers 404 UNKNOWN_ENDPOINT'
+  else
+    fail "POST /v1/session.nope answered ${status}: $(body_excerpt)"
   fi
 
   status="$(

@@ -1,4 +1,4 @@
-import json, re, html
+import json, re, html, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -8,7 +8,7 @@ CORE = json.loads((ROOT / 'public-api/core-examples.json').read_text(encoding='u
 WORKFLOWS = json.loads((ROOT / 'public-api/workflow-examples.json').read_text(encoding='utf-8'))
 U = '97000000-0000-4000-8000-000000000001'
 DRAWING = {'version':1,'width':800,'height':600,'strokes':[{'pen':'pixel','color':'#222222','size':4,'points':[[10,10],[40,30]]}]}
-VALUES = {'accept':True,'approve':True,'blocked':True,'block_messages':True,'enabled':True,'archived':True,'moderator':True,'spoiler':True,'yeah':True,'name':'Handheld chat','title':'Friends','body':'Hello everyone!','visibility':'public','kind':'icon','reason':'Explain the reason for this action.','code':'12345678','user_ids':[U],'member_ids':[U],'drawing':DRAWING,'payload':{'body':'My unfinished note'},'stationery_id':'plain'}
+VALUES = {'accept':True,'approve':True,'blocked':True,'block_messages':True,'block_invites':True,'enabled':True,'archived':True,'moderator':True,'spoiler':True,'yeah':True,'name':'Handheld chat','title':'Friends','body':'Hello everyone!','visibility':'public','kind':'icon','reason':'Explain the reason for this action.','code':'12345678','user_ids':[U],'member_ids':[U],'drawing':DRAWING,'payload':{'body':'My unfinished note'},'stationery_id':'plain'}
 EXTRAS = {'messages.send':{'body':'Hello!'},'boards.publish':{'body':'Hello everyone!'},'boards.preferences':{'muted':True},'boards.update_board':{'description':'A place to share handheld games.'},'boards.list':{'scope':'explore','limit':30},'boards.feed':{'sort':'newest','limit':30},'boards.restrict':{'kind':'mute'},'boards.join_code':{'code':'REPLACE_WITH_INVITATION_CODE'}}
 def sample(endpoint,fields):
     result={}
@@ -46,7 +46,8 @@ for name,section,scope,fields in entries:
     kt+=f'val result = api("{name}", request)\n// Render result in your app; handle ApiError without discarding pending work.'
     parts.append(detail('example-'+name.replace('.','-'),name,f'<p>Scope: <code>{esc(scope)}</code>. <a href="#{section}">Endpoint reference</a>.</p>'+pair(js,kt)))
 parts.append('</details></section>')
-s=DOCS.read_text(encoding='utf-8')
+original=DOCS.read_bytes().decode('utf-8')
+s=original.replace('\r\n','\n')
 a='<!-- api-examples:start -->';b='<!-- api-examples:end -->'
 s=s[:s.index(a)+len(a)]+'\n'+'\n'.join(parts)+'\n          '+s[s.index(b):]
 for name,section,scope,fields in entries:
@@ -58,5 +59,9 @@ for section,target in links.items():
     marker=f'<p class="section-examples"><a href="#example-{target}">Kotlin &amp; JavaScript examples →</a></p>'
     pat=r'(<h2 id="'+section+r'">.*?</h2>)(?!\s*<p class="section-examples">)'
     s=re.sub(pat,lambda m:m[1]+'\n            '+marker,s)
-DOCS.write_text(s,encoding='utf-8',newline='\n')
-print(f'Generated {len(entries)} endpoint pairs and {len(WORKFLOWS)} workflow pairs.')
+if '--check' in sys.argv[1:]:
+    if s!=original:sys.exit('developer/docs.html is out of date. Run public-api/build-examples.py to regenerate the examples.')
+    print('developer/docs.html examples are up to date.')
+else:
+    DOCS.write_text(s,encoding='utf-8',newline='\n')
+    print(f'Generated {len(entries)} endpoint pairs and {len(WORKFLOWS)} workflow pairs.')

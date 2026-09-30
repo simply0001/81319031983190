@@ -340,6 +340,23 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .hint { display: block; margin-top: 0.4rem; font-size: 0.85rem; color: var(--teal-soft); font-weight: 600; }
 .badge-you { border-color: var(--teal-border); background: var(--teal-pale); color: var(--teal); }
 .actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.ban-form select, .ban-form textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 24px;
+  border: 5px solid var(--teal-border-light);
+  background: var(--white);
+  color: var(--teal);
+  font: inherit;
+  font-weight: 600;
+  font-size: 1.05rem;
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.06);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.ban-form textarea { resize: vertical; min-height: 6rem; }
+.ban-form select:focus, .ban-form textarea:focus { outline: none; border-color: var(--green-border); box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.06), 0 0 0 4px rgba(85, 194, 75, 0.25); }
+.ban-form .field { align-content: start; }
+.ban-form .hint { margin-top: 0; }
 
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(14px) scale(0.985); }

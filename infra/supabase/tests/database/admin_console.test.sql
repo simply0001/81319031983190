@@ -127,7 +127,7 @@ select extensions.is(
 
 select extensions.is(
   jsonb_array_length(public.admin_whoami() -> 'permissions'),
-  8,
+  19,
   'whoami lists the effective permissions'
 );
 

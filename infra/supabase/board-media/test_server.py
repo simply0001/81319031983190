@@ -134,5 +134,29 @@ class HttpTests(unittest.TestCase):
             caught.exception.close()
             pixels.assert_not_called()
 
+    def test_api_missing_token_and_fields_use_documented_codes(self):
+        valid={'board_id':'board','kind':'icon','operation_id':'operation','image':base64.b64encode(b'pixels').decode()}
+        with patch.object(server,'rpc') as rpc, patch.object(server,'process_image') as pixels:
+            status,result=self.post(valid,None,'/v1/boards.artwork_upload')
+            self.assertEqual((status,result['hint']),(401,'API_TOKEN_REQUIRED'))
+            self.assertEqual(self.post(valid)[1]['hint'],'TOKEN_REQUIRED')
+            status,result=self.post({k:v for k,v in valid.items() if k!='image'},'oauth','/v1/boards.artwork_upload')
+            self.assertEqual((status,result['hint']),(400,'MISSING_FIELD'))
+            rpc.assert_not_called();pixels.assert_not_called()
+
+    def test_api_commit_errors_use_the_envelope(self):
+        source=io.BytesIO();Image.new('RGB',(8,8),'red').save(source,format='PNG')
+        body={'board_id':'board','kind':'icon','operation_id':'operation','image':base64.b64encode(source.getvalue()).decode()}
+        for status,raw,expected in (
+            (403,b'{"code":"42501","details":null,"hint":null,"message":"Upload unavailable"}',(403,{'code':'PT403','message':'Upload unavailable','hint':'BOARD_ACCESS_DENIED'})),
+            (400,b'{"code":"22023","details":null,"hint":null,"message":"Upload expired. Choose the image again."}',(400,{'code':'PT400','message':'Upload expired. Choose the image again.','hint':'INVALID_FIELD'})),
+            (500,b'{"code":"XX000","message":"boom"}',(503,{'code':'PT503','message':'Image upload could not be confirmed. Please retry.','hint':'MEDIA_UNCONFIRMED'})),
+        ):
+            def rpc(name, payload, authorization):
+                if name=='api_v1_boards_prepare_branding': return {'ticket':'ticket'}
+                raise HTTPError('test',status,'Error',{},io.BytesIO(raw))
+            with patch.object(server,'rpc',side_effect=rpc), patch.dict(server.os.environ,{'SERVICE_ROLE_KEY':'test-service'}):
+                self.assertEqual(self.post(body,'oauth','/v1/boards.artwork_upload'),expected)
+
 
 if __name__ == '__main__': unittest.main()

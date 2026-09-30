@@ -35,6 +35,7 @@
     ["admins", "Manage admins", "Add, edit and remove other admins"],
     ["apps", "Developer apps", "Review and suspend third-party apps"],
     ["supporters", "Supporters", "Ko-fi payments and supporter status"],
+    ["bans", "Bans", "Ban and unban accounts"],
     ["board_requests", "Board requests", "Approve or reject community proposals"],
     ["boards", "Board management", "Create and configure communities"],
     ["board_content", "Board content and reports", "Review content, resolve reports and moderate notes"],
@@ -93,6 +94,8 @@
     apps: { query: "", offset: 0, total: 0, rows: [] },
     limitRequests: { status: "pending", rows: [] },
     supporters: { filter: "unmatched", events: [], rows: [] },
+    bans: { status: "active", offset: 0, total: 0, rows: [] },
+    blockedSignups: { offset: 0, total: 0, rows: [] },
     lastLoginEmail: "",
   };
 
@@ -246,7 +249,7 @@
     if (error.code === "42501") {
       const match = /^Permission required: (\w+)$/.exec(error.message || "");
       if (match) return `You need the "${PERMISSION_LABELS[match[1]] || match[1]}" permission.`;
-      if (/^Owners are managed/.test(error.message || "")) return error.message;
+      if (/^(Owners are managed|Admins and owners cannot be banned|You cannot ban yourself)/.test(error.message || "")) return error.message;
       return "This account is not an admin.";
     }
     return error.message;
@@ -303,6 +306,10 @@
         return "Unlinked Ko-fi payer from account";
       case "set_supporter":
         return `Supporter status ${fmtDate(payload.old)} → ${fmtDate(payload.new)} — ${payload.reason || ""}`;
+      case "ban_account":
+        return `Banned ${payload.ends_at ? `until ${fmtDate(payload.ends_at)}` : "permanently"}${payload.reason ? ` — ${payload.reason}` : ""}`;
+      case "lift_ban":
+        return `Unbanned${payload.note ? ` — ${payload.note}` : ""}`;
       default:
         return entry.action;
     }
@@ -329,10 +336,10 @@
   const can = (permission) => Boolean(
     state.me && (state.me.is_owner || (Array.isArray(state.me.permissions) && state.me.permissions.includes(permission))),
   );
-  const VIEW_PERMISSION = { users: "users", user: "users", audit: "audit", admins: "admins", apps: "apps", supporters: "supporters" };
+  const VIEW_PERMISSION = { users: "users", user: "users", audit: "audit", admins: "admins", apps: "apps", supporters: "supporters", bans: "bans" };
   const viewAllowed = (name) => name === "boards" ? PERMISSIONS.some(([key]) => (key === "boards" || key.startsWith("board_")) && can(key)) : !VIEW_PERMISSION[name] || can(VIEW_PERMISSION[name]);
 
-  const views = ["login", "forbidden", "overview", "users", "user", "audit", "admins", "apps", "supporters", "boards"];
+  const views = ["login", "forbidden", "overview", "users", "user", "audit", "admins", "apps", "supporters", "bans", "boards"];
   const showView = (name) => {
     for (const view of views) $(`view-${view}`).hidden = view !== name;
     const authScreen = name === "login" || name === "forbidden";
@@ -460,9 +467,8 @@
     ["user_per_minute", "per user / min"],
     ["app_per_minute", "per app / min"],
     ["app_per_second", "per app / s"],
-    ["realtime_connections", "Realtime"],
   ];
-  const limitValue = (values, key) => (values && values[key] !== null && values[key] !== undefined ? fmtNumber(values[key]) : (key === "realtime_connections" ? "shared" : "—"));
+  const limitValue = (values, key) => (values && values[key] !== null && values[key] !== undefined ? fmtNumber(values[key]) : "—");
   const limitSummary = (values) => (values ? LIMIT_FIELDS.map(([key, label]) => `${limitValue(values, key)} ${label}`).join(" · ") : "—");
   const limitLines = (values) => el("div", {}, LIMIT_FIELDS.map(([key, label]) => el("div", { text: `${limitValue(values, key)} ${label}` })));
 
@@ -709,7 +715,148 @@
     ], rows, { empty: "No supporters yet." }));
   };
 
-  const renderUser = (data) => {
+  const SIGNUP_LABELS = { email: "Email", discord: "Discord", username: "Username", network: "Network" };
+
+  const showPage = (prefix, page, count) => {
+    const start = page.total ? page.offset + 1 : 0;
+    const end = Math.min(page.offset + count, page.total);
+    $(`${prefix}-page`).textContent = `${start}–${end} of ${page.total}`;
+    $(`${prefix}-prev`).disabled = page.offset === 0;
+    $(`${prefix}-next`).disabled = page.offset + PAGE_SIZE >= page.total;
+  };
+
+  const accountCell = (row) => el("div", {}, [
+    el("div", {}, [el("strong", {}, userLink(row.user_id, displayName(row)))]),
+    el("div", { class: "muted", text: row.username ? `@${row.username}` : "" }),
+  ]);
+
+  const banEnds = (row) => {
+    if (row.lifted_at) {
+      const liftedBy = row.lifted_by_name || (row.lifted_by ? shortId(row.lifted_by) : "");
+      return el("div", {}, [
+        el("span", { class: "badge badge-good", text: "lifted" }),
+        el("div", { class: "muted", text: `Lifted ${fmtDate(row.lifted_at)}${liftedBy ? ` by ${liftedBy}` : ""}` }),
+        row.lift_note ? el("div", { class: "muted", text: row.lift_note }) : null,
+      ]);
+    }
+    return el("div", {}, [
+      el("span", { class: `badge ${row.active ? "badge-bad" : ""}`, text: row.active ? "active" : "ended" }),
+      el("div", { class: "muted", text: row.ends_at ? fmtDate(row.ends_at) : "Permanent" }),
+    ]);
+  };
+
+  const liftBan = (row, label, reload) => run(async () => {
+    const note = window.prompt(`Unban ${label}? Add a note (optional):`, "");
+    if (note === null) return;
+    if (note.trim().length > 300) throw new Error("The note must be 300 characters or fewer.");
+    await rpc("admin_lift_ban", { p_ban_id: row.id, p_note: note.trim() || null });
+    notify(`${label} unbanned.`);
+    await reload();
+  });
+
+  const banColumns = (withUser, reload) => {
+    const columns = withUser ? [{ label: "User", render: accountCell }] : [];
+    columns.push(
+      { label: "Reason", key: "reason" },
+      { label: "Staff note", render: (row) => row.staff_note || null },
+      { label: "Banned by", render: (row) => row.banned_by_name || shortId(row.banned_by) },
+      { label: "Banned", render: (row) => fmtDate(row.created_at) },
+      { label: "Ends", render: banEnds },
+    );
+    if (reload) {
+      columns.push({ label: "", render: (row) => (row.active ? el("div", { class: "actions" }, [
+        el("button", { type: "button", class: "btn btn-small btn-red", text: "Unban", onclick: () => liftBan(row, displayName(row), reload) }),
+      ]) : "") });
+    }
+    return columns;
+  };
+
+  const loadBans = async () => {
+    const filter = state.bans;
+    const rows = await rpc("admin_list_bans", { p_status: filter.status, p_limit: PAGE_SIZE, p_offset: filter.offset });
+    if (!rows.length && filter.offset > 0) {
+      filter.offset = Math.max(0, filter.offset - PAGE_SIZE);
+      return loadBans();
+    }
+    filter.rows = rows;
+    filter.total = rows.length ? Number(rows[0].total_count) : 0;
+    for (const button of document.querySelectorAll("#bans-filter button")) {
+      button.className = `btn btn-small ${button.dataset.status === filter.status ? "btn-green" : "btn-grey"}`;
+    }
+    const wrap = $("bans-table");
+    clear(wrap);
+    wrap.append(table(banColumns(true, loadBans), rows, { empty: filter.status === "active" ? "No active bans." : "No bans yet." }));
+    showPage("bans", filter, rows.length);
+  };
+
+  const loadBlockedSignups = async () => {
+    const page = state.blockedSignups;
+    const rows = await rpc("admin_list_blocked_signups", { p_limit: PAGE_SIZE, p_offset: page.offset });
+    page.rows = rows;
+    page.total = rows.length ? Number(rows[0].total_count) : 0;
+    const wrap = $("blocked-signups-table");
+    clear(wrap);
+    wrap.append(table([
+      { label: "Time", render: (row) => fmtDate(row.created_at) },
+      { label: "Method", render: (row) => SIGNUP_LABELS[row.method] || row.method },
+      { label: "Matched on", render: (row) => SIGNUP_LABELS[row.kind] || row.kind },
+      { label: "Banned account", render: (row) => (row.user_id ? accountCell(row) : null) },
+    ], rows, { empty: "No blocked sign-ups." }));
+    showPage("blocked-signups", page, rows.length);
+  };
+
+  const renderUserBans = (fragment, data, bans, name) => {
+    const panel = fragment.querySelector(".ban-panel");
+    const historyPanel = fragment.querySelector(".ban-history-panel");
+    if (!bans) {
+      panel.remove();
+      historyPanel.remove();
+      return;
+    }
+    const activeBan = bans.find((ban) => ban.active);
+    const current = panel.querySelector(".ban-current");
+    const form = panel.querySelector(".ban-form");
+    panel.querySelector(".ban-status").textContent = activeBan ? "Banned" : "Not banned";
+    if (activeBan) {
+      form.remove();
+      const facts = current.querySelector(".ban-facts");
+      const fact = (label, value) => facts.append(el("dt", { text: label }), el("dd", { text: value || "—" }));
+      fact("Reason", activeBan.reason);
+      fact("Staff note", activeBan.staff_note);
+      fact("Banned by", activeBan.banned_by_name || shortId(activeBan.banned_by));
+      fact("Banned", fmtDate(activeBan.created_at));
+      fact("Ends", activeBan.ends_at ? fmtDate(activeBan.ends_at) : "Permanent");
+      current.querySelector(".ban-lift").addEventListener("click", () => liftBan(activeBan, name, loadUser));
+    } else if (data.is_admin) {
+      current.remove();
+      form.remove();
+      panel.append(el("span", { class: "hint", text: "Admins can't be banned." }));
+    } else {
+      current.remove();
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        run(async () => {
+          const reason = form.elements.reason.value.trim();
+          const note = form.elements.note.value.trim();
+          const duration = form.elements.duration;
+          if (!reason) throw new Error("Enter a reason.");
+          const length = duration.value === "permanent" ? "permanently" : `for ${duration.selectedOptions[0].textContent}`;
+          if (!confirmAction(`Ban ${name} ${length}? They will be signed out of everything and hidden from other players.`)) return;
+          await rpc("admin_ban_account", {
+            p_user_id: data.user_id,
+            p_reason: reason,
+            p_staff_note: note || null,
+            p_duration: duration.value,
+          });
+          notify("Account banned.");
+          await loadUser();
+        });
+      });
+    }
+    historyPanel.querySelector(".ban-history").append(table(banColumns(false), bans, { empty: "No bans." }));
+  };
+
+  const renderUser = (data, bans) => {
     const root = $("user-detail");
     clear(root);
     const fragment = $("tpl-user-detail").content.cloneNode(true);
@@ -721,6 +868,7 @@
     if (data.is_admin) badges.append(el("span", { class: "badge badge-admin", text: "admin" }));
     if (profile.legacy_account) badges.append(el("span", { class: "badge badge-warn", text: "legacy account" }));
     if (!data.profile) badges.append(el("span", { class: "badge", text: "auth user without profile" }));
+    if (bans && bans.some((ban) => ban.active)) badges.append(el("span", { class: "badge badge-bad", text: "banned" }));
 
     const facts = fragment.querySelector(".user-facts");
     const fact = (label, value) => {
@@ -844,6 +992,7 @@
       }) },
     ], data.achievements || []));
 
+    renderUserBans(fragment, data, bans, name);
     fragment.querySelector(".user-audit").append(table(auditColumns(false), data.audit || [], { empty: "No admin actions on this account yet." }));
     root.append(fragment);
   };
@@ -934,9 +1083,12 @@
 
   const loadUser = async () => {
     if (!state.user.id) return;
-    const data = await rpc("admin_get_user", { p_user_id: state.user.id });
+    const [data, bans] = await Promise.all([
+      rpc("admin_get_user", { p_user_id: state.user.id }),
+      can("bans") ? rpc("admin_get_user_bans", { p_user_id: state.user.id }) : Promise.resolve(null),
+    ]);
     state.user.data = data;
-    renderUser(data);
+    renderUser(data, bans);
   };
 
   let pending = 0;
@@ -968,7 +1120,7 @@
     const hash = location.hash.replace(/^#/, "");
     const match = /^user\/([0-9a-f-]{36})$/i.exec(hash);
     if (match) return { view: "user", id: match[1] };
-    if (["overview", "users", "audit", "admins", "apps", "supporters", "boards"].includes(hash)) return { view: hash };
+    if (["overview", "users", "audit", "admins", "apps", "supporters", "bans", "boards"].includes(hash)) return { view: hash };
     return { view: "overview" };
   };
 
@@ -1005,6 +1157,10 @@
       else if (route.view === "supporters") {
         await loadKofiEvents();
         await loadSupporters();
+      }
+      else if (route.view === "bans") {
+        await loadBans();
+        await loadBlockedSignups();
       }
       else if (route.view === "boards") {
         await window.PocketPassBoardsAdmin.render({root: $("boards-console"), rpc, can, accountId: state.me.user_id, upload: async args => {
@@ -1128,6 +1284,17 @@
     }
     $("apps-prev").addEventListener("click", () => { state.apps.offset = Math.max(0, state.apps.offset - PAGE_SIZE); run(loadApps); });
     $("apps-next").addEventListener("click", () => { state.apps.offset += PAGE_SIZE; run(loadApps); });
+    for (const button of document.querySelectorAll("#bans-filter button")) {
+      button.addEventListener("click", () => {
+        state.bans.status = button.dataset.status;
+        state.bans.offset = 0;
+        run(loadBans);
+      });
+    }
+    $("bans-prev").addEventListener("click", () => { state.bans.offset = Math.max(0, state.bans.offset - PAGE_SIZE); run(loadBans); });
+    $("bans-next").addEventListener("click", () => { state.bans.offset += PAGE_SIZE; run(loadBans); });
+    $("blocked-signups-prev").addEventListener("click", () => { state.blockedSignups.offset = Math.max(0, state.blockedSignups.offset - PAGE_SIZE); run(loadBlockedSignups); });
+    $("blocked-signups-next").addEventListener("click", () => { state.blockedSignups.offset += PAGE_SIZE; run(loadBlockedSignups); });
     $("user-back").addEventListener("click", () => { location.hash = "#users"; });
     const addForm = $("admin-add-form");
     renderPermGrid(addForm.querySelector("[data-perm-grid]"), []);

@@ -128,6 +128,39 @@ api.pocketpass.xyz {
 			header_up apikey {$SUPABASE_PUBLISHABLE_KEY}
 			header_up Accept application/json
 			flush_interval -1
+			@api_unmarked_401 {
+				status 401
+				header !X-PocketPass-Error
+			}
+			handle_response @api_unmarked_401 {
+				copy_response_headers {
+					include Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Expose-Headers Vary RateLimit-Remaining RateLimit-Reset Retry-After
+				}
+				header Content-Type application/json
+				respond `{"code":"PT401","message":"A connected app access token is required","hint":"API_TOKEN_REQUIRED"}` 401
+			}
+			@api_unmarked_404 {
+				status 404
+				header !X-PocketPass-Error
+			}
+			handle_response @api_unmarked_404 {
+				copy_response_headers {
+					include Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Expose-Headers Vary RateLimit-Remaining RateLimit-Reset Retry-After
+				}
+				header Content-Type application/json
+				respond `{"code":"PT404","message":"Unknown endpoint","hint":"UNKNOWN_ENDPOINT"}` 404
+			}
+			@api_unmarked_400 {
+				status 400
+				header !X-PocketPass-Error
+			}
+			handle_response @api_unmarked_400 {
+				copy_response_headers {
+					include Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Expose-Headers Vary RateLimit-Remaining RateLimit-Reset Retry-After
+				}
+				header Content-Type application/json
+				respond `{"code":"PT400","message":"Request body must be a JSON object","hint":"INVALID_FIELD"}` 400
+			}
 		}
 	}
 

@@ -57,6 +57,7 @@
         <nav id="nav" class="nav">
           <button type="button" class="nav-link is-active" data-view="overview">Overview</button>
           <button type="button" class="nav-link" data-view="users">Users</button>
+          <button type="button" class="nav-link" data-view="bans">Bans</button>
           <button type="button" class="nav-link" data-view="apps">Apps</button>
           <button type="button" class="nav-link" data-view="supporters">Supporters</button>
           <button type="button" class="nav-link" data-view="boards">Boards</button>
@@ -185,6 +186,41 @@
               <p class="panel-sub">Accounts with every hat unlocked, and those that lapsed in the last 30 days. Set or remove a status by hand from the account page.</p>
             </div>
             <div id="supporters-table" class="table-wrap"></div>
+          </div>
+        </section>
+
+        <section id="view-bans" class="view" hidden>
+          <div class="view-head">
+            <h1>Bans</h1>
+            <button type="button" class="btn btn-grey btn-small" data-refresh="bans">Refresh</button>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Bans</h2>
+              <p class="panel-sub">Ban an account from its page.</p>
+            </div>
+            <div id="bans-filter" class="actions">
+              <button type="button" class="btn btn-small btn-green" data-status="active">Active</button>
+              <button type="button" class="btn btn-small btn-grey" data-status="all">All</button>
+            </div>
+            <div id="bans-table" class="table-wrap"></div>
+          </div>
+          <div class="pager">
+            <button type="button" id="bans-prev" class="btn btn-grey btn-small">Previous</button>
+            <span id="bans-page" class="pager-label"></span>
+            <button type="button" id="bans-next" class="btn btn-grey btn-small">Next</button>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Blocked sign-ups</h2>
+              <p class="panel-sub">Sign-ups refused because they matched a banned account.</p>
+            </div>
+            <div id="blocked-signups-table" class="table-wrap"></div>
+          </div>
+          <div class="pager">
+            <button type="button" id="blocked-signups-prev" class="btn btn-grey btn-small">Previous</button>
+            <span id="blocked-signups-page" class="pager-label"></span>
+            <button type="button" id="blocked-signups-next" class="btn btn-grey btn-small">Next</button>
           </div>
         </section>
 
@@ -343,6 +379,49 @@
           <p class="panel-sub">Revoking one the user has genuinely earned only lasts until their next evaluation.</p>
         </div>
         <div class="table-wrap achievements"></div>
+      </div>
+      <div class="panel ban-panel">
+        <div class="panel-head">
+          <h2>Ban</h2>
+          <p class="panel-sub">Banned accounts are signed out of everything and hidden from other players.</p>
+        </div>
+        <p class="status-line">Status: <strong class="ban-status"></strong></p>
+        <div class="stack ban-current">
+          <dl class="facts ban-facts"></dl>
+          <div class="row">
+            <button type="button" class="btn btn-red ban-lift">Unban</button>
+          </div>
+        </div>
+        <form class="stack ban-form">
+          <div class="grid-2">
+            <label class="field">
+              <span>Reason</span>
+              <input name="reason" type="text" maxlength="300" required>
+              <small class="hint">Shown to the person.</small>
+            </label>
+            <label class="field">
+              <span>Duration</span>
+              <select name="duration">
+                <option value="permanent" selected>Permanent</option>
+                <option value="1d">1 day</option>
+                <option value="7d">7 days</option>
+                <option value="30d">30 days</option>
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Staff note (optional)</span>
+            <textarea name="note" maxlength="1000" rows="3"></textarea>
+            <small class="hint">Only staff see this.</small>
+          </label>
+          <div class="row">
+            <button type="submit" class="btn btn-red">Ban account</button>
+          </div>
+        </form>
+      </div>
+      <div class="panel ban-history-panel">
+        <div class="panel-head"><h2>Ban history</h2></div>
+        <div class="table-wrap ban-history"></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>Admin history for this account</h2></div>

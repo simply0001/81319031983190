@@ -604,11 +604,10 @@ services:
       - name: rate-limiting
         config:
           limit_by: ip
-          minute: 6000
-          hour: 200000
+          minute: 1000000
           policy: local
           fault_tolerant: true
-          hide_client_headers: false
+          hide_client_headers: true
 
   - name: rest-v1-api-v1-blocked
     _comment: 'PostgREST: /rest/v1/rpc/api_v1_* -> 404, /v1/<resource>.<action> is the only entry (blocked)'

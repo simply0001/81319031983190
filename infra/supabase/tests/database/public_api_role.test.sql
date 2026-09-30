@@ -540,7 +540,7 @@ select extensions.is(
   jsonb_build_object(
     'email', 'your email address',
     'phone', 'your phone number',
-    'profile', 'your account name and picture'
+    'profile', 'your PocketPass username'
   ),
   'OIDC scope descriptions are exposed'
 );

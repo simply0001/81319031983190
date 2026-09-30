@@ -274,6 +274,7 @@ a per-admin permission from `private.admin_permission_keys()`:
 | `admins` | the Admins tab: add, edit and remove other admins |
 | `apps` | the Developer apps tab: suspending and reactivating third-party apps |
 | `supporters` | the Supporters tab: Ko-fi payments, linking payer emails, granting or revoking supporter status |
+| `bans` | the Bans tab and the Ban panel on a user's page: banning, unbanning, the ban list and refused sign-ups |
 | `board_*` | ten Boards keys (`board_requests`, `boards`, `board_content`, `board_members`, `board_suspensions`, `board_private_review`, `board_delete`, `board_filters`, `board_stationery`, `board_settings`), described in [boards-operations.md](../../docs/boards-operations.md) |
 
 Owners (`is_owner`) hold every permission implicitly, cannot be edited or
@@ -323,6 +324,60 @@ sign-in (`POST /auth/v1/token?grant_type=password`) to 10/minute and 60/hour
 per client IP, and `POST /auth/v1/recover` terminated with 404 so no reset
 path exists.
 
+### Account bans
+
+`20260927000400_account_bans.sql` adds bans (permission `bans`). A ban is a
+row in `private.account_bans` with a reason the person sees, a staff note, and
+an end (`ends_at`, null for permanent; the console offers permanent, 1, 7 or 30
+days). Bans have no foreign key, so they outlive account deletion and the
+unfinished-signup prune. What a ban does:
+
+- **Lock.** PostgREST runs `public.pocketpass_request_guard()` before every
+  request (`PGRST_DB_PRE_REQUEST` on `rest`). A banned caller gets 403
+  `PT403 ACCOUNT_BANNED` everywhere except `rpc/get_my_account_ban`, which
+  returns the reason and end date for the app's ban screen. The person can
+  still sign in to the app. Restrictive policies close app-token storage
+  writes and every Realtime topic but their own `notifications:` and
+  `app_updates`. Connected apps are closed too: the access-token hook refuses
+  to issue app tokens for a banned account, and `private.api_has_scope`
+  returns false, which shuts their API calls, Realtime topics and uploads.
+  Consents are kept, so apps work again once the ban ends. The ban also
+  consumes their live Nearby passes and deletes their push devices.
+- **Hide.** `private.has_block_between` and `private.board_blocked` treat a
+  banned account as blocked by everyone, so its profile, friend code,
+  leaderboard entry, encounters, DMs, friend requests, group adds and Boards
+  posts disappear for others; Boards staff review still sees everything.
+  Restrictive policies hide its friendships, friend requests and encounters.
+  Nothing is deleted, so lifting the ban restores all of it.
+- **Stop new accounts.** Auth runs `public.pocketpass_before_user_created`
+  (`GOTRUE_HOOK_BEFORE_USER_CREATED_*` on `auth`) before creating any user and
+  refuses with 403 "This sign-up is blocked because of a ban." when an active
+  ban matches: the same email (trimmed, lowercased, `+tag` removed, Gmail dots
+  folded) for email and Discord sign-ups, the same Discord ID, and, for
+  username accounts only, a network (IPv4 host or IPv6 /64) the banned account
+  used. Networks come from its `auth.sessions` at ban time and from each
+  `get_my_account_ban` call while banned, and expire 30 days after they were
+  seen. Triggers on `auth.identities` and `auth.users` stop a banned Discord
+  ID or email being linked to another account. The hook fails open: any
+  unexpected error lets the sign-up through.
+- **Signals** are keyed hashes (`hmac` with the random key in
+  `private.ban_signal_key`), never raw values. Lifting a ban deletes its
+  signals; `pocketpass-prune-ban-records` (03:37 UTC) drops expired signals and
+  refused sign-up rows older than 90 days.
+
+Ban and Unban are on the user's page, and the Bans tab lists bans and refused
+sign-ups. Both are audited (`ban_account`, `lift_ban`). Admins and owners can't
+be banned. To lift a ban without the console:
+
+```bash
+docker compose ... exec -T db psql -U postgres -d postgres -c   "update private.account_bans set lifted_at = now(), lift_note = 'psql'
+   where user_id = '<uuid>' and lifted_at is null;"
+```
+
+To switch the lock off in an emergency, remove `PGRST_DB_PRE_REQUEST` and
+recreate `rest`; to stop sign-up checks, set
+`GOTRUE_HOOK_BEFORE_USER_CREATED_ENABLED` to `false` and recreate `auth`.
+
 ## Public API and developer portal
 
 Third-party apps connect a PocketPass account with OAuth 2.1 (authorization
@@ -365,7 +420,32 @@ the API functions, and Kong and Caddy fence connected-app tokens in.
   those same topics through one insert policy
   (`pocketpass_api_presence_track`, `presence:write`). It holds no other
   table privilege, no other RPC, no GraphQL, cannot send Broadcast and
-  cannot join `app_updates`.
+  cannot join `app_updates`. Realtime refuses any private join without
+  Broadcast read, so the select policy also allows Broadcast read on a
+  `friend-presence:` topic whenever Presence read is allowed there
+  (`20260928000100`). Profile changes reach `friends:` as one `UPDATE`
+  carrying only `{user_id}` per recipient.
+- **Errors.** Every `/v1` error uses `{ code, message, hint }`. The API
+  functions set it through `private.api_error`, which also adds the header
+  `X-PocketPass-Error: api`. Caddy rewrites PostgREST's own unmarked 401,
+  404 and 400 bodies on `/v1` into `PT401 API_TOKEN_REQUIRED`,
+  `PT404 UNKNOWN_ENDPOINT` and `PT400 INVALID_FIELD`, copying the CORS and
+  rate-limit headers. The request guard answers a first-party or anonymous
+  token on `rpc/api_v1_*` with `PT401 API_TOKEN_REQUIRED` and a banned account
+  with `PT403 ACCOUNT_BANNED`. `board-media` shapes `/v1/boards.artwork_upload`
+  errors the same way itself, since that route skips PostgREST's `/v1` path.
+- **OpenID `profile`.** GoTrue builds `name`, `picture`, `preferred_username`
+  and the `user_metadata` claim from `auth.users.raw_user_meta_data`, falling
+  back to the email when `name` is empty. Triggers from `20260928000400` keep
+  that metadata to `{ username, name }` (the PocketPass username, or
+  `PocketPass user` before one is chosen): after the sign-up trigger has read
+  the Discord or email name, on every metadata write, and when the username
+  changes. Nothing in the app reads user metadata.
+- **Retries.** `send_message` looks up a reused `client_operation_id` before
+  its membership and block checks and returns the message as it is now, even
+  after an edit, a delete, leaving the chat or a block. It refuses the id only
+  when it was used for a different message that was never edited or deleted
+  (`20260928000300`). `messages.send` skips its attachment check on a replay.
   `usage` on schema `realtime` can only be granted by `supabase_admin`
   (`postgres` has no grant option there), so that one statement lives outside
   the migrations: `docker exec supabase-db psql -U supabase_admin -d postgres
@@ -454,8 +534,9 @@ API: `set_invite_privacy` refuses OAuth tokens.
 Every app starts with 120 requests per minute per user, 600 per minute per
 app and a burst cap of 100 per second per app (`private.developer_apps`
 columns `user_rate_limit_per_minute`, `rate_limit_per_minute`,
-`rate_limit_per_second`; `realtime_connection_limit` is recorded only, the
-Realtime cap is tenant-wide: `_realtime.tenants` holds 5000 concurrent
+`rate_limit_per_second`; `realtime_connection_limit` is a leftover column
+that the portal and console no longer offer, since the Realtime cap is
+tenant-wide: `_realtime.tenants` holds 5000 concurrent
 connections, 500 joins/s, 1000 events/s and 1 MB/s, set by hand as
 `supabase_admin`. Realtime's self-host seed would delete and re-insert that
 row with the hard-coded defaults (200/100/100/100 KB) on every boot, so the
@@ -466,7 +547,13 @@ on before they are applied. If `JWT_JWKS` ever changes, update
 file-descriptor limits that used to cap proxied websockets at about 2000:
 Kong runs with `worker_rlimit_nofile`/`ulimit` 65536 and 16384 connections per
 worker, Realtime with `RLIMIT_NOFILE=65536`, and PostgREST keeps a pool of 25
-connections). Developers ask for more from the app
+connections). The per-app minute and second counters are split over 16 rows
+per bucket (`shard`, chosen by backend pid) and summed, so one app's
+concurrent requests don't queue behind a single counter row. Kong's per-IP
+limit on `/v1` is 1,000,000 a minute with its headers hidden, so the
+`RateLimit-*` and `Retry-After` headers clients see come only from these
+limits. Friend-code lookups count hits and misses (50 per user per hour) and
+a refusal carries `Retry-After`. Developers ask for more from the app
 page in the portal (`public.developer_request_limits`, one pending request per
 app, stored in `private.developer_limit_requests`). Each new request and each
 decision is posted to Discord through `pg_net` with the webhook stored in

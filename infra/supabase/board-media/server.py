@@ -73,6 +73,19 @@ class Handler(BaseHTTPRequestHandler):
     def fail(self, status, message, hint):
         return self.reply(status, {'code': f'PT{status}', 'message': message, 'hint': hint})
 
+    def api_failure(self, status, detail, retry_after=None):
+        if isinstance(detail, dict) and str(detail.get('code', '')).startswith('PT') and detail.get('hint'):
+            return self.reply(status, {'code': detail['code'], 'message': detail.get('message') or '', 'hint': detail['hint']}, retry_after)
+        if status == 401:
+            return self.fail(401, 'A connected app access token is required', 'API_TOKEN_REQUIRED')
+        if status >= 500:
+            return self.fail(503, 'Image upload could not be confirmed. Please retry.', 'MEDIA_UNCONFIRMED')
+        message = detail.get('message') if isinstance(detail, dict) else None
+        hint = detail.get('hint') if isinstance(detail, dict) else None
+        fallback = {400: 'INVALID_FIELD', 403: 'BOARD_ACCESS_DENIED', 409: 'DUPLICATE_OPERATION_ID', 429: 'API_RATE_LIMITED'}
+        return self.reply(status, {'code': f'PT{status}', 'message': message or 'Image upload failed. Please retry.',
+                                   'hint': hint or fallback.get(status, 'MEDIA_UNCONFIRMED')}, retry_after)
+
     def do_OPTIONS(self):
         self.send_response(204)
         origin = self.headers.get('Origin', '')
@@ -91,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
         public_api = self.path == '/v1/boards.artwork_upload'
         authorization = self.headers.get('Authorization', '')
         if not authorization.startswith('Bearer ') or len(authorization) > 8192:
+            if public_api:
+                return self.fail(401, 'A connected app access token is required', 'API_TOKEN_REQUIRED')
             return self.fail(401, 'Sign in to change board artwork.', 'TOKEN_REQUIRED')
         if not PROCESSORS.acquire(blocking=False):
             return self.fail(503, 'Image processing is busy. Please retry.', 'MEDIA_BUSY')
@@ -129,9 +144,19 @@ class Handler(BaseHTTPRequestHandler):
                 detail = {'message': 'Image upload failed. Please retry.'}
             finally:
                 error.close()
-            self.reply(error.code, detail if isinstance(detail, dict) else {'message': 'Image upload failed.'},
-                       error.headers.get('Retry-After') if error.headers else None)
-        except (ValueError, KeyError, TypeError, binascii.Error) as error:
+            retry_after = error.headers.get('Retry-After') if error.headers else None
+            if public_api:
+                self.api_failure(error.code, detail, retry_after)
+            else:
+                self.reply(error.code, detail if isinstance(detail, dict) else {'message': 'Image upload failed.'}, retry_after)
+        except KeyError:
+            if public_api:
+                self.fail(400, 'board_id, kind, operation_id and image are required.', 'MISSING_FIELD')
+            else:
+                self.fail(400, 'Invalid image upload.', 'INVALID_FIELD')
+        except json.JSONDecodeError:
+            self.fail(400, 'Request body must be a JSON object', 'INVALID_FIELD')
+        except (ValueError, TypeError, binascii.Error) as error:
             self.fail(400, str(error) if isinstance(error, ValueError) else 'Invalid image upload.', 'INVALID_FIELD')
         except Exception:
             self.fail(503, 'Image upload could not be confirmed. Please retry.', 'MEDIA_UNCONFIRMED')

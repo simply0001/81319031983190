@@ -2,7 +2,7 @@ begin;
 
 set local search_path = public, extensions;
 
-select extensions.plan(67);
+select extensions.plan(69);
 
 insert into auth.users (
   instance_id,
@@ -572,6 +572,43 @@ select extensions.ok(
     'friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000003'
   ),
   'tracking on a pair with a stranger stays closed'
+);
+
+reset role;
+select pg_catalog.set_config('request.jwt.claims', '', true);
+
+insert into realtime.messages (topic, extension, private, payload, event)
+values
+  ('friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000002', 'broadcast', true, '{}', 'join_check'),
+  ('friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000002', 'presence', true, '{}', 'join_check'),
+  ('friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000003', 'broadcast', true, '{}', 'join_check'),
+  ('friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000003', 'presence', true, '{}', 'join_check');
+
+set local role api_client;
+select pg_catalog.set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '99650000-0000-4000-8000-000000000001',
+    'role', 'api_client',
+    'client_id', current_setting('pte_test.full'),
+    'aud', 'authenticated'
+  )::text,
+  true
+);
+select pg_catalog.set_config('realtime.topic', 'friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000002', true);
+
+select extensions.is(
+  (select count(*)::integer from realtime.messages where topic = realtime.topic() and event = 'join_check'),
+  2,
+  'a presence app can join its friend pair channel, which Realtime checks through broadcast and presence reads'
+);
+
+select pg_catalog.set_config('realtime.topic', 'friend-presence:99650000-0000-4000-8000-000000000001:99650000-0000-4000-8000-000000000003', true);
+
+select extensions.is(
+  (select count(*)::integer from realtime.messages where topic = realtime.topic() and event = 'join_check'),
+  0,
+  'a friend presence channel with a stranger stays closed'
 );
 
 reset role;

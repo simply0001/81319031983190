@@ -82,6 +82,7 @@ services:
   rest:
     environment:
       PGRST_DB_POOL: "25"
+      PGRST_DB_PRE_REQUEST: public.pocketpass_request_guard
 
   storage:
     environment:
@@ -99,6 +100,8 @@ services:
       GOTRUE_OAUTH_SERVER_DEFAULT_SCOPE: openid
       GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED: ${PUBLIC_API_ENABLED:-false}
       GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI: pg-functions://postgres/public/pocketpass_access_token_hook
+      GOTRUE_HOOK_BEFORE_USER_CREATED_ENABLED: "true"
+      GOTRUE_HOOK_BEFORE_USER_CREATED_URI: pg-functions://postgres/public/pocketpass_before_user_created
       GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_REAUTHENTICATION: "true"
       GOTRUE_PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-8}
       GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: "false"

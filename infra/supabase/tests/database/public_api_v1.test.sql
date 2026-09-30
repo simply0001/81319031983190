@@ -2174,7 +2174,7 @@ where client_id = current_setting('api_test.limited')::uuid
 
 insert into private.api_rate_buckets_app (client_id, bucket, requests)
 values (current_setting('api_test.limited')::uuid, date_trunc('minute', now()), 600)
-on conflict (client_id, bucket) do update set requests = 600;
+on conflict (client_id, bucket, shard) do update set requests = 600;
 
 set local role api_client;
 
