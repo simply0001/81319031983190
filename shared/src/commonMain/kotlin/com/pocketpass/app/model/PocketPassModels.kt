@@ -294,6 +294,7 @@ data class ProfileViewerUiState(
 
 data class StatusInfo(
     val time: String = "12:46",
+    val amPm: String = "",
     val batteryPercent: Int = 99,
     val batteryCharging: Boolean = false,
     val wifiConnected: Boolean = true,

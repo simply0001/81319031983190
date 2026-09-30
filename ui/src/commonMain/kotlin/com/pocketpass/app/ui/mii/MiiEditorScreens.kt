@@ -111,7 +111,9 @@ import com.pocketpass.app.ui.TOP_DESIGN_HEIGHT
 import com.pocketpass.app.ui.TOP_DESIGN_WIDTH
 import com.pocketpass.app.ui.anchoredBounds
 import com.pocketpass.app.ui.components.FigmaAsset
+import com.pocketpass.app.ui.components.StatusClockText
 import com.pocketpass.app.ui.components.StatusConnectivityContent
+import com.pocketpass.app.ui.components.statusClockWidth
 import com.pocketpass.app.ui.components.pocketBorder
 import com.pocketpass.app.ui.components.drawRoundedShadow
 import com.pocketpass.app.ui.components.roundedShadowMask
@@ -1952,22 +1954,14 @@ private fun MiiTopStatusPills(
             metrics,
             x = 48.5f,
             y = 38.81f,
-            width = 301f,
+            width = statusClockWidth(status),
             height = 132f,
             horizontal = DesignAnchor.Start,
             vertical = DesignAnchor.Start,
         ).blockMiiRendererGestures(),
         shape = shape,
     ) {
-        Text(
-            text = status.time,
-            color = PocketText,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.Medium,
-            fontSize = metrics.sp(73.915f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-        )
+        StatusClockText(metrics, status, PocketText)
     }
     FigmaPillSurface(
         metrics = metrics,

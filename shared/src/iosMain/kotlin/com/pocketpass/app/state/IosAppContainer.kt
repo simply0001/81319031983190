@@ -81,6 +81,7 @@ import com.pocketpass.app.mii.iosReadPortraitFile
 import com.pocketpass.app.mii.iosWriteRestoredPortrait
 import com.pocketpass.app.mii.toSaveRequest
 import com.pocketpass.app.mii.withoutLockedHat
+import com.pocketpass.app.model.StatusClock
 import com.pocketpass.app.model.StatusInfo
 import com.pocketpass.app.security.KeychainSecureStringStore
 import com.pocketpass.app.security.KeystoreSupabaseCodeVerifierCache
@@ -126,11 +127,16 @@ import kotlinx.coroutines.launch
 import okio.FileSystem
 import okio.Path.Companion.toPath
 import platform.Foundation.NSApplicationSupportDirectory
+import platform.Foundation.NSCalendar
+import platform.Foundation.NSCalendarUnitHour
+import platform.Foundation.NSCalendarUnitMinute
 import platform.Foundation.NSDate
 import platform.Foundation.NSDateFormatter
+import platform.Foundation.NSLocale
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSUserDomainMask
+import platform.Foundation.autoupdatingCurrentLocale
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
 import platform.UIKit.UIApplicationWillResignActiveNotification
 import platform.UIKit.UIDevice
@@ -919,15 +925,20 @@ private fun iosDatabasePath(): String {
 }
 
 class IosStatusFeed : StatusFeed {
-    private val clockFormatter = NSDateFormatter().apply { dateFormat = "HH:mm" }
-
     override fun status(): Flow<StatusInfo> = flow {
         UIDevice.currentDevice.batteryMonitoringEnabled = true
         while (true) {
             val level = UIDevice.currentDevice.batteryLevel
+            val now = NSDate()
+            val hour = NSCalendar.currentCalendar.component(NSCalendarUnitHour, fromDate = now).toInt()
+            val minute = NSCalendar.currentCalendar.component(NSCalendarUnitMinute, fromDate = now).toInt()
+            val twentyFourHour = NSDateFormatter
+                .dateFormatFromTemplate("j", 0u, NSLocale.autoupdatingCurrentLocale)
+                ?.contains('a') != true
             emit(
                 StatusInfo(
-                    time = clockFormatter.stringFromDate(NSDate()),
+                    time = StatusClock.time(hour, minute, twentyFourHour),
+                    amPm = StatusClock.amPm(hour, twentyFourHour),
                     batteryPercent = if (level < 0f) 100 else (level * 100f).roundToInt(),
                     batteryCharging = UIDevice.currentDevice.batteryState ==
                         UIDeviceBatteryState.UIDeviceBatteryStateCharging ||

@@ -8,19 +8,16 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
+import android.text.format.DateFormat
 import androidx.core.content.ContextCompat
+import com.pocketpass.app.model.StatusClock
 import com.pocketpass.app.model.StatusInfo
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
-
-private val clockFormat = DateTimeFormatter.ofPattern("HH:mm")
-
-private fun formatTime(time: LocalTime): String = time.format(clockFormat)
 
 private fun batteryIsCharging(status: Int): Boolean =
     status == BatteryManager.BATTERY_STATUS_CHARGING ||
@@ -63,9 +60,12 @@ class AndroidStatusProvider : StatusProvider {
                 connected = wifiConnected,
                 signalStrength = networkCapabilities?.signalStrength ?: Int.MIN_VALUE,
             )
+            val now = LocalTime.now()
+            val twentyFourHour = DateFormat.is24HourFormat(context)
             trySend(
                 StatusInfo(
-                    time = formatTime(LocalTime.now()),
+                    time = StatusClock.time(now.hour, now.minute, twentyFourHour),
+                    amPm = StatusClock.amPm(now.hour, twentyFourHour),
                     batteryPercent = StatusFormatter.batteryPercent(level, scale, fallback),
                     batteryCharging = batteryIsCharging(batteryStatus),
                     wifiConnected = wifiConnected,

@@ -49,8 +49,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -308,18 +311,10 @@ fun StatusPills(
     StatusPill(
         metrics = metrics,
         x = 50f,
-        width = 301f,
+        width = statusClockWidth(status),
         horizontal = DesignAnchor.Start,
     ) {
-        Text(
-            text = status.time,
-            color = pocketPalette.teal,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.Medium,
-            fontSize = metrics.sp(73.915f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-        )
+        StatusClockText(metrics, status, pocketPalette.teal)
     }
     StatusPill(
         metrics = metrics,
@@ -329,6 +324,34 @@ fun StatusPills(
     ) {
         StatusConnectivityContent(metrics, status)
     }
+}
+
+internal fun statusClockWidth(status: StatusInfo): Float =
+    if (status.amPm.isEmpty()) 301f else 361f
+
+@Composable
+internal fun StatusClockText(
+    metrics: DesignMetrics,
+    status: StatusInfo,
+    color: Color,
+) {
+    Text(
+        text = buildAnnotatedString {
+            append(status.time)
+            if (status.amPm.isNotEmpty()) {
+                append(" ")
+                withStyle(SpanStyle(fontSize = metrics.sp(38f), fontWeight = FontWeight.SemiBold)) {
+                    append(status.amPm)
+                }
+            }
+        },
+        color = color,
+        fontFamily = Rubik,
+        fontWeight = FontWeight.Medium,
+        fontSize = metrics.sp(73.915f),
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
 }
 
 @Composable
