@@ -88,7 +88,7 @@ Earlier releases:
 | 0.1.7-alpha | 20 | 09-09 |
 
 ### Backend
-Migrations are applied through `20260927000300_piip_wording` (checked on the VM). The 09-26 changes:
+Migrations are applied through `20260928000400_oauth_profile_username` (auth user metadata is kept to the PocketPass username, so the OpenID `profile` scope exposes nothing else) (bans applied 2026-09-28; the privacy and delete-account pages describe ban records). Realtime v2.102.3 refuses a private channel join without broadcast read, even for presence-only channels; that migration lets connected apps join `friend-presence:` channels. `20260928000200_api_hardening` (2026-09-28): bans close connected apps, per-app counters are sharded, `/v1` errors all use the envelope (Caddy rewrites PostgREST's unmarked 400/401/404; API errors carry `X-PocketPass-Error: api`), Kong's `/v1` per-IP limit is 1,000,000/min, and the privacy API covers Block Invites. The 09-26 changes:
 Applied on 2026-09-27 after a dry run and a fresh backup: `20260927000100_worker_rpc_service_role_checks` (the push and branding worker RPCs refuse anyone but `service_role`; `health.sh` checks their grants), `20260927000200_drop_unused_rpcs` and `20260927000300_piip_wording`. Backups now keep privileges.
 - `20260925000100_split_social_privacy` and `20260926000100_email_privacy`;
 - Resend SMTP moved to implicit TLS on port 465;
@@ -114,10 +114,9 @@ Not released; the owner deferred it and wants TestFlight first.
 - An external OAuth app running the Boards flow.
 
 ### Test drift (not regressions)
-- `admin_console.test.sql` expects 8 permissions; there are 18.
 - `public_api_followups.test.sql` has 3 stale expectations.
 - Older pgTAP files assume an empty database.
-- `kofi_supporters.test.sql` has 6 failures on production: counts that assume an empty database, plus the permission catalog (8 expected, 18 real).
+- `kofi_supporters.test.sql` has 6 failures on production: counts that assume an empty database, plus the permission catalog (8 expected, 19 real).
 - `WidgetBindingStoreTest` has 3 failures on Windows.
 - `PuzzleSwapFocusUiTest` compiles but has never run.
 - `:app:lintRelease` stops on 2 `MissingPermission` errors at `notify()` in `push/BoardNotifications.kt` and `push/MessageNotifications.kt`. Both calls are guarded by `allowed()`; the errors predate the 2026-09-27 dependency update.
@@ -240,6 +239,7 @@ Not released; the owner deferred it and wants TestFlight first.
   - Emergency switch: dashboard → Feature controls. Never drop tables or roll back Room.
   - Retention cron runs 03:23 UTC. Music: `bgm_boards`.
 - **Privacy.** Block Messages rejects new DMs. Block Invites rejects group/board invites and friend requests. Triggers enforce both at the write boundary; the API returns 403 `FRIEND_REQUESTS_BLOCKED`. Show Boards is local only.
+- **Bans** (`20260927000400_account_bans`, permission `bans`). A PostgREST pre-request guard (`PGRST_DB_PRE_REQUEST`) refuses a banned account with 403 `ACCOUNT_BANNED` except `get_my_account_ban`, which the app's ban screen reads. `has_block_between`/`board_blocked` treat banned accounts as blocked by everyone; nothing is deleted, so lifting restores. The `before-user-created` Auth hook refuses the same email, Discord ID, or (username accounts only) a network the banned account used; signals are HMAC hashes. See the README "Account bans".
   - Email is visible only to the owner, permissioned admins, and apps granted the `email` scope.
 - **Chat.** Account-wide `chat_bubble_colour` presets. Images and GIFs up to 10 MiB. Push goes through Firebase `pocketpass-e005c` as data-only FCM; iOS alerts are generic.
   - Emoji are only the Sudofont DS glyphs, plus the added crying face (`ui/.../components/Sudofont.kt`).
@@ -343,7 +343,7 @@ Not released; the owner deferred it and wants TestFlight first.
     - First rewrite `tools/mii-renderer/src/renderer.ts` and `dist/renderer.js` with LF endings.
     - Do a two-pass hash update: the build fails with the new hash; put it in `bundle.sha256`; run `-UpdateBundle`; then run once more without flags.
   - `RENDERER_VERSION` is duplicated in `IosMiiRenderController`; keep it in sync.
-  - Hats: `hat_N.glb` is type N-1. hat_10 is the Halo, hat_11 the Hijab.
+  - Hats: `hat_N.glb` is type N-1. hat_10 is the Halo, hat_11 the Hijab. Two-colour hats: `docs/two-colour-hats.md`.
   - Headless check without a device:
     - Serve the renderer dir over http.
     - Drive it with puppeteer-core and Chrome (`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`).
