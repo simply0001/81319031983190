@@ -25,7 +25,7 @@ xcodegen generate
 
 plist_backup=$(mktemp)
 cp Sources/Info.plist "$plist_backup"
-trap 'cp "$plist_backup" Sources/Info.plist; rm -f "$plist_backup"' EXIT
+trap 'status=$?; cp "$plist_backup" Sources/Info.plist; rm -f "$plist_backup"; exit $status' EXIT
 python3 - <<'PY'
 import os, plistlib
 from pathlib import Path
@@ -51,9 +51,9 @@ xcodebuild -project PocketPass.xcodeproj -scheme PocketPass -configuration Relea
   -sdk iphoneos -destination 'generic/platform=iOS' -archivePath "$archive" \
   "DEVELOPMENT_TEAM=$APPLE_TEAM_ID" "MARKETING_VERSION=$APP_VERSION" "CURRENT_PROJECT_VERSION=$APP_BUILD" \
   CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES APS_ENVIRONMENT=production \
-  "${sign_args[@]}" "${auth_args[@]}" archive
+  "${sign_args[@]}" ${auth_args[@]+"${auth_args[@]}"} archive
 python3 scripts/package_check.py --archive "$archive" --export-options build/ExportOptions.plist
 xcodebuild -exportArchive -archivePath "$archive" -exportPath "$export_path" \
-  -exportOptionsPlist build/ExportOptions.plist "${provision_args[@]}" "${auth_args[@]}"
+  -exportOptionsPlist build/ExportOptions.plist ${provision_args[@]+"${provision_args[@]}"} ${auth_args[@]+"${auth_args[@]}"}
 python3 scripts/package_check.py --ipa "$export_path/PocketPass.ipa"
 echo "Signed archive and IPA for TestFlight prepared at $export_path"
