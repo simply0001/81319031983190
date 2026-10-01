@@ -30,7 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.CompositionLocalProvider
+import com.pocketpass.app.ui.controller.ControllerOverlayFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocusLayer
+import com.pocketpass.app.ui.controller.controllerTarget
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -46,6 +50,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.pocketpass.app.model.BIO_MAX_LENGTH
+import com.pocketpass.app.feature.ACCOUNT_SETUP_AGE_MAX
+import com.pocketpass.app.feature.ACCOUNT_SETUP_AGE_MIN
 import com.pocketpass.app.domain.model.PROFILE_NAME_MAX_LENGTH
 import com.pocketpass.app.model.FriendsOverlay
 import com.pocketpass.app.model.PocketPassDestination
@@ -158,9 +164,24 @@ fun PhoneDialogs(
         dispatch = dispatch,
     )
 
+    PhoneAgeEditorDialog(
+        metrics = metrics,
+        visible = root == PocketPassDestination.Settings && state.ageEditor.visible,
+        state = state,
+        dispatch = dispatch,
+    )
+
+    PhoneCountryEditorDialog(
+        metrics = metrics,
+        visible = root == PocketPassDestination.Settings && state.countryEditor.visible,
+        state = state,
+        dispatch = dispatch,
+    )
+
     PhoneWidgetMakerDialogs(metrics = metrics, state = state, dispatch = dispatch)
 
-    if (root == PocketPassDestination.Settings && state.miiSlotsVisible) {
+    val miiSlotsShown = root == PocketPassDestination.Settings && state.miiSlotsVisible
+    PhoneOverlayLayer(miiSlotsShown) {
         PhoneScrim(visible = true, tag = "mii_slots_scrim", onDismiss = { dispatch(PocketPassEvent.CloseMiiSlots) })
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(Modifier.size(metrics.dp(BOTTOM_DESIGN_WIDTH), metrics.dp(BOTTOM_DESIGN_HEIGHT))) {
@@ -178,7 +199,7 @@ fun PhoneDialogs(
         dispatch = dispatch,
     )
 
-    if (root == PocketPassDestination.Settings && state.connectedApps.visible) {
+    PhoneOverlayLayer(root == PocketPassDestination.Settings && state.connectedApps.visible) {
         PhoneScrim(
             visible = true,
             tag = "connected_apps_scrim",
@@ -204,7 +225,7 @@ fun PhoneDialogs(
         onConfirm = { dispatch(PocketPassEvent.ConfirmRevokeConnectedApp) },
     )
 
-    if (state.sessionState.showsPocketPassApp() && state.oauthConsent.visible) {
+    PhoneOverlayLayer(state.sessionState.showsPocketPassApp() && state.oauthConsent.visible) {
         PhoneScrim(
             visible = true,
             tag = "oauth_consent_scrim",
@@ -215,6 +236,17 @@ fun PhoneDialogs(
                 OAuthConsentOverlay(metrics, state, dispatch)
             }
         }
+    }
+}
+
+@Composable
+internal fun PhoneOverlayLayer(visible: Boolean, content: @Composable () -> Unit) {
+    ControllerOverlayFocus(visible)
+    CompositionLocalProvider(
+        LocalControllerFocusLayer provides LocalControllerFocusLayer.current + PHONE_DIALOG_FOCUS_LAYER,
+        LocalControllerFocus provides LocalControllerFocus.current?.takeIf { visible },
+    ) {
+        if (visible) content()
     }
 }
 
@@ -240,6 +272,7 @@ internal fun DialogTitleRow(
         Box(
             modifier = Modifier
                 .requiredSize(metrics.dp(84f))
+                .controllerTarget(closeTag, cornerRadius = 42f) { onClose() }
                 .clip(CircleShape)
                 .testTag(closeTag)
                 .clickable(
@@ -368,7 +401,13 @@ fun PhoneDigitSlots(
     focusRequester: FocusRequester? = null,
 ) {
     val digits = value.filter(Char::isDigit).take(length)
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    val requester = focusRequester ?: remember { FocusRequester() }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .controllerTarget(tag, cornerRadius = 24f) { requester.requestFocus() },
+        contentAlignment = Alignment.Center,
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(metrics.dp(gap))) {
             repeat(length) { index ->
                 val digit = digits.getOrNull(index)?.toString().orEmpty()
@@ -414,7 +453,7 @@ fun PhoneDigitSlots(
                 .matchParentSize()
                 .alpha(0f)
                 .testTag(tag)
-                .then(if (focusRequester == null) Modifier else Modifier.focusRequester(focusRequester)),
+                .controllerTextField(tag, requester),
             textStyle = TextStyle(color = Color.Transparent, fontSize = metrics.sp(1f)),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onDone() }),
@@ -496,6 +535,133 @@ private fun PhoneNameEditorDialog(
             height = 130f,
             tag = "name_editor_save",
         ) { dispatch(PocketPassEvent.SaveName) }
+    }
+}
+
+@Composable
+private fun PhoneAgeEditorDialog(
+    metrics: DesignMetrics,
+    visible: Boolean,
+    state: PocketPassUiState,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
+    val palette = pocketPalette
+    val editor = state.ageEditor
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(visible) { if (visible) runCatching { focusRequester.requestFocus() } }
+    val canSave = editor.valid && !editor.saving
+    val short = phoneShortViewport(metrics)
+    PhoneDialog(
+        metrics = metrics,
+        visible = visible,
+        tag = "age_editor",
+        onDismiss = { dispatch(PocketPassEvent.CloseAgeEditor) },
+        borderColor = palette.tealBorder,
+        fill = Brush.verticalGradient(
+            colorStops = arrayOf(0f to palette.surface, 0.62f to palette.surface, 1f to palette.tint(Color(0xFFBDF8CB))),
+        ),
+    ) {
+        DialogTitleRow(metrics, "Edit Age", palette.teal, "close_age_editor") { dispatch(PocketPassEvent.CloseAgeEditor) }
+        Spacer(Modifier.height(metrics.dp(if (short) 12f else 20f)))
+        Text(
+            text = editor.error ?: "Shown on your profile",
+            modifier = Modifier.fillMaxWidth(),
+            color = if (editor.error != null) palette.ink(Color(0xFFB31E3A)) else palette.tealSoft,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(34f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(metrics.dp(if (short) 16f else 24f)))
+        PhoneTextField(
+            metrics = metrics,
+            value = editor.draft,
+            onValueChange = { dispatch(PocketPassEvent.UpdateAgeDraft(it)) },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = "--",
+            keyboardOptions = KeyboardOptions(
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { if (canSave) dispatch(PocketPassEvent.SaveAge) }),
+            textAlign = TextAlign.Center,
+            tag = "age_editor_field",
+            focusRequester = focusRequester,
+        )
+        Spacer(Modifier.height(metrics.dp(16f)))
+        Text(
+            text = "$ACCOUNT_SETUP_AGE_MIN to $ACCOUNT_SETUP_AGE_MAX",
+            modifier = Modifier.fillMaxWidth(),
+            color = palette.tealSoft,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(30f),
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(metrics.dp(if (short) 20f else 30f)))
+        Row(horizontalArrangement = Arrangement.spacedBy(metrics.dp(30f))) {
+            PhoneButton(
+                metrics = metrics,
+                label = "Hide",
+                modifier = Modifier.weight(1f),
+                fill = cancelButtonBrush(),
+                borderColor = Color(0xFF8A8A8A),
+                enabled = !editor.saving,
+                height = 130f,
+                tag = "age_editor_hide",
+            ) { dispatch(PocketPassEvent.HideAge) }
+            PhoneButton(
+                metrics = metrics,
+                label = if (editor.saving) "Saving…" else "Save",
+                modifier = Modifier.weight(1f),
+                enabled = canSave,
+                height = 130f,
+                tag = "age_editor_save",
+            ) { dispatch(PocketPassEvent.SaveAge) }
+        }
+    }
+}
+
+@Composable
+private fun PhoneCountryEditorDialog(
+    metrics: DesignMetrics,
+    visible: Boolean,
+    state: PocketPassUiState,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
+    val palette = pocketPalette
+    val editor = state.countryEditor
+    PhoneDialog(
+        metrics = metrics,
+        visible = visible,
+        tag = "country_editor",
+        onDismiss = { dispatch(PocketPassEvent.CloseCountryEditor) },
+        borderColor = palette.tealBorder,
+        fill = Brush.verticalGradient(
+            colorStops = arrayOf(0f to palette.surface, 0.62f to palette.surface, 1f to palette.tint(Color(0xFFBDF8CB))),
+        ),
+    ) {
+        DialogTitleRow(metrics, "Country", palette.teal, "close_country_editor") { dispatch(PocketPassEvent.CloseCountryEditor) }
+        Spacer(Modifier.height(metrics.dp(20f)))
+        Text(
+            text = editor.error ?: if (editor.savingCode != null) "Saving…" else "Pick where you play from",
+            modifier = Modifier.fillMaxWidth(),
+            color = if (editor.error != null) palette.ink(Color(0xFFB31E3A)) else palette.tealSoft,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(34f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(metrics.dp(24f)))
+        CountryList(
+            metrics = metrics,
+            selectedCode = editor.savingCode ?: state.profile?.countryCode,
+            tagPrefix = "country_editor",
+        ) { code -> if (editor.savingCode == null) dispatch(PocketPassEvent.SaveCountry(code)) }
     }
 }
 

@@ -214,6 +214,8 @@ class PocketPassStore(
                 if (container.leaderboard.close()) return
                 if (container.homeProfile.closeBioEditor()) return
                 if (container.homeProfile.closeNameEditor()) return
+                if (container.homeProfile.closeAgeEditor()) return
+                if (container.homeProfile.closeCountryEditor()) return
                 if (container.homeProfile.closeMoodPicker()) return
                 if (container.friends.closeOverlay()) return
                 if (container.messages.closeGroupInfo()) return
@@ -297,6 +299,8 @@ class PocketPassStore(
                 container.leaderboard.close()
                 container.homeProfile.closeBioEditor()
                 container.homeProfile.closeNameEditor()
+                container.homeProfile.closeAgeEditor()
+                container.homeProfile.closeCountryEditor()
                 container.homeProfile.closeMoodPicker()
                 container.friends.closeOverlay()
                 container.messages.closeConversation()
@@ -313,6 +317,16 @@ class PocketPassStore(
             PocketPassEvent.OpenNameEditor -> {
                 container.profileViewer.close()
                 container.homeProfile.openNameEditor()
+            }
+
+            PocketPassEvent.OpenAgeEditor -> {
+                container.profileViewer.close()
+                container.homeProfile.openAgeEditor()
+            }
+
+            PocketPassEvent.OpenCountryEditor -> {
+                container.profileViewer.close()
+                container.homeProfile.openCountryEditor()
             }
 
             is PocketPassEvent.OpenMessage -> {
@@ -531,6 +545,13 @@ class PocketPassStore(
                 container.homeProfile.setNameDraft(event.value)
             PocketPassEvent.SaveName -> container.homeProfile.saveName()
             PocketPassEvent.CloseNameEditor -> container.homeProfile.closeNameEditor()
+            is PocketPassEvent.UpdateAgeDraft ->
+                container.homeProfile.setAgeDraft(event.value)
+            PocketPassEvent.SaveAge -> container.homeProfile.saveAge()
+            PocketPassEvent.HideAge -> container.homeProfile.hideAge()
+            PocketPassEvent.CloseAgeEditor -> container.homeProfile.closeAgeEditor()
+            is PocketPassEvent.SaveCountry -> container.homeProfile.saveCountry(event.code)
+            PocketPassEvent.CloseCountryEditor -> container.homeProfile.closeCountryEditor()
             is PocketPassEvent.UpdateMessageDraft ->
                 container.messages.setDraft(event.value)
 
@@ -827,6 +848,8 @@ class PocketPassStore(
                         homeMoodActive = feature.moodActive,
                         bioEditor = feature.bioEditor,
                         nameEditor = feature.nameEditor,
+                        ageEditor = feature.ageEditor,
+                        countryEditor = feature.countryEditor,
                         recentInteractions = feature.recentInteractions.dataOr(
                             current.recentInteractions,
                         ).latestPerPerson(),

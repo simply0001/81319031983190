@@ -12,7 +12,7 @@ surface.
 - Upstream commit: `1cd6b7d1d09e75fffd5c116a10e3e162647ecb78`
 - Bundler: Bun `1.3.14`
 - Reproducible bundle SHA-256:
-  `9b656dc3d0185ea3b63295e168d8cca9eaf5d4aea4c1cae8e62bdab448b766d6`
+  `1cb263ffabda8e5d99e93f49d7e809c76fbd5fbf4696207379e31bf78c5c6b68`
 
 `provenance.json` is the machine-readable source of truth for the pinned
 commit, PocketPass source hashes, upstream runtime-asset hashes, build command,

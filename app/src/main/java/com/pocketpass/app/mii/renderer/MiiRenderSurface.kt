@@ -25,6 +25,7 @@ fun MiiRenderSurface(
     controller: MiiRenderController,
     modifier: Modifier = Modifier,
     initialCanonicalBase64: String = MiiRenderController.DEFAULT_MII_BASE64,
+    fitHeight: Boolean = false,
 ) {
     val context = LocalContext.current
     val surfaceGeneration by controller.surfaceGeneration.collectAsState()
@@ -33,7 +34,7 @@ fun MiiRenderSurface(
     }
 
     DisposableEffect(webView, controller) {
-        controller.attach(webView, initialCanonicalBase64)
+        controller.attach(webView, initialCanonicalBase64, fitHeight)
         onDispose {
             controller.detach(webView)
             webView.destroy()

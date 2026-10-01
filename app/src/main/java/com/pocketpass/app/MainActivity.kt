@@ -14,6 +14,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.hardware.input.InputManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -47,6 +48,7 @@ import com.pocketpass.app.auth.ConsentLinkPolicy
 import com.pocketpass.app.display.CompanionDisplayCoordinator
 import com.pocketpass.app.display.DisplayRoles
 import com.pocketpass.app.display.preferSixtyHertz
+import com.pocketpass.app.input.GamepadPresence
 import com.pocketpass.app.input.MiiEditorJoystickHandler
 import com.pocketpass.app.input.MiiEditorRightStickHandler
 import com.pocketpass.app.input.BoardCanvasJoystickHandler
@@ -91,6 +93,9 @@ class MainActivity : ComponentActivity() {
     }
     private val boardCanvasJoystickHandler by lazy {
         BoardCanvasJoystickHandler({ viewModel.state.value }, viewModel.controllerFocus)
+    }
+    private val gamepadPresence by lazy {
+        GamepadPresence(getSystemService(InputManager::class.java))
     }
     private var nearbyPermissionStage = NearbyPermissionStage.Idle
     private val nearbyPermissionLauncher = registerForActivityResult(
@@ -192,7 +197,7 @@ class MainActivity : ComponentActivity() {
             val companionAttached = displayCoordinator.companionAttached
             LaunchedEffect(companionAttached) { applyOrientationPolicy() }
             when {
-                !companionAttached -> PhoneApp(viewModel = viewModel)
+                !companionAttached -> PhoneApp(viewModel = viewModel, gamepadActive = gamepadPresence.active)
                 DisplayRoles.defaultDisplayIsBottomPanel -> BottomDisplayApp(viewModel = viewModel)
                 else -> TopDisplayApp(viewModel = viewModel)
             }
@@ -374,6 +379,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        gamepadPresence.start()
         (application as PocketPassApplication)
             .container
             .setAppForeground(true)
@@ -414,6 +420,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        gamepadPresence.stop()
         (application as PocketPassApplication)
             .container
             .setAppForeground(false)
@@ -438,11 +445,14 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val singleScreen = ::displayCoordinator.isInitialized && !displayCoordinator.companionAttached
+        if (singleScreen && gamepadPresence.activateFrom(event)) return true
         if (
             handleMiiEditorGamepadKeyEvent(
                 event = event,
                 state = viewModel.state.value,
                 dispatch = viewModel::dispatch,
+                singleScreen = singleScreen,
             )
         ) {
             return true

@@ -131,12 +131,12 @@ import com.pocketpass.app.ui.designBounds
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
 
-private val PocketBlue = Color(0xFF5E9AAC)
-private val PocketText = Color(0xFF1D596B)
-private val PocketPaleGreen = Color(0xFFBDF8CB)
-private val PocketSelectedGreen = Color(0xFFA8FFC7)
-private val PocketActionGreen = Color(0xFF4BC252)
-private val PocketShadow = Color.Black.copy(alpha = 0.32f)
+internal val PocketBlue = Color(0xFF5E9AAC)
+internal val PocketText = Color(0xFF1D596B)
+internal val PocketPaleGreen = Color(0xFFBDF8CB)
+internal val PocketSelectedGreen = Color(0xFFA8FFC7)
+internal val PocketActionGreen = Color(0xFF4BC252)
+internal val PocketShadow = Color.Black.copy(alpha = 0.32f)
 
 @Composable
 fun MiiEditorTopScreen(
@@ -225,7 +225,7 @@ fun MiiEditorTopScreen(
     }
 }
 
-private fun MiiEditorUiState.editorNotice(): String? {
+internal fun MiiEditorUiState.editorNotice(): String? {
     if (!isEditorVisible) return null
     return (saveState as? MiiSaveState.Error)?.message
         ?: (rendererStatus as? MiiRendererStatus.Error)?.message
@@ -563,12 +563,12 @@ private fun DiscardChangesPrompt(
     }
 }
 
-private const val MII_DISCARD_FOCUS_LAYER = 20
-private const val MII_DISCARD_KEEP_TAG = "mii_discard_keep"
-private const val MII_DISCARD_CONFIRM_TAG = "mii_discard_confirm"
+internal const val MII_DISCARD_FOCUS_LAYER = 20
+internal const val MII_DISCARD_KEEP_TAG = "mii_discard_keep"
+internal const val MII_DISCARD_CONFIRM_TAG = "mii_discard_confirm"
 
 @Composable
-private fun MiiEditorBackground(metrics: DesignMetrics) {
+internal fun MiiEditorBackground(metrics: DesignMetrics) {
     DesignBackdrop(metrics) {
         Box(
             Modifier
@@ -592,7 +592,7 @@ private fun MiiEditorBackground(metrics: DesignMetrics) {
     }
 }
 
-private data class CategoryVisual(
+internal data class CategoryVisual(
     val category: MiiCategory,
     val icon: PocketAsset,
     val width: Float,
@@ -614,12 +614,12 @@ private const val ADJUSTMENT_PANEL_HEIGHT = 185f
 private const val ADJUSTMENT_BUTTON_LEFT = 998f
 private const val ADJUSTMENT_BUTTON_WIDTH = 242f
 private const val RIGHT_FLUSH_RING_EXTENSION = 140f
-private const val MII_ADJUSTMENT_FOCUS_LAYER = 10
-private const val MII_ADJUSTMENT_SLIDER_TAG = "mii_adjustment_slider"
+internal const val MII_ADJUSTMENT_FOCUS_LAYER = 10
+internal const val MII_ADJUSTMENT_SLIDER_TAG = "mii_adjustment_slider"
 
-private fun miiCategoryTag(category: MiiCategory): String = "mii_category_${category.name}"
+internal fun miiCategoryTag(category: MiiCategory): String = "mii_category_${category.name}"
 
-private val categoryVisuals = listOf(
+internal val categoryVisuals = listOf(
     CategoryVisual(MiiCategory.Face, PocketAsset("files/figma/mii_editor_category_face.svg"), 83f, 83f),
     CategoryVisual(MiiCategory.Hair, PocketAsset("files/figma/mii_editor_category_hair.svg"), 83f, 83f),
     CategoryVisual(MiiCategory.Eyebrows, PocketAsset("files/figma/mii_editor_category_eyebrow.svg"), 96f, 43f),
@@ -631,7 +631,7 @@ private val categoryVisuals = listOf(
 )
 
 @Composable
-private fun rememberMiiEditorEntrance(): Animatable<Float, AnimationVector1D> {
+internal fun rememberMiiEditorEntrance(): Animatable<Float, AnimationVector1D> {
     val entrance = remember { Animatable(0f) }
     LaunchedEffect(entrance) {
         if (!platformAnimationsEnabled()) {
@@ -782,7 +782,7 @@ private fun TraitGrid(
 }
 
 @Composable
-private fun TraitPill(
+internal fun TraitPill(
     metrics: DesignMetrics,
     field: MiiTraitField,
     index: Int,
@@ -1084,7 +1084,7 @@ private fun ColorPalettePanel(
     }
 }
 
-private data class TraitEntry(
+internal data class TraitEntry(
     val field: MiiTraitField,
     val index: Int,
 )
@@ -1100,7 +1100,7 @@ private val MiiEditorUiState.facialHairMode: Boolean
 private val MiiEditorUiState.hatMode: Boolean
     get() = selectedCategory == MiiCategory.Hair && activeTraitField == MiiTraitField.HatType
 
-private fun MiiEditorUiState.traitEntries(): List<TraitEntry> {
+internal fun MiiEditorUiState.traitEntries(): List<TraitEntry> {
     if (hatMode) {
         val hats = descriptor.traits.first { it.field == MiiTraitField.HatType }
         return listOf(TraitEntry(MiiTraitField.HatType, NO_HAT_INDEX)) +
@@ -1122,7 +1122,7 @@ private fun MiiEditorUiState.traitEntries(): List<TraitEntry> {
     }
 }
 
-private val PaletteWheel = listOf(
+internal val PaletteWheel = listOf(
     Color(0xFFFF5A5A),
     Color(0xFFFFB347),
     Color(0xFFFFE85C),
@@ -1133,9 +1133,9 @@ private val PaletteWheel = listOf(
     Color(0xFFFF5A5A),
 )
 
-private fun miiColorPaletteTag(field: MiiColorField): String = "mii_color_palette_${field.name}"
+internal fun miiColorPaletteTag(field: MiiColorField): String = "mii_color_palette_${field.name}"
 
-private fun MiiEditorUiState.chipPaletteField(): MiiColorField? {
+internal fun MiiEditorUiState.chipPaletteField(): MiiColorField? {
     val activeField = descriptor.colors.firstOrNull { it.field == activeColorField }?.field
         ?: descriptor.colors.firstOrNull { it.figmaPrimary }?.field
     return activeField?.takeIf { it.isPalette }
@@ -1157,7 +1157,7 @@ private const val PALETTE_PITCH = 92f
 private const val PALETTE_INSET_X = 36f
 private const val PALETTE_INSET_Y = 40f
 
-private fun MiiColorField.palette(): List<Color> = when (this) {
+internal fun MiiColorField.palette(): List<Color> = when (this) {
     MiiColorField.Skin -> MiiEditorColors.skin
     MiiColorField.Eyes -> MiiEditorColors.eyes
     MiiColorField.Hair,
@@ -1173,10 +1173,10 @@ private fun MiiColorField.palette(): List<Color> = when (this) {
     -> MiiEditorColors.favorite
 }
 
-private fun MiiColorField.paletteDisplayOrder(): List<Int> =
+internal fun MiiColorField.paletteDisplayOrder(): List<Int> =
     if (palette() === MiiEditorColors.common) MiiEditorColors.commonDisplayOrder else palette().indices.toList()
 
-private fun swatchBorder(index: Int, color: Color): Color = when (index) {
+internal fun swatchBorder(index: Int, color: Color): Color = when (index) {
     0 -> Color(0xCC777777)
     1 -> Color(0xCCBFBFBF)
     2 -> Color.White.copy(alpha = 0.35f)
@@ -1190,7 +1190,7 @@ private fun swatchBorder(index: Int, color: Color): Color = when (index) {
     }
 }
 
-private enum class AdjustmentVisualSlot(
+internal enum class AdjustmentVisualSlot(
     val icon: PocketAsset,
     val visualWidth: Float,
     val visualHeight: Float,
@@ -1304,20 +1304,20 @@ private fun AdjustmentButtons(
     }
 }
 
-private class RailToggle(
+internal class RailToggle(
     val icon: PocketAsset,
     val on: Boolean,
     val event: MiiEditorEvent,
 )
 
-private class HatColourToggle(
+internal class HatColourToggle(
     val on: Boolean,
     val colour1: Color,
     val colour2: Color,
     val event: MiiEditorEvent,
 )
 
-private fun MiiEditorUiState.hatColourToggle(): HatColourToggle? {
+internal fun MiiEditorUiState.hatColourToggle(): HatColourToggle? {
     if (!hatMode || !selectedHatHasSecondColour) return null
     val palette = MiiEditorColors.favorite
     val colour1 = draft.extHatColor.takeIf { it >= 0 } ?: draft.favoriteColor
@@ -1333,7 +1333,7 @@ private fun MiiEditorUiState.hatColourToggle(): HatColourToggle? {
 }
 
 @Composable
-private fun HatColourSplit(
+internal fun HatColourSplit(
     metrics: DesignMetrics,
     colour1: Color,
     colour2: Color,
@@ -1353,7 +1353,7 @@ private fun HatColourSplit(
     }
 }
 
-private fun MiiEditorUiState.railToggle(): RailToggle? = when (selectedCategory) {
+internal fun MiiEditorUiState.railToggle(): RailToggle? = when (selectedCategory) {
     MiiCategory.Hair -> RailToggle(
         icon = PocketAsset("files/figma/mii_editor_adjust_hat.svg"),
         on = hatMode,
@@ -1376,7 +1376,7 @@ private fun MiiEditorUiState.railToggle(): RailToggle? = when (selectedCategory)
     else -> null
 }
 
-private fun MiiEditorUiState.relevantAdjustments(): List<MiiAdjustmentDescriptor> {
+internal fun MiiEditorUiState.relevantAdjustments(): List<MiiAdjustmentDescriptor> {
     val all = descriptor.adjustments
     return when (activeTraitField) {
         MiiTraitField.MustacheType, MiiTraitField.BeardType -> all.filter {
@@ -1389,7 +1389,7 @@ private fun MiiEditorUiState.relevantAdjustments(): List<MiiAdjustmentDescriptor
     }
 }
 
-private fun List<MiiAdjustmentDescriptor>.fieldFor(
+internal fun List<MiiAdjustmentDescriptor>.fieldFor(
     slot: AdjustmentVisualSlot,
 ): MiiAdjustmentField? = when (slot) {
     AdjustmentVisualSlot.Vertical -> firstOrNull {
@@ -1411,7 +1411,7 @@ private fun List<MiiAdjustmentDescriptor>.fieldFor(
     }?.field
 }
 
-private fun MiiAdjustmentField.visualSlot(): AdjustmentVisualSlot = when {
+internal fun MiiAdjustmentField.visualSlot(): AdjustmentVisualSlot = when {
     name.endsWith("YPosition") || this == MiiAdjustmentField.Height ->
         AdjustmentVisualSlot.Vertical
     name.endsWith("VerticalStretch") ||
@@ -1426,7 +1426,7 @@ private fun MiiAdjustmentField.visualSlot(): AdjustmentVisualSlot = when {
 }
 
 @Composable
-private fun AdjustmentIcon(
+internal fun AdjustmentIcon(
     metrics: DesignMetrics,
     slot: AdjustmentVisualSlot,
     modifier: Modifier = Modifier,
@@ -1866,10 +1866,10 @@ private fun adjustmentPanelLeft(progress: Float): Float =
 private fun adjustmentPanelWidth(progress: Float): Float =
     ADJUSTMENT_BUTTON_WIDTH + (ADJUSTMENT_PANEL_WIDTH - ADJUSTMENT_BUTTON_WIDTH) * progress
 
-private fun adjustmentContentAlpha(progress: Float): Float =
+internal fun adjustmentContentAlpha(progress: Float): Float =
     ((progress - 0.7f) / 0.3f).coerceIn(0f, 1f)
 
-private fun adjustmentShadowAlpha(progress: Float): Float =
+internal fun adjustmentShadowAlpha(progress: Float): Float =
     (progress / 0.35f).coerceIn(0f, 1f)
 
 private fun Modifier.adjustmentPanelBounds(
@@ -1890,7 +1890,7 @@ private fun Modifier.adjustmentPanelBounds(
     }
 
 @Composable
-private fun FigmaPillSurface(
+internal fun FigmaPillSurface(
     metrics: DesignMetrics,
     modifier: Modifier,
     shape: RoundedCornerShape,
@@ -1988,23 +1988,11 @@ private fun ContinuePanel(
     onClick: () -> Unit,
     glyph: Boolean = true,
 ) {
-    val labelStyle = TextStyle(
-        brush = Brush.verticalGradient(
-            listOf(PocketBlue, Color(0xFF21677B)),
-        ),
-        fontFamily = Rubik,
-        fontWeight = FontWeight.Bold,
-        fontSize = metrics.sp(82.814f),
-    )
-    val density = LocalDensity.current
-    val textMeasurer = rememberTextMeasurer()
-    val labelWidth = remember(label, density) {
-        textMeasurer.measure(label, labelStyle).size.width.toFloat()
-    }
+    val labelStyle = continueLabelStyle(metrics)
+    val labelWidth = rememberContinueLabelWidth(label, labelStyle)
     val labelX = if (glyph) CONTINUE_LABEL_X else CONTINUE_LABEL_END_PADDING
     val width = labelX + labelWidth + CONTINUE_LABEL_END_PADDING
-    val height = 178f
-    val radius = 130f
+    val height = CONTINUE_TAB_HEIGHT
     Box(
         modifier = Modifier
             .anchoredBounds(
@@ -2032,57 +2020,94 @@ private fun ContinuePanel(
                 },
             ),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val panelPath = Path().apply {
-                moveTo(0f, 0f)
-                lineTo(width - radius, 0f)
-                quadraticTo(width, 0f, width, radius)
-                lineTo(width, height)
-                lineTo(0f, height)
-                close()
-            }
-            drawPath(
-                path = panelPath,
-                brush = Brush.verticalGradient(
-                    colorStops = arrayOf(
-                        0f to Color.White,
-                        0.44712f to Color.White,
-                        1f to Color(0xFFBDF8CB),
-                    ),
-                ),
-            )
-
-            val borderPath = Path().apply {
-                moveTo(0f, 8f)
-                lineTo(width - radius, 8f)
-                quadraticTo(width - 8f, 8f, width - 8f, radius)
-                lineTo(width - 8f, height)
-            }
-            drawPath(
-                path = borderPath,
-                color = PocketBlue,
-                style = Stroke(width = 16f),
-            )
-        }
-
-        if (glyph) {
-            FigmaAsset(
-                resource = PocketAsset("files/figma/mii_editor_ok_y.svg"),
-                modifier = Modifier.designBounds(metrics, 68.78f, 46.28f, 85.44f, 92.44f),
-            )
-        }
-        Text(
-            text = label,
-            modifier = Modifier.designBounds(metrics, labelX, 40f, labelWidth + 4f, 98f),
-            style = labelStyle,
-            maxLines = 1,
-            softWrap = false,
-        )
+        ContinueTabFace(metrics, width, height, label, labelStyle, labelX, labelWidth, glyph)
     }
 }
 
-private const val CONTINUE_LABEL_X = 180.22f
-private const val CONTINUE_LABEL_END_PADDING = 103.78f
+@Composable
+internal fun continueLabelStyle(metrics: DesignMetrics, fontSize: Float = 82.814f): TextStyle = TextStyle(
+    brush = Brush.verticalGradient(
+        listOf(PocketBlue, Color(0xFF21677B)),
+    ),
+    fontFamily = Rubik,
+    fontWeight = FontWeight.Bold,
+    fontSize = metrics.sp(fontSize),
+)
+
+@Composable
+internal fun rememberContinueLabelWidth(label: String, style: TextStyle): Float {
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    return remember(label, density) {
+        textMeasurer.measure(label, style).size.width.toFloat()
+    }
+}
+
+@Composable
+internal fun BoxScope.ContinueTabFace(
+    metrics: DesignMetrics,
+    width: Float,
+    height: Float,
+    label: String,
+    labelStyle: TextStyle,
+    labelX: Float,
+    labelWidth: Float,
+    glyph: Boolean,
+    glyphX: Float = CONTINUE_GLYPH_X,
+) {
+    val radius = 130f
+    Canvas(Modifier.fillMaxSize()) {
+        val panelPath = Path().apply {
+            moveTo(0f, 0f)
+            lineTo(width - radius, 0f)
+            quadraticTo(width, 0f, width, radius)
+            lineTo(width, height)
+            lineTo(0f, height)
+            close()
+        }
+        drawPath(
+            path = panelPath,
+            brush = Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to Color.White,
+                    0.44712f to Color.White,
+                    1f to Color(0xFFBDF8CB),
+                ),
+            ),
+        )
+
+        val borderPath = Path().apply {
+            moveTo(0f, 8f)
+            lineTo(width - radius, 8f)
+            quadraticTo(width - 8f, 8f, width - 8f, radius)
+            lineTo(width - 8f, height)
+        }
+        drawPath(
+            path = borderPath,
+            color = PocketBlue,
+            style = Stroke(width = 16f),
+        )
+    }
+
+    if (glyph) {
+        FigmaAsset(
+            resource = PocketAsset("files/figma/mii_editor_ok_y.svg"),
+            modifier = Modifier.designBounds(metrics, glyphX, 46.28f, 85.44f, 92.44f),
+        )
+    }
+    Text(
+        text = label,
+        modifier = Modifier.designBounds(metrics, labelX, 40f, labelWidth + 4f, 98f),
+        style = labelStyle,
+        maxLines = 1,
+        softWrap = false,
+    )
+}
+
+internal const val CONTINUE_LABEL_X = 180.22f
+internal const val CONTINUE_LABEL_END_PADDING = 103.78f
+internal const val CONTINUE_GLYPH_X = 68.78f
+internal const val CONTINUE_TAB_HEIGHT = 178f
 
 @Composable
 private fun EditorNotice(
@@ -2128,11 +2153,11 @@ private fun EditorNotice(
     }
 }
 
-private val EditorNoticeRed = Color(0xFFB31E3A)
+internal val EditorNoticeRed = Color(0xFFB31E3A)
 private const val EDITOR_NOTICE_PADDING = 56f
 private const val EDITOR_NOTICE_MAX_WIDTH = 952f
 
-private fun Modifier.blockMiiRendererGestures(): Modifier = pointerInput(Unit) {
+internal fun Modifier.blockMiiRendererGestures(): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         do {
             val event = awaitPointerEvent()

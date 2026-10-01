@@ -24,7 +24,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -44,6 +47,11 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.IntegrityBlockScreen
 import com.pocketpass.app.ui.components.EntranceMotion
 import com.pocketpass.app.ui.components.MotionLayer
+import com.pocketpass.app.ui.controller.ControllerOverlayFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalFocusDisplay
+import com.pocketpass.app.ui.controller.LocalControllerFocusLayer
+import com.pocketpass.app.ui.controller.controllerFocusBarrier
 import com.pocketpass.app.ui.requiresAccountSetup
 import com.pocketpass.app.ui.requiresForcedUpdate
 import com.pocketpass.app.ui.requiresMiiGate
@@ -66,10 +74,17 @@ fun PhoneRoot(
 ) {
     val savedCanonical by rememberUpdatedState(state.miiEditor.savedCanonicalBase64)
     val renderSurface = LocalMiiRenderSurface.current
+    val miiLiveSurface = remember(miiEditorController, renderSurface) {
+        movableContentOf {
+            if (miiEditorController != null) {
+                renderSurface?.invoke(miiEditorController, savedCanonical, Modifier.fillMaxSize())
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         if (state.miiEditor.isEditorPreparing && miiEditorController != null) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0f }) {
-                renderSurface?.invoke(miiEditorController, savedCanonical, Modifier.fillMaxSize())
+                miiLiveSurface()
             }
         }
         when {
@@ -79,7 +94,9 @@ fun PhoneRoot(
             state.requiresAccountSetup() -> PhoneAccountSetupScreen(metrics, state.accountSetup) {
                 dispatch(PocketPassEvent.AccountSetup(it))
             }
-            state.requiresMiiGate() -> PhoneMiiGate(metrics, state, miiEditorController, dispatch)
+            state.requiresMiiGate() -> PhoneMiiGate(metrics, state, dispatch) {
+                if (state.miiEditor.isEditorVisible && miiEditorController != null) miiLiveSurface()
+            }
             !state.sessionState.showsPocketPassApp() -> PhoneAuthScreen(metrics, state.sessionState, state.auth) {
                 dispatch(PocketPassEvent.Auth(it))
             }
@@ -100,6 +117,7 @@ private fun PhoneShell(
     val insets = LocalPhoneInsets.current
     val layout = phoneLayout(metrics.designWidth - insets.start - insets.end, metrics.designHeight)
     val backdrop = phoneBackdrop(state, pocketPalette)
+    ControllerRouteFocus(state.rootDestination, state.routes.size)
     Box(Modifier.fillMaxSize()) {
         if(state.rootDestination == PocketPassDestination.Messages) BoardBackdrop(metrics)
         else PhoneBackdrop(metrics, backdrop.top, backdrop.bottom)
@@ -175,16 +193,16 @@ private fun PhoneCompactShell(
             )
         }
     }
-    PhonePageLayer(metrics, backdrop, visible = state.routes.lastOrNull().let { it != null && it !is PocketPassRoute.Root }, fromEnd = true) {
+    PhonePageLayer(metrics, backdrop, visible = state.routes.lastOrNull().let { it != null && it !is PocketPassRoute.Root }, fromEnd = true, focusLayer = PHONE_ROUTE_FOCUS_LAYER) {
         PhoneRoutePage(metrics, state, dispatch)
     }
-    PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
+    PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false, focusLayer = PHONE_GAME_FOCUS_LAYER) {
         PhoneGamePage(metrics, state, dispatch)
     }
-    PhonePageLayer(metrics, backdrop.takeUnless { state.profileViewer.source == ProfileViewerSource.Board }, visible = state.profileViewer.visible, fromEnd = false) {
+    PhonePageLayer(metrics, backdrop.takeUnless { state.profileViewer.source == ProfileViewerSource.Board }, visible = state.profileViewer.visible, fromEnd = false, focusLayer = PHONE_PROFILE_FOCUS_LAYER) {
         PhoneDeck(metrics) { PhoneProfilePage(metrics, state, dispatch) }
     }
-    PhonePageLayer(metrics, backdrop, visible = destination == PocketPassDestination.Home && state.friendsOverlay == FriendsOverlay.Notifications, fromEnd = true) {
+    PhonePageLayer(metrics, backdrop, visible = destination == PocketPassDestination.Home && state.friendsOverlay == FriendsOverlay.Notifications, fromEnd = true, focusLayer = PHONE_NOTIFICATIONS_FOCUS_LAYER) {
         PhoneDeck(metrics) { PhoneNotificationsPage(metrics, state, dispatch) }
     }
 }
@@ -229,14 +247,14 @@ private fun PhoneWideShell(
                 }
             }
             if(destination != PocketPassDestination.Messages) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
-            PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false) {
+            PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false, focusLayer = PHONE_GAME_FOCUS_LAYER) {
                 PhoneGamePage(metrics, state, dispatch)
             }
             val messagesPage = state.routes.lastOrNull()
                 ?.takeIf { it is PocketPassRoute.MessageDetail || it is PocketPassRoute.NewGroup }
             val shownMessagesPage = remember { mutableStateOf(messagesPage) }
             if (messagesPage != null) shownMessagesPage.value = messagesPage
-            PhonePageLayer(metrics, backdrop, visible = messagesPage != null, fromEnd = true) {
+            PhonePageLayer(metrics, backdrop, visible = messagesPage != null, fromEnd = true, focusLayer = PHONE_ROUTE_FOCUS_LAYER) {
                 Box(Modifier.fillMaxSize().padding(end = metrics.dp(insets.end))) {
                     if (shownMessagesPage.value is PocketPassRoute.NewGroup) {
                         PhoneNewGroupPage(metrics, state, dispatch)
@@ -245,7 +263,7 @@ private fun PhoneWideShell(
                     }
                 }
             }
-            PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Home && state.friendsOverlay == FriendsOverlay.Notifications, fromEnd = true) {
+            PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Home && state.friendsOverlay == FriendsOverlay.Notifications, fromEnd = true, focusLayer = PHONE_NOTIFICATIONS_FOCUS_LAYER) {
                 PhoneNotificationsSheet(metrics, state, dispatch)
             }
         }
@@ -280,8 +298,14 @@ internal fun PhonePageLayer(
     backdrop: BackgroundPair?,
     visible: Boolean,
     fromEnd: Boolean,
+    focusLayer: Int = PHONE_ROUTE_FOCUS_LAYER,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    ControllerOverlayFocus(visible)
+    CompositionLocalProvider(
+        LocalControllerFocusLayer provides LocalControllerFocusLayer.current + focusLayer,
+        LocalControllerFocus provides LocalControllerFocus.current?.takeIf { visible },
+    ) {
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(200)) + if (fromEnd) {
@@ -298,6 +322,7 @@ internal fun PhonePageLayer(
         Box(
             Modifier
                 .fillMaxSize()
+                .controllerFocusBarrier("phone_page_$focusLayer", layer = 0)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -309,4 +334,49 @@ internal fun PhonePageLayer(
             if (backdrop != null) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
         }
     }
+    }
 }
+
+@Composable
+private fun ControllerRouteFocus(destination: PocketPassDestination, depth: Int) {
+    val focus = LocalControllerFocus.current ?: return
+    val display = LocalFocusDisplay.current
+    val tracker = remember { RouteFocusTracker(destination, depth) }
+    val restore = remember(focus, destination, depth) { tracker.arrive(destination, depth, focus.focusId) }
+    LaunchedEffect(focus, destination, depth) {
+        if (restore != null) {
+            focus.focus(restore, reveal = false)
+        } else {
+            withFrameNanos { }
+            withFrameNanos { }
+            focus.ensureFocus(display)
+        }
+    }
+}
+
+private class RouteFocusTracker(private var destination: PocketPassDestination, private var depth: Int) {
+    private val openers = mutableMapOf<Int, String>()
+
+    fun arrive(nextDestination: PocketPassDestination, nextDepth: Int, focusedId: String?): String? {
+        val sameTab = nextDestination == destination
+        val previousDepth = depth
+        destination = nextDestination
+        depth = nextDepth
+        if (!sameTab) {
+            openers.clear()
+            return null
+        }
+        if (nextDepth > previousDepth) {
+            focusedId?.let { openers[previousDepth] = it }
+            return null
+        }
+        if (nextDepth == previousDepth) return null
+        openers.keys.removeAll { it > nextDepth }
+        return openers.remove(nextDepth)
+    }
+}
+
+internal const val PHONE_ROUTE_FOCUS_LAYER = 100
+internal const val PHONE_GAME_FOCUS_LAYER = 200
+internal const val PHONE_PROFILE_FOCUS_LAYER = 300
+internal const val PHONE_NOTIFICATIONS_FOCUS_LAYER = 400

@@ -133,11 +133,12 @@ import com.pocketpass.app.domain.model.NearbyEncounter
 import com.pocketpass.app.domain.state.PendingState
 import com.pocketpass.app.model.BIO_MAX_LENGTH
 import com.pocketpass.app.model.BioEditorUiState
-import com.pocketpass.app.model.NameEditorUiState
 import com.pocketpass.app.model.GameTarget
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassRoute
+import com.pocketpass.app.feature.ACCOUNT_SETUP_AGE_MAX
+import com.pocketpass.app.feature.ACCOUNT_SETUP_AGE_MIN
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.ProfileViewerSource
 import com.pocketpass.app.model.RecentInteractionsSort
@@ -227,6 +228,10 @@ fun BottomScreen(
         )
         PocketPassRoute.ChatColours -> ChatColoursBottom(state, dispatch)
         PocketPassRoute.Social -> SocialBottom(
+            state = state,
+            dispatch = dispatch,
+        )
+        PocketPassRoute.EditInfo -> EditInfoBottom(
             state = state,
             dispatch = dispatch,
         )
@@ -1538,6 +1543,13 @@ fun BioEditorBottomOverlay(
 
 private const val BIO_EDITOR_FOCUS_LAYER = 10
 
+private data class ProfileFieldEditorContent(
+    val draft: String,
+    val error: String?,
+    val errorShakeNonce: Int,
+    val submitEnabled: Boolean,
+)
+
 @Composable
 fun NameEditorBottomOverlay(
     metrics: DesignMetrics,
@@ -1545,8 +1557,118 @@ fun NameEditorBottomOverlay(
     dispatch: (PocketPassEvent) -> Unit,
 ) {
     val palette = pocketPalette
-    val active = if (state.nameEditor.visible) state.nameEditor else null
-    var retained by remember { mutableStateOf<NameEditorUiState?>(null) }
+    val editor = state.nameEditor
+    ProfileFieldEditorOverlay(
+        metrics = metrics,
+        active = if (editor.visible) {
+            ProfileFieldEditorContent(editor.draft, editor.error, editor.errorShakeNonce, editor.valid && !editor.saving)
+        } else {
+            null
+        },
+        tagPrefix = "name_editor",
+        closeTag = "close_name_editor",
+        title = "Edit Name",
+        hint = "The name everyone will see",
+        placeholder = "yourname",
+        layout = PocketKeyboardLayout.Text,
+        onClose = { dispatch(PocketPassEvent.CloseNameEditor) },
+        onDraft = { dispatch(PocketPassEvent.UpdateNameDraft(it)) },
+        onSubmit = { dispatch(PocketPassEvent.SaveName) },
+    ) { content ->
+        Text(
+            text = "${content.draft.length}/$PROFILE_NAME_MAX_LENGTH",
+            modifier = Modifier.designBounds(metrics, 58f, 414f, 964f, 40f),
+            color = palette.tealBorder,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(30f),
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+fun AgeEditorBottomOverlay(
+    metrics: DesignMetrics,
+    state: PocketPassUiState,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
+    val palette = pocketPalette
+    val editor = state.ageEditor
+    ProfileFieldEditorOverlay(
+        metrics = metrics,
+        active = if (editor.visible) {
+            ProfileFieldEditorContent(editor.draft, editor.error, editor.errorShakeNonce, editor.valid && !editor.saving)
+        } else {
+            null
+        },
+        tagPrefix = "age_editor",
+        closeTag = "close_age_editor",
+        title = "Edit Age",
+        hint = "Shown on your profile",
+        placeholder = "--",
+        layout = PocketKeyboardLayout.Numeric,
+        onClose = { dispatch(PocketPassEvent.CloseAgeEditor) },
+        onDraft = { dispatch(PocketPassEvent.UpdateAgeDraft(it)) },
+        onSubmit = { dispatch(PocketPassEvent.SaveAge) },
+    ) {
+        Text(
+            text = "$ACCOUNT_SETUP_AGE_MIN to $ACCOUNT_SETUP_AGE_MAX",
+            modifier = Modifier.designBounds(metrics, 58f, 414f, 600f, 40f),
+            color = palette.tealBorder,
+            fontFamily = Rubik,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = metrics.sp(30f),
+            maxLines = 1,
+        )
+        val hideShape = RoundedCornerShape(metrics.dp(38f))
+        val hideEnabled = !editor.saving
+        Box(
+            modifier = Modifier
+                .designBounds(metrics, 802f, 398f, 220f, 76f)
+                .clip(hideShape)
+                .pocketFrame(cancelButtonBrush(), metrics.dp(8f), Color(0xFF8A8A8A), hideShape)
+                .testTag("age_editor_hide")
+                .controllerTarget("age_editor_hide", cornerRadius = 38f, layer = NAME_EDITOR_FOCUS_LAYER) {
+                    if (hideEnabled) dispatch(PocketPassEvent.HideAge)
+                }
+                .clickable(
+                    enabled = hideEnabled,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { dispatch(PocketPassEvent.HideAge) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "Hide",
+                color = Color.White,
+                fontFamily = Rubik,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = metrics.sp(36f),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileFieldEditorOverlay(
+    metrics: DesignMetrics,
+    active: ProfileFieldEditorContent?,
+    tagPrefix: String,
+    closeTag: String,
+    title: String,
+    hint: String,
+    placeholder: String,
+    layout: PocketKeyboardLayout,
+    onClose: () -> Unit,
+    onDraft: (String) -> Unit,
+    onSubmit: () -> Unit,
+    footer: @Composable BoxScope.(ProfileFieldEditorContent) -> Unit,
+) {
+    val palette = pocketPalette
+    var retained by remember { mutableStateOf<ProfileFieldEditorContent?>(null) }
     val progress = remember { Animatable(0f) }
     SideEffect {
         if (active != null) retained = active
@@ -1576,13 +1698,13 @@ fun NameEditorBottomOverlay(
             .designBounds(metrics, 0f, 0f, 1240f, 1080f)
             .graphicsLayer { alpha = progress.value }
             .background(pocketPalette.scrim)
-            .testTag("name_editor_overlay")
-            .controllerFocusBarrier("name_editor_overlay", layer = NAME_EDITOR_FOCUS_LAYER)
+            .testTag("${tagPrefix}_overlay")
+            .controllerFocusBarrier("${tagPrefix}_overlay", layer = NAME_EDITOR_FOCUS_LAYER)
             .clickable(
                 enabled = active != null,
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { dispatch(PocketPassEvent.CloseNameEditor) },
+            ) { onClose() },
     )
     Box(
         Modifier
@@ -1615,10 +1737,10 @@ fun NameEditorBottomOverlay(
                 panelShape,
             )
             .pointerInput(Unit) { detectTapGestures { } }
-            .testTag("name_editor_panel"),
+            .testTag("${tagPrefix}_panel"),
     ) {
         Text(
-            text = "Edit Name",
+            text = title,
             modifier = Modifier.designBounds(metrics, 58f, 46f, 760f, 94f),
             color = pocketPalette.teal,
             fontFamily = Rubik,
@@ -1630,14 +1752,14 @@ fun NameEditorBottomOverlay(
         Canvas(
             Modifier
                 .designBounds(metrics, 945f, 55f, 72f, 72f)
-                .testTag("close_name_editor")
-                .controllerTarget("close_name_editor", layer = NAME_EDITOR_FOCUS_LAYER) {
-                    dispatch(PocketPassEvent.CloseNameEditor)
+                .testTag(closeTag)
+                .controllerTarget(closeTag, layer = NAME_EDITOR_FOCUS_LAYER) {
+                    onClose()
                 }
                 .clickable(
                     interactionSource = closeInteraction,
                     indication = null,
-                ) { dispatch(PocketPassEvent.CloseNameEditor) },
+                ) { onClose() },
         ) {
             drawLine(
                 palette.ink(Color(0xFF2F948C)),
@@ -1655,7 +1777,7 @@ fun NameEditorBottomOverlay(
             )
         }
         Text(
-            text = editor.error ?: "The name everyone will see",
+            text = editor.error ?: hint,
             modifier = Modifier.designBounds(metrics, 58f, 150f, 964f, 50f),
             color = if (editor.error != null) {
                 palette.ink(Color(0xFFB31E3A))
@@ -1684,14 +1806,14 @@ fun NameEditorBottomOverlay(
                 .graphicsLayer { translationX = shake.value }
                 .clip(fieldShape)
                 .pocketFrame(palette.surfaceSunken, metrics.dp(8f), palette.tealBorder, fieldShape)
-                .testTag("name_editor_field"),
+                .testTag("${tagPrefix}_field"),
             contentAlignment = Alignment.Center,
         ) {
             if (editor.draft.isEmpty()) {
                 Text(
                     text = buildAnnotatedString {
                         appendInlineContent(TYPING_CARET_INLINE_ID, "|")
-                        append("yourname")
+                        append(placeholder)
                     },
                     inlineContent = typingCaretInline(metrics, pocketPalette.teal, 56f),
                     color = palette.ink(Color(0xFF8FB9C6)),
@@ -1716,32 +1838,21 @@ fun NameEditorBottomOverlay(
                 )
             }
         }
-        Text(
-            text = "${editor.draft.length}/$PROFILE_NAME_MAX_LENGTH",
-            modifier = Modifier.designBounds(metrics, 58f, 414f, 964f, 40f),
-            color = palette.tealBorder,
-            fontFamily = Rubik,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = metrics.sp(30f),
-            textAlign = TextAlign.End,
-            maxLines = 1,
-        )
+        footer(editor)
     }
     PocketKeyboard(
         metrics = metrics,
-        layout = PocketKeyboardLayout.Text,
+        layout = layout,
         submitLabel = "Save",
-        submitEnabled = editor.valid && !editor.saving,
+        submitEnabled = editor.submitEnabled,
         canBackspace = editor.draft.isNotEmpty(),
         onKey = { key ->
             when (key) {
-                is PocketKey.Character ->
-                    dispatch(PocketPassEvent.UpdateNameDraft(editor.draft + key.value))
+                is PocketKey.Character -> onDraft(editor.draft + key.value)
 
-                PocketKey.Backspace ->
-                    dispatch(PocketPassEvent.UpdateNameDraft(editor.draft.dropLast(1)))
+                PocketKey.Backspace -> onDraft(editor.draft.dropLast(1))
 
-                PocketKey.Submit -> dispatch(PocketPassEvent.SaveName)
+                PocketKey.Submit -> onSubmit()
                 PocketKey.Space, PocketKey.Alphabet, PocketKey.Emoji -> Unit
             }
         },
@@ -5412,7 +5523,7 @@ private fun SoundSlider(
 }
 
 @Composable
-internal fun EditNamePanel(
+internal fun EditInfoPanel(
     metrics: DesignMetrics,
     y: Float,
     onClick: () -> Unit,
@@ -5427,14 +5538,14 @@ internal fun EditNamePanel(
         borderWidth = 20.152f,
         radius = 110f,
         fillBrush = greyPanelBrush(),
-        tag = "edit_name",
+        tag = "edit_info",
         onClick = onClick,
     ) {
         SettingsHeading(
             metrics = metrics,
             icon = Assets.SettingsEditName,
-            title = "Edit Name",
-            subtitle = "Change the name everyone sees",
+            title = "Edit Info",
+            subtitle = "Change your name, age and country",
         )
         FigmaAsset(
             resource = Assets.SettingsArrow,
@@ -5523,7 +5634,7 @@ private fun SocialBottom(
             backTag = "social_back",
         ) { dispatch(PocketPassEvent.Back) }
         val rows = buildList<@Composable (Float) -> Unit> {
-            add { y -> EditNamePanel(metrics, y) { dispatch(PocketPassEvent.OpenNameEditor) } }
+            add { y -> EditInfoPanel(metrics, y) { dispatch(PocketPassEvent.OpenEditInfo) } }
             if (state.miiEditorEnabled) add { y -> EditMiiPanel(metrics, y) { dispatch(PocketPassEvent.OpenMiiSlots) } }
             if (state.connectedApps.enabled) add { y -> ConnectedAppsPanel(metrics, y) { dispatch(PocketPassEvent.OpenConnectedApps) } }
         }
@@ -5697,7 +5808,7 @@ private fun AppSettingsBottom(
 }
 
 @Composable
-private fun rememberBelowSubpageHeaderFocusViewport(metrics: DesignMetrics): ControllerFocusViewport {
+internal fun rememberBelowSubpageHeaderFocusViewport(metrics: DesignMetrics): ControllerFocusViewport {
     val density = LocalDensity.current
     return remember(metrics, density) {
         ControllerFocusViewport(
@@ -5817,7 +5928,7 @@ private fun NotificationSettingsBottom(
         ) { dispatch(PocketPassEvent.Back) }
         val rows = buildList {
             if (state.messagePushSupported) add(NotificationSettingsRow(
-                Assets.NavMessages, "Message Alerts", "New direct and group messages",
+                Assets.SettingsMessagePrivacy, "Message Alerts", "New direct and group messages",
                 "message_alerts_toggle", state.messageAlertsEnabled,
                 PocketPassEvent.SetMessageAlertsEnabled(!state.messageAlertsEnabled),
             ))
@@ -7640,6 +7751,7 @@ internal fun BoxScope.SettingsHeading(
     subtitleColor: Color? = null,
     subtitleSize: Float = 45f,
     centerTitle: Boolean = false,
+    subtitleOverflow: TextOverflow = TextOverflow.Clip,
 ) {
     FigmaAsset(
         resource = icon,
@@ -7662,6 +7774,7 @@ internal fun BoxScope.SettingsHeading(
         fontWeight = FontWeight.SemiBold,
         fontSize = metrics.sp(subtitleSize),
         maxLines = 1,
+        overflow = subtitleOverflow,
     )
 }
 

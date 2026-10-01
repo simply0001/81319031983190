@@ -67,7 +67,7 @@ import com.pocketpass.app.ui.screens.GameBottomOverlay
 import com.pocketpass.app.ui.screens.GamesBottomOverlay
 import com.pocketpass.app.ui.screens.LeaderboardBottomOverlay
 import com.pocketpass.app.ui.screens.MiiSlotsOverlay
-import com.pocketpass.app.ui.screens.NameEditorBottomOverlay
+import com.pocketpass.app.ui.screens.EditInfoBottomOverlays
 import com.pocketpass.app.ui.screens.NotificationDrawer
 import com.pocketpass.app.ui.screens.OAuthConsentOverlay
 import com.pocketpass.app.ui.screens.OAuthConsentTopScreen
@@ -301,6 +301,9 @@ fun BottomDisplayContent(
                             )
                             if (route == PocketPassRoute.Social) {
                                 SocialBottomOverlays(metrics, state, dispatch)
+                            }
+                            if (route == PocketPassRoute.EditInfo) {
+                                EditInfoBottomOverlays(metrics, state, dispatch)
                             }
                         },
                     )
@@ -558,7 +561,6 @@ private fun SocialBottomOverlays(
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
 ) {
-    NameEditorBottomOverlay(metrics, state, dispatch)
     if (state.miiSlotsVisible) {
         MiiSlotsOverlay(metrics, state, dispatch)
     }

@@ -344,12 +344,8 @@ Not released; the owner deferred it and wants TestFlight first.
     - Do a two-pass hash update: the build fails with the new hash; put it in `bundle.sha256`; run `-UpdateBundle`; then run once more without flags.
   - `RENDERER_VERSION` is duplicated in `IosMiiRenderController`; keep it in sync.
   - Hats: `hat_N.glb` is type N-1. hat_10 is the Halo, hat_11 the Hijab. Two-colour hats: `docs/two-colour-hats.md`.
-  - Headless check without a device:
-    - Serve the renderer dir over http.
-    - Drive it with puppeteer-core and Chrome (`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`).
-    - Inject `window.PocketPassNative`.
-    - Send base64 JSON via `PocketPassMiiRenderer.receiveBase64`.
-    - The first boot takes about 2.5 minutes.
+  - Headless check: serve the renderer dir over http, drive it with puppeteer-core and Chrome (`--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`), inject `window.PocketPassNative`, send base64 JSON to `PocketPassMiiRenderer.receiveBase64`. First boot takes ~2.5 min.
+  - Framing (2026-10-01): WebView clamps the renderer's CSS width × DPR² buffer to 4096 px; `LEGACY_PROJECTION_X_SCALE` and the 92 px lift offset the Thor's clamp (4428→4096). Phones/iOS load `?fit=height`, rebuilding that framing clamp-free. Re-check the Thor if the other path changes.
 - **iOS gotchas.**
   - Every CMP target needs `CADisableMinimumFrameDurationOnPhone=true` in Info.plist, or it crashes at launch.
   - `ui/.../files/figma/home_avatar_petah.svg` is really a PNG. Check magic bytes before copying assets into xcassets.
@@ -359,3 +355,5 @@ Not released; the owner deferred it and wants TestFlight first.
   - Crash reports: Settings → Privacy & Security → Analytics Data; `lastExceptionBacktrace` names the function.
 - **Glance widgets.** `Res` lives in `:ui`, so bitmap renderers go there. A Glance column holds at most 10 children.
 - **Controller focus.** Horizontal card rows scroll themselves to the focused card via `snapshotFlow`. Check Up/Down/L/R order closely; the owner reports focus bugs often.
+  - Single screen (2026-10-01): `PhoneApp` provides focus once `GamepadPresence` sees a gamepad or its key. Pages/dialogs add `LocalControllerFocusLayer` offsets (routes 100, dialogs 1000) behind barriers; `ControllerOverlayFocus`/`ControllerRouteFocus` hand focus over. As on the Thor, page back headers aren't targets; dialog close buttons are. No iOS gamepad input yet.
+- **Single-screen Piip editor.** `ui/mii/MiiEditorSingleScreen.kt` + `MiiSingleScreenLayout.kt`: preview on top when upright, Thor-style panel on the right when width ≥ 1.2× height. Y saves.

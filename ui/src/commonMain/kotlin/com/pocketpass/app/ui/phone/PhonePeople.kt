@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +66,8 @@ import com.pocketpass.app.ui.components.FigmaAsset
 import com.pocketpass.app.ui.components.pocketBorder
 import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.components.pocketShadow
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.screens.CARD_PORTRAIT_ZOOM
 import com.pocketpass.app.ui.screens.DynamicAvatar
 import com.pocketpass.app.ui.screens.DynamicTopAvatar
@@ -179,6 +182,7 @@ internal fun PhonePersonCard(
     val avatarShape = RoundedCornerShape(metrics.dp(56f))
     Column(
         modifier = modifier
+            .controllerTarget(tag, cornerRadius = 104f) { if (enabled) onClick() }
             .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
             .phoneShadow(metrics, 104f)
             .clip(shape)
@@ -309,11 +313,13 @@ internal fun PhoneEmptyRow(
                 if (onClick == null) {
                     Modifier
                 } else {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClick,
-                    )
+                    Modifier
+                        .controllerTarget(tag, cornerRadius = 110f) { onClick() }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onClick,
+                        )
                 },
             )
             .padding(start = metrics.dp(43f), end = metrics.dp(43f), top = metrics.dp(38f), bottom = metrics.dp(38f)),
@@ -378,6 +384,18 @@ internal fun BoxScope.PhoneSortMenuPanel(
     tagPrefix: String,
     onSelect: (RecentInteractionsSort) -> Unit,
 ) {
+    val focus = LocalControllerFocus.current
+    val returnTo = remember { arrayOfNulls<String>(1) }
+    LaunchedEffect(open, focus) {
+        if (focus == null) return@LaunchedEffect
+        if (open) {
+            returnTo[0] = focus.focusId
+            focus.focus("${tagPrefix}_${selected.key}", reveal = false)
+        } else {
+            returnTo[0]?.let { focus.focus(it, reveal = false) }
+            returnTo[0] = null
+        }
+    }
     Box(
         Modifier
             .align(Alignment.TopEnd)
@@ -417,7 +435,7 @@ internal fun BoxScope.PhoneSortMenuPanel(
                     selected = sort == selected,
                     textColor = textColor,
                     tag = "${tagPrefix}_${sort.key}",
-                    focusable = false,
+                    focusable = open,
                     onClick = { onSelect(sort) },
                 )
             }

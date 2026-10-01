@@ -48,6 +48,7 @@ import com.pocketpass.app.model.BIO_MAX_LENGTH
 import com.pocketpass.app.model.FriendsOverlay
 import com.pocketpass.app.model.GameTarget
 import com.pocketpass.app.model.HomeMood
+import com.pocketpass.app.model.PROFILE_AGE_RULE_MESSAGE
 import com.pocketpass.app.model.ProfileFriendRequestState
 import com.pocketpass.app.model.ProfileViewerSource
 import com.pocketpass.app.model.ThemeMode
@@ -410,6 +411,91 @@ class FeatureStateHoldersTest {
             FixtureData.currentProfile.username,
             (holder.state.value.profile as LoadState.Data).value?.username,
         )
+    }
+
+    @Test
+    fun ageEditorSeedsFromTheProfileKeepsDigitsAndSaves() = runTest {
+        val holder = HomeProfileStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            profileRepository = FixtureProfileRepository(),
+            encounterRepository = FixtureEncounterRepository(),
+            settingsRepository = InMemorySettingsRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        assertFalse(holder.closeAgeEditor())
+        holder.openAgeEditor()
+        runCurrent()
+        assertTrue(holder.state.value.ageEditor.visible)
+        assertEquals("43", holder.state.value.ageEditor.draft)
+
+        holder.setAgeDraft("2a71")
+        holder.saveAge()
+        runCurrent()
+        assertEquals("271", holder.state.value.ageEditor.draft)
+        assertEquals(PROFILE_AGE_RULE_MESSAGE, holder.state.value.ageEditor.error)
+        assertEquals(1, holder.state.value.ageEditor.errorShakeNonce)
+        assertEquals(43, (holder.state.value.profile as LoadState.Data).value?.age)
+
+        holder.setAgeDraft("27")
+        holder.saveAge()
+        runCurrent()
+        assertFalse(holder.state.value.ageEditor.visible)
+        assertEquals(27, (holder.state.value.profile as LoadState.Data).value?.age)
+    }
+
+    @Test
+    fun hidingTheAgeClearsItFromTheProfile() = runTest {
+        val holder = HomeProfileStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            profileRepository = FixtureProfileRepository(),
+            encounterRepository = FixtureEncounterRepository(),
+            settingsRepository = InMemorySettingsRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        holder.openAgeEditor()
+        holder.hideAge()
+        runCurrent()
+        assertFalse(holder.state.value.ageEditor.visible)
+        assertEquals(null, (holder.state.value.profile as LoadState.Data).value?.age)
+
+        holder.openAgeEditor()
+        runCurrent()
+        assertEquals("", holder.state.value.ageEditor.draft)
+    }
+
+    @Test
+    fun countryEditorSavesTheChosenCountryAndClosesOnTheSameOne() = runTest {
+        val holder = HomeProfileStateHolder(
+            accountId = flowOf(FixtureData.CurrentUserId),
+            profileRepository = FixtureProfileRepository(),
+            encounterRepository = FixtureEncounterRepository(),
+            settingsRepository = InMemorySettingsRepository(),
+            scope = backgroundScope,
+        )
+        runCurrent()
+
+        holder.saveCountry("BE")
+        runCurrent()
+        assertEquals("US", (holder.state.value.profile as LoadState.Data).value?.countryCode)
+
+        holder.openCountryEditor()
+        runCurrent()
+        assertTrue(holder.state.value.countryEditor.visible)
+        holder.saveCountry("us")
+        runCurrent()
+        assertFalse(holder.state.value.countryEditor.visible)
+        assertEquals("US", (holder.state.value.profile as LoadState.Data).value?.countryCode)
+
+        holder.openCountryEditor()
+        holder.saveCountry("be")
+        runCurrent()
+        assertFalse(holder.state.value.countryEditor.visible)
+        assertEquals("BE", (holder.state.value.profile as LoadState.Data).value?.countryCode)
+        assertFalse(holder.closeCountryEditor())
     }
 
     @Test

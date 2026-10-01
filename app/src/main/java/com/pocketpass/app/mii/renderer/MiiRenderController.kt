@@ -121,6 +121,7 @@ class MiiRenderController private constructor(
     internal fun attach(
         webView: WebView,
         initialCanonicalBase64: String,
+        fitHeight: Boolean = false,
     ) {
         checkMainThread()
         val bootCanonical = initialCanonicalBase64
@@ -162,6 +163,7 @@ class MiiRenderController private constructor(
             .authority(ASSET_HOST)
             .path("/index.html")
             .appendQueryParameter("mii", bootCanonical)
+            .apply { if (fitHeight) appendQueryParameter("fit", "height") }
             .build()
         webView.loadUrl(page.toString())
     }
@@ -583,7 +585,7 @@ class MiiRenderController private constructor(
 
     companion object {
         const val RENDERER_VERSION =
-            "ariankordi/mii-creator@1cd6b7d1d09e75fffd5c116a10e3e162647ecb78+pocketpass.20260930.1"
+            "ariankordi/mii-creator@1cd6b7d1d09e75fffd5c116a10e3e162647ecb78+pocketpass.20261001.1"
 
         const val DEFAULT_MII_BASE64 =
             "BAXGigDvV8wSNID/cJl869TJwxYAAAAAAAAAAAAAAAAAAAAAAAAAAE0AaQBpAAAAAAAAAAAAAAAAAAAACAAAAAAAQAMDAQYEBgIKCAQEAgIMAAAAAP8AAAAACAQACgEAIf///0AABAACFAMTBBcNBAAKBAEJ//8A/wAAAP//"

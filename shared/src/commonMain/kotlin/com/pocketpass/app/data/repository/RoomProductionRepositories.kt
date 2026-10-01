@@ -40,6 +40,8 @@ import com.pocketpass.app.domain.model.SendMessageCommand
 import com.pocketpass.app.domain.model.SetUserBlockCommand
 import com.pocketpass.app.domain.model.UpdateProfileCommand
 import com.pocketpass.app.domain.model.RenameProfileCommand
+import com.pocketpass.app.domain.model.SetProfileAgeCommand
+import com.pocketpass.app.domain.model.SetProfileCountryCommand
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.repository.MessageRepository
@@ -177,6 +179,30 @@ class RoomProfileRepository(
         command: RenameProfileCommand,
     ): RepositoryResult<UserProfile> = repositoryCall {
         when (val result = remote.renameProfile(command)) {
+            is RepositoryResult.Failure -> result
+            is RepositoryResult.Success -> {
+                reconciler.reconcileAcknowledgedProfile(result.value)
+                result
+            }
+        }
+    }
+
+    override suspend fun setProfileAge(
+        command: SetProfileAgeCommand,
+    ): RepositoryResult<UserProfile> = repositoryCall {
+        when (val result = remote.setProfileAge(command)) {
+            is RepositoryResult.Failure -> result
+            is RepositoryResult.Success -> {
+                reconciler.reconcileAcknowledgedProfile(result.value)
+                result
+            }
+        }
+    }
+
+    override suspend fun setProfileCountry(
+        command: SetProfileCountryCommand,
+    ): RepositoryResult<UserProfile> = repositoryCall {
+        when (val result = remote.setProfileCountry(command)) {
             is RepositoryResult.Failure -> result
             is RepositoryResult.Success -> {
                 reconciler.reconcileAcknowledgedProfile(result.value)

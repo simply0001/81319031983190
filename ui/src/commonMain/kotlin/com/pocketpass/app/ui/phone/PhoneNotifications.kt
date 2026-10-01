@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.graphicsLayer
@@ -51,6 +52,11 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.FigmaAsset
+import com.pocketpass.app.ui.controller.ControllerFocusViewport
+import com.pocketpass.app.ui.controller.FocusDirection
+import com.pocketpass.app.ui.controller.LocalControllerFocusViewport
+import com.pocketpass.app.ui.controller.controllerFocusViewport
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.components.NotificationListMotion
 import com.pocketpass.app.ui.components.PinListToNewestNotification
 import com.pocketpass.app.ui.components.notificationMotion
@@ -190,9 +196,11 @@ private fun PhoneNotificationList(
     val listState = rememberLazyListState()
     val shown = motion.shown(state.notifications)
     PinListToNewestNotification(listState, shown)
+    val viewport = remember { ControllerFocusViewport() }
+    CompositionLocalProvider(LocalControllerFocusViewport provides viewport) {
     LazyColumn(
         state = listState,
-        modifier = modifier,
+        modifier = modifier.controllerFocusViewport(viewport),
         contentPadding = PaddingValues(horizontal = metrics.dp(horizontalPadding), vertical = metrics.dp(24f)),
     ) {
         if (shown.isEmpty()) {
@@ -210,6 +218,7 @@ private fun PhoneNotificationList(
                 }
             }
         }
+    }
     }
 }
 
@@ -335,10 +344,18 @@ private fun PhoneNotificationCard(
         actorCard -> "Is now your friend!"
         else -> notification.body
     }
+    val cardFocusId = "notification_${notification.id.value}"
+    val acceptFocusId = "accept_friend_request_${notification.id.value}"
+    val declineFocusId = "decline_friend_request_${notification.id.value}"
     PhoneNotificationShell(
         metrics = metrics,
         modifier = Modifier
-            .testTag("notification_${notification.id.value}")
+            .testTag(cardFocusId)
+            .controllerTarget(
+                cardFocusId,
+                cornerRadius = 60f,
+                neighbors = if (pendingRequest) mapOf(FocusDirection.Down to acceptFocusId) else emptyMap(),
+            ) { onOpen() }
             .clickable(
                 interactionSource = remember(notification.id) { MutableInteractionSource() },
                 indication = null,
@@ -393,8 +410,16 @@ private fun PhoneNotificationCard(
         if (pendingRequest) {
             Spacer(Modifier.height(metrics.dp(22f)))
             Row(horizontalArrangement = Arrangement.spacedBy(metrics.dp(16f))) {
-                PhoneRequestButton(metrics, "Accept", Assets.NotificationAccept, 35.8f, 25.988f, greenButtonBrush(), Color(0xFF4FC24B), "accept_friend_request", onAccept)
-                PhoneRequestButton(metrics, "Decline", Assets.NotificationDecline, 28.58f, 28.58f, redButtonBrush(), Color(0xFFC24B4B), "decline_friend_request", onDecline)
+                PhoneRequestButton(
+                    metrics, "Accept", Assets.NotificationAccept, 35.8f, 25.988f, greenButtonBrush(), Color(0xFF4FC24B),
+                    "accept_friend_request", acceptFocusId,
+                    mapOf(FocusDirection.Up to cardFocusId, FocusDirection.Right to declineFocusId), onAccept,
+                )
+                PhoneRequestButton(
+                    metrics, "Decline", Assets.NotificationDecline, 28.58f, 28.58f, redButtonBrush(), Color(0xFFC24B4B),
+                    "decline_friend_request", declineFocusId,
+                    mapOf(FocusDirection.Up to cardFocusId, FocusDirection.Left to acceptFocusId), onDecline,
+                )
             }
         }
     }
@@ -410,6 +435,8 @@ private fun PhoneRequestButton(
     fill: Brush,
     borderColor: Color,
     tag: String,
+    focusId: String,
+    neighbors: Map<FocusDirection, String>,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(metrics.dp(57.927f))
@@ -421,6 +448,7 @@ private fun PhoneRequestButton(
             .clip(shape)
             .pocketFrame(fill, metrics.dp(9.893f), borderColor, shape)
             .testTag(tag)
+            .controllerTarget(focusId, cornerRadius = 57.927f, neighbors = neighbors) { onClick() }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

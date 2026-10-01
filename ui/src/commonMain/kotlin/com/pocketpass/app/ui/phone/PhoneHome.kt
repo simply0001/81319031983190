@@ -61,6 +61,8 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.components.FigmaAsset
 import com.pocketpass.app.ui.components.pocketFrame
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.screens.HOME_EMOJI_ALPHA
 import com.pocketpass.app.ui.screens.HOME_EMOJI_BURST_COUNT
 import com.pocketpass.app.ui.screens.HOME_EMOJI_SIZE
@@ -339,6 +341,16 @@ private fun PhoneMoodCluster(
     var confirmationMood by remember { mutableStateOf<HomeMood?>(null) }
     var confirmationSequence by remember { mutableStateOf(0) }
     val confirmationScale = remember { Animatable(1f) }
+    val focus = LocalControllerFocus.current
+    var wasExpanded by remember { mutableStateOf(state.homeMoodPickerExpanded) }
+    LaunchedEffect(state.homeMoodPickerExpanded) {
+        if (state.homeMoodPickerExpanded) {
+            focus?.focus(phoneMoodTag(state.homeMood), reveal = false)
+        } else if (wasExpanded) {
+            focus?.focus(PHONE_MOOD_TRIGGER_TAG, reveal = false)
+        }
+        wasExpanded = state.homeMoodPickerExpanded
+    }
     LaunchedEffect(confirmationSequence) {
         if (confirmationSequence == 0) return@LaunchedEffect
         confirmationScale.snapTo(1f)
@@ -368,11 +380,27 @@ private fun PhoneMoodCluster(
             val haloVisible by remember(selected, progress) {
                 derivedStateOf { selected && progress.value > HOME_MOOD_HALO_REVEAL_PROGRESS }
             }
+            val select = {
+                confirmationMood = mood
+                confirmationSequence += 1
+                dispatch(PocketPassEvent.SelectHomeMood(mood))
+            }
             Box(
                 modifier = Modifier
                     .offset(x = metrics.dp(targetX - haloInset), y = metrics.dp(0f))
                     .requiredSize(metrics.dp(PHONE_MOOD_HALO))
                     .graphicsLayer { translationX = (PHONE_MOOD_TRIGGER_X - targetX) * (1f - progress.value) }
+                    .then(
+                        if (state.homeMoodPickerExpanded) {
+                            Modifier.controllerTarget(
+                                phoneMoodTag(mood),
+                                layer = PHONE_MOOD_FOCUS_LAYER,
+                                cornerRadius = PHONE_MOOD_HALO / 2f,
+                            ) { select() }
+                        } else {
+                            Modifier
+                        },
+                    )
                     .clip(CircleShape)
                     .pocketFrame(
                         if (haloVisible) HOME_MOOD_SELECTED_COLOR else Color.Transparent,
@@ -388,12 +416,8 @@ private fun PhoneMoodCluster(
                     description = mood.name,
                     size = PHONE_MOOD_BUTTON,
                     enabled = state.homeMoodPickerExpanded,
-                    modifier = Modifier.testTag("home_mood_${mood.name.lowercase()}"),
-                    onClick = {
-                        confirmationMood = mood
-                        confirmationSequence += 1
-                        dispatch(PocketPassEvent.SelectHomeMood(mood))
-                    },
+                    modifier = Modifier.testTag(phoneMoodTag(mood)),
+                    onClick = select,
                 )
             }
         }
@@ -403,6 +427,7 @@ private fun PhoneMoodCluster(
                 .offset(x = metrics.dp(0f), y = metrics.dp(haloInset))
                 .requiredSize(metrics.dp(PHONE_MOOD_BUTTON))
                 .testTag("home_edit")
+                .controllerTarget("home_edit", cornerRadius = PHONE_MOOD_BUTTON / 2f) { onEdit() }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -417,11 +442,19 @@ private fun PhoneMoodCluster(
             transitionScale = { confirmationScale.value },
             modifier = Modifier
                 .offset(x = metrics.dp(PHONE_MOOD_TRIGGER_X), y = metrics.dp(haloInset))
-                .testTag("home_mood_trigger"),
+                .testTag(PHONE_MOOD_TRIGGER_TAG)
+                .controllerTarget(PHONE_MOOD_TRIGGER_TAG, cornerRadius = PHONE_MOOD_BUTTON / 2f) {
+                    dispatch(PocketPassEvent.ToggleHomeMoodPicker)
+                },
             onClick = { dispatch(PocketPassEvent.ToggleHomeMoodPicker) },
         )
     }
 }
+
+private const val PHONE_MOOD_TRIGGER_TAG = "home_mood_trigger"
+private const val PHONE_MOOD_FOCUS_LAYER = 5
+
+private fun phoneMoodTag(mood: HomeMood) = "home_mood_${mood.name.lowercase()}"
 
 @Composable
 internal fun PhoneRisingEmojis(

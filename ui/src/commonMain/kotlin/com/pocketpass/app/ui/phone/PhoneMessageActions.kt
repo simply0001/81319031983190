@@ -30,6 +30,12 @@ import androidx.compose.material.icons.rounded.Edit
 import com.pocketpass.app.ui.components.Icon
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.pocketpass.app.ui.controller.ControllerOverlayFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocusLayer
+import com.pocketpass.app.ui.controller.controllerFocusBarrier
+import com.pocketpass.app.ui.controller.controllerTarget
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -74,6 +80,11 @@ internal fun PhoneMessageActionsSheet(
     if (message != null) retained.value = message
     val shown = retained.value ?: return
     val insets = LocalPhoneInsets.current
+    ControllerOverlayFocus(visible)
+    CompositionLocalProvider(
+        LocalControllerFocusLayer provides LocalControllerFocusLayer.current + PHONE_DIALOG_FOCUS_LAYER,
+        LocalControllerFocus provides LocalControllerFocus.current?.takeIf { visible },
+    ) {
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
@@ -85,6 +96,7 @@ internal fun PhoneMessageActionsSheet(
                     .fillMaxSize()
                     .background(pocketPalette.scrim)
                     .testTag("message_actions_scrim")
+                    .controllerFocusBarrier("message_actions_scrim", layer = 0)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -186,6 +198,7 @@ internal fun PhoneMessageActionsSheet(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -237,6 +250,7 @@ private fun PhoneMessageActionRow(
             .clip(shape)
             .pocketFrame(Brush.verticalGradient(fill), metrics.dp(14f), border, shape)
             .testTag(tag)
+            .controllerTarget(tag, cornerRadius = 60f) { onClick() }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -328,6 +342,7 @@ internal fun PhoneMessageEditingChip(
             text = "Cancel",
             modifier = Modifier
                 .testTag("message_edit_cancel")
+                .controllerTarget("message_edit_cancel", cornerRadius = 26f) { onCancel() }
                 .clip(chipShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },

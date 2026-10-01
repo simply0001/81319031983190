@@ -6,6 +6,8 @@ import com.pocketpass.app.domain.model.RemoveFriendCommand
 import com.pocketpass.app.domain.model.RenameProfileCommand
 import com.pocketpass.app.domain.model.RespondToFriendRequestCommand
 import com.pocketpass.app.domain.model.SendFriendRequestCommand
+import com.pocketpass.app.domain.model.SetProfileAgeCommand
+import com.pocketpass.app.domain.model.SetProfileCountryCommand
 import com.pocketpass.app.domain.model.SetUserBlockCommand
 import com.pocketpass.app.domain.model.UpdateProfileCommand
 import com.pocketpass.app.domain.model.UserProfile
@@ -37,6 +39,14 @@ interface MutableProfileRepository : ProfileRepository {
     suspend fun renameProfile(
         command: RenameProfileCommand,
     ): RepositoryResult<UserProfile>
+
+    suspend fun setProfileAge(command: SetProfileAgeCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(com.pocketpass.app.domain.state.RepositoryFailure(
+            com.pocketpass.app.domain.state.RepositoryFailureKind.NotFound, "Profile details are unavailable", retryable = false))
+
+    suspend fun setProfileCountry(command: SetProfileCountryCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(com.pocketpass.app.domain.state.RepositoryFailure(
+            com.pocketpass.app.domain.state.RepositoryFailureKind.NotFound, "Profile details are unavailable", retryable = false))
 }
 
 interface MutableFriendsRepository : FriendsRepository {

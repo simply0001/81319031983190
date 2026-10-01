@@ -24,6 +24,7 @@ fun MiiEditorRenderSurface(
     editorController: MiiEditorController,
     modifier: Modifier = Modifier,
     initialCanonicalBase64: String? = null,
+    fitHeight: Boolean = false,
 ) {
     val renderer = rememberMiiRenderController()
     val appContext = LocalContext.current.applicationContext
@@ -38,6 +39,7 @@ fun MiiEditorRenderSurface(
         modifier = modifier,
         initialCanonicalBase64 = initialCanonicalBase64
             ?: MiiRenderController.DEFAULT_MII_BASE64,
+        fitHeight = fitHeight,
     )
 }
 

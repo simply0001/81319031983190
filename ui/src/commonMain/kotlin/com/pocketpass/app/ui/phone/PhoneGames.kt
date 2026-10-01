@@ -12,6 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.pocketpass.app.ui.controller.ControllerOverlayFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocusLayer
+import com.pocketpass.app.ui.controller.controllerFocusBarrier
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -144,11 +149,17 @@ fun PhoneGamePage(
                 }
             }
         }
+        ControllerOverlayFocus(dismissDialog != null)
+        CompositionLocalProvider(
+            LocalControllerFocusLayer provides LocalControllerFocusLayer.current + PHONE_DIALOG_FOCUS_LAYER,
+            LocalControllerFocus provides LocalControllerFocus.current?.takeIf { dismissDialog != null },
+        ) {
         if (dismissDialog != null) {
             Column(
                 Modifier.fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.68f))
                     .testTag("game_dialog_scrim")
+                    .controllerFocusBarrier("game_dialog_scrim", layer = 0)
                     .clickable(remember { MutableInteractionSource() }, indication = null, onClick = dismissDialog)
                     .padding(
                         start = metrics.dp(insets.start), end = metrics.dp(insets.end),
@@ -166,6 +177,7 @@ fun PhoneGamePage(
                     }
                 }
             }
+        }
         }
     }
 }

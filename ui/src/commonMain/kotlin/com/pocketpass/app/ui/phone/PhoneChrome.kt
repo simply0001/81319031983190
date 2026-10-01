@@ -44,6 +44,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +58,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -97,6 +103,11 @@ import com.pocketpass.app.ui.components.POCKET_SHADOW_BLUR
 import com.pocketpass.app.ui.components.navSpecs
 import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.components.pocketShadow
+import com.pocketpass.app.ui.controller.ControllerOverlayFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocusLayer
+import com.pocketpass.app.ui.controller.controllerFocusBarrier
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.components.roundedShadowMask
 import com.pocketpass.app.ui.components.drawRoundedShadow
 import com.pocketpass.app.ui.screens.cancelButtonBrush
@@ -363,11 +374,13 @@ internal fun PhoneRoundAction(
                     if (onClick == null) {
                         Modifier
                     } else {
-                        Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onClick,
-                        )
+                        Modifier
+                            .controllerTarget(tag, cornerRadius = 40f) { onClick() }
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onClick,
+                            )
                     },
                 ),
             contentAlignment = Alignment.Center,
@@ -559,6 +572,7 @@ fun PhoneButton(
     Box(
         modifier = modifier
             .height(metrics.dp(height))
+            .controllerTarget(tag ?: "phone_button_$label", cornerRadius = radius) { if (enabled) onClick() }
             .graphicsLayer {
                 alpha = if (enabled) 1f else 0.58f
                 compositingStrategy = CompositingStrategy.ModulateAlpha
@@ -599,6 +613,7 @@ fun PhoneTextAction(
 ) {
     Box(
         modifier = modifier
+            .controllerTarget(tag, cornerRadius = 50f) { if (enabled) onClick() }
             .clip(RoundedCornerShape(metrics.dp(50f)))
             .testTag(tag)
             .clickable(
@@ -637,6 +652,7 @@ internal fun PhoneScrim(
                 .fillMaxSize()
                 .background(pocketPalette.scrim)
                 .testTag(tag)
+                .controllerFocusBarrier(tag, layer = 0)
                 .clickable(
                     enabled = onDismiss != null,
                     interactionSource = remember { MutableInteractionSource() },
@@ -660,6 +676,11 @@ internal fun PhoneDialog(
 ) {
     val insets = LocalPhoneInsets.current
     val short = phoneShortViewport(metrics)
+    ControllerOverlayFocus(visible)
+    CompositionLocalProvider(
+        LocalControllerFocusLayer provides LocalControllerFocusLayer.current + PHONE_DIALOG_FOCUS_LAYER,
+        LocalControllerFocus provides LocalControllerFocus.current?.takeIf { visible },
+    ) {
     PhoneScrim(visible, "${tag}_scrim", onDismiss)
     Box(
         Modifier
@@ -700,7 +721,10 @@ internal fun PhoneDialog(
             }
         }
     }
+    }
 }
+
+internal const val PHONE_DIALOG_FOCUS_LAYER = 1000
 
 @Composable
 internal fun phoneShortViewport(metrics: DesignMetrics): Boolean {
@@ -910,16 +934,19 @@ fun PhoneTextField(
         color = textColor,
         textAlign = textAlign,
     )
+    val requester = focusRequester ?: remember { FocusRequester() }
+    val targetId = tag ?: "phone_text_field_$placeholder"
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier
             .defaultMinSize(minHeight = metrics.dp(minHeight))
+            .controllerTarget(targetId, cornerRadius = radius) { if (enabled) requester.requestFocus() }
             .phoneShadow(metrics, radius, 12f, 0.12f)
             .pocketFrame(fill, metrics.dp(borderWidth), borderColor, shape)
             .clip(shape)
             .then(if (tag == null) Modifier else Modifier.testTag(tag))
-            .then(if (focusRequester == null) Modifier else Modifier.focusRequester(focusRequester)),
+            .controllerTextField(targetId, requester),
         enabled = enabled,
         textStyle = style,
         cursorBrush = SolidColor(textColor),
@@ -960,6 +987,26 @@ fun PhoneTextField(
             }
         },
     )
+}
+
+@Composable
+internal fun Modifier.controllerTextField(targetId: String, requester: FocusRequester): Modifier {
+    val controllerFocus = LocalControllerFocus.current
+    val focusManager = LocalFocusManager.current
+    var editing by remember { mutableStateOf(false) }
+    if (controllerFocus != null) {
+        LaunchedEffect(controllerFocus, targetId) {
+            snapshotFlow { controllerFocus.focusId }.collect { id ->
+                if (editing && id != targetId) focusManager.clearFocus()
+            }
+        }
+    }
+    return this
+        .focusRequester(requester)
+        .onFocusChanged { state ->
+            editing = state.isFocused
+            if (state.isFocused) controllerFocus?.focus(targetId, reveal = false)
+        }
 }
 
 @Composable

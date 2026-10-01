@@ -133,6 +133,52 @@ class PocketPassReducerTest {
     }
 
     @Test
+    fun backClosesTheDeleteAccountPromptUnlessItIsDeleting() {
+        val settings = PocketPassReducer.reduce(
+            PocketPassUiState(),
+            PocketPassEvent.SelectDestination(PocketPassDestination.Settings),
+        )
+        val prompt = PocketPassReducer.reduce(settings, PocketPassEvent.OpenDeleteAccount)
+        assertTrue(prompt.hasDismissableLayer())
+
+        val closed = PocketPassReducer.reduce(prompt, PocketPassEvent.Back)
+        assertFalse(closed.deleteAccountVisible)
+        assertEquals(settings.routes, closed.routes)
+
+        val deleting = prompt.copy(deleteAccountInProgress = true)
+        assertTrue(PocketPassReducer.reduce(deleting, PocketPassEvent.Back).deleteAccountVisible)
+    }
+
+    @Test
+    fun editInfoRoutePushesOnceAndPopsWithBack() {
+        val settings = PocketPassReducer.reduce(
+            PocketPassUiState(),
+            PocketPassEvent.SelectDestination(PocketPassDestination.Settings),
+        )
+        val social = PocketPassReducer.reduce(settings, PocketPassEvent.OpenSocial)
+        val opened = PocketPassReducer.reduce(social, PocketPassEvent.OpenEditInfo)
+        val openedTwice = PocketPassReducer.reduce(opened, PocketPassEvent.OpenEditInfo)
+        val back = PocketPassReducer.reduce(opened, PocketPassEvent.Back)
+
+        assertEquals(PocketPassRoute.EditInfo, opened.routes.last())
+        assertEquals(opened.routes, openedTwice.routes)
+        assertEquals(social.routes, back.routes)
+
+        listOf(
+            PocketPassEvent.OpenAgeEditor,
+            PocketPassEvent.UpdateAgeDraft("30"),
+            PocketPassEvent.SaveAge,
+            PocketPassEvent.HideAge,
+            PocketPassEvent.CloseAgeEditor,
+            PocketPassEvent.OpenCountryEditor,
+            PocketPassEvent.SaveCountry("BE"),
+            PocketPassEvent.CloseCountryEditor,
+        ).forEach { event ->
+            assertEquals(opened, PocketPassReducer.reduce(opened, event))
+        }
+    }
+
+    @Test
     fun contributorsRoutePushesOnceAndPopsWithBack() {
         val settings = PocketPassReducer.reduce(
             PocketPassUiState(),

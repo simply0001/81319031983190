@@ -59,6 +59,7 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.AvatarCollage
 import com.pocketpass.app.ui.components.FigmaAsset
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.components.pocketFrame
 import com.pocketpass.app.ui.screens.DynamicAvatar
 import com.pocketpass.app.ui.screens.rememberMessageArrivalTracker
@@ -205,6 +206,7 @@ private fun PhoneConversationNotice(
                 shape,
             )
             .testTag("conversation_notice")
+            .controllerTarget("conversation_notice", cornerRadius = 60f) { onDismiss() }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -437,6 +439,7 @@ private fun PhoneThreadHeader(
                 modifier = Modifier
                     .weight(1f)
                     .testTag("message_group_info")
+                    .controllerTarget("message_group_info", cornerRadius = 85f) { onOpenInfo() }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -550,6 +553,7 @@ private fun PhoneComposer(
                     .offset(y = metrics.dp(8f))
                     .alpha(if (canSend) 1f else 0.72f)
                     .testTag("message_send")
+                    .controllerTarget("message_send", cornerRadius = 79.226f) { send() }
                     .clickable(
                         enabled = canSend,
                         interactionSource = remember { MutableInteractionSource() },
@@ -591,6 +595,7 @@ private fun PhoneAttachButton(
                 shape,
             )
             .testTag("message_actions")
+            .controllerTarget("message_actions", cornerRadius = 79.226f) { onClick() }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -631,6 +636,7 @@ private fun PhoneEmojiButton(
                 shape,
             )
             .testTag("message_emoji")
+            .controllerTarget("message_emoji", cornerRadius = 79.226f) { onClick() }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -674,6 +680,7 @@ private fun PhoneEmojiStrip(
                     .clip(shape)
                     .pocketFrame(fill, metrics.dp(10f), Color(0xFF5A96A9), shape)
                     .testTag("strip_emoji_$index")
+                    .controllerTarget("strip_emoji_$index", cornerRadius = 26f) { onGlyph(glyph.text) }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

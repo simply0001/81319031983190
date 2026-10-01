@@ -9,12 +9,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,10 +35,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,24 +71,17 @@ import com.pocketpass.app.domain.model.PROFILE_NAME_MAX_LENGTH
 import com.pocketpass.app.feature.AccountSetupEvent
 import com.pocketpass.app.feature.AccountSetupStep
 import com.pocketpass.app.feature.AccountSetupUiState
-import com.pocketpass.app.mii.MiiEditorEvent
 import com.pocketpass.app.model.BIO_MAX_LENGTH
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.nearby.NearbyPermissionUiState
-import com.pocketpass.app.mii.MiiEditorController
 import com.pocketpass.app.ui.Assets
-import com.pocketpass.app.ui.mii.LocalMiiRenderSurface
 import com.pocketpass.app.ui.platformAnimationsEnabled
 import com.pocketpass.app.ui.asksToRunInBackground
 import com.pocketpass.app.ui.requiresLegacyLocationPermission
-import com.pocketpass.app.ui.BOTTOM_DESIGN_HEIGHT
-import com.pocketpass.app.ui.BOTTOM_DESIGN_WIDTH
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
-import com.pocketpass.app.ui.TOP_DESIGN_HEIGHT
-import com.pocketpass.app.ui.TOP_DESIGN_WIDTH
 import com.pocketpass.app.ui.auth.ACCOUNT_BAN_APPEAL_LABEL
 import com.pocketpass.app.ui.auth.ACCOUNT_BAN_APPEAL_TAG
 import com.pocketpass.app.ui.auth.ACCOUNT_BAN_SIGN_OUT_LABEL
@@ -104,8 +97,12 @@ import com.pocketpass.app.ui.auth.endsLine
 import com.pocketpass.app.ui.auth.rememberAccountBanAppeal
 import com.pocketpass.app.ui.components.FigmaAsset
 import com.pocketpass.app.ui.components.pocketFrame
-import com.pocketpass.app.ui.mii.MiiEditorBottomScreen
-import com.pocketpass.app.ui.mii.MiiEditorTopScreen
+import com.pocketpass.app.ui.mii.MiiEditorSingleScreen
+import com.pocketpass.app.ui.controller.ControllerFocusViewport
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocusViewport
+import com.pocketpass.app.ui.controller.controllerFocusViewport
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.screens.AppUpdateStatusPanel
 import com.pocketpass.app.ui.setup.CountryCatalog
 import com.pocketpass.app.ui.theme.pocketPalette
@@ -844,6 +841,7 @@ private fun SetupBackChevron(metrics: DesignMetrics, enabled: Boolean, onClick: 
     Canvas(
         Modifier
             .fillMaxSize()
+            .controllerTarget("setup_back", cornerRadius = 48f) { if (enabled) onClick() }
             .clip(CircleShape)
             .testTag("setup_back")
             .clickable(
@@ -861,22 +859,32 @@ private fun SetupBackChevron(metrics: DesignMetrics, enabled: Boolean, onClick: 
 }
 
 @Composable
-private fun CountryList(metrics: DesignMetrics, selectedCode: String?, onSelect: (String) -> Unit) {
+internal fun CountryList(
+    metrics: DesignMetrics,
+    selectedCode: String?,
+    tagPrefix: String = "setup_country",
+    onSelect: (String) -> Unit,
+) {
     val countries = CountryCatalog.countries
     val listState = rememberLazyListState()
+    val focus = LocalControllerFocus.current
     LaunchedEffect(Unit) {
         val index = countries.indexOfFirst { it.code == selectedCode }
         if (index >= 0) listState.scrollToItem((index - 2).coerceAtLeast(0))
+        if (selectedCode != null) focus?.focus("${tagPrefix}_$selectedCode", reveal = false)
     }
     val shape = RoundedCornerShape(metrics.dp(60f))
+    val viewport = remember(shape) { ControllerFocusViewport(shape) }
+    CompositionLocalProvider(LocalControllerFocusViewport provides viewport) {
     LazyColumn(
         state = listState,
         modifier = Modifier
             .fillMaxWidth()
             .height(metrics.dp(760f))
+            .controllerFocusViewport(viewport)
             .clip(shape)
             .pocketFrame(pocketPalette.surface, metrics.dp(12f), PocketBorder, shape)
-            .testTag("setup_country_list"),
+            .testTag("${tagPrefix}_list"),
         contentPadding = PaddingValues(horizontal = metrics.dp(28f), vertical = metrics.dp(26f)),
     ) {
         items(countries, key = { it.code }) { country ->
@@ -885,9 +893,12 @@ private fun CountryList(metrics: DesignMetrics, selectedCode: String?, onSelect:
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(metrics.dp(96f))
+                    .controllerTarget("${tagPrefix}_${country.code}", cornerRadius = 48f) {
+                        onSelect(country.code)
+                    }
                     .clip(RoundedCornerShape(metrics.dp(48f)))
                     .background(if (selected) pocketPalette.tint(Color(0xFFBDF8CB)) else Color.Transparent)
-                    .testTag("setup_country_${country.code}")
+                    .testTag("${tagPrefix}_${country.code}")
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -917,6 +928,7 @@ private fun CountryList(metrics: DesignMetrics, selectedCode: String?, onSelect:
                 }
             }
         }
+    }
     }
 }
 
@@ -1136,53 +1148,13 @@ internal fun PhoneForceUpdateScreen(
 internal fun PhoneMiiGate(
     metrics: DesignMetrics,
     state: PocketPassUiState,
-    controller: MiiEditorController?,
     dispatch: (PocketPassEvent) -> Unit,
+    liveRender: @Composable BoxScope.() -> Unit,
 ) {
-    val savedCanonical by rememberUpdatedState(state.miiEditor.savedCanonicalBase64)
-    val onEvent: (MiiEditorEvent) -> Unit = { dispatch(PocketPassEvent.Mii(it)) }
-    val renderSurface = LocalMiiRenderSurface.current
-    val insets = LocalPhoneInsets.current
-    val frame = Modifier
-        .fillMaxSize()
-        .background(Color(0xFF17232B))
-        .padding(
-            start = metrics.dp(insets.start),
-            top = metrics.dp(insets.top),
-            end = metrics.dp(insets.end),
-            bottom = metrics.dp(insets.bottom),
-        )
-    val topBoard: @Composable () -> Unit = {
-        MiiEditorTopScreen(
-            state = state.miiEditor,
-            status = state.status,
-            onEvent = onEvent,
-            modifier = Modifier.fillMaxSize(),
-            saveOnly = true,
-        ) {
-            if (state.miiEditor.isEditorVisible && controller != null) {
-                renderSurface?.invoke(controller, savedCanonical, Modifier.fillMaxSize())
-            }
-        }
-    }
-    val bottomBoard: @Composable () -> Unit = {
-        MiiEditorBottomScreen(state = state.miiEditor, onEvent = onEvent, modifier = Modifier.fillMaxSize())
-    }
-    if (phoneLayout(metrics.designWidth, metrics.designHeight) == PhoneLayout.Wide) {
-        Row(frame, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth().aspectRatio(TOP_DESIGN_WIDTH / TOP_DESIGN_HEIGHT)) { topBoard() }
-            }
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .aspectRatio(BOTTOM_DESIGN_WIDTH / BOTTOM_DESIGN_HEIGHT, matchHeightConstraintsFirst = true),
-            ) { bottomBoard() }
-        }
-    } else {
-        Column(frame, verticalArrangement = Arrangement.Center) {
-            Box(Modifier.fillMaxWidth().aspectRatio(TOP_DESIGN_WIDTH / TOP_DESIGN_HEIGHT)) { topBoard() }
-            Box(Modifier.fillMaxWidth().aspectRatio(BOTTOM_DESIGN_WIDTH / BOTTOM_DESIGN_HEIGHT)) { bottomBoard() }
-        }
-    }
+    MiiEditorSingleScreen(
+        metrics = metrics,
+        state = state.miiEditor,
+        onEvent = { dispatch(PocketPassEvent.Mii(it)) },
+        liveRender = liveRender,
+    )
 }

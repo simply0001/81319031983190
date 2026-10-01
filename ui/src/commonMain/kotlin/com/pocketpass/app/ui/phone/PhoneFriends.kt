@@ -28,6 +28,7 @@ import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.EntranceMotion
 import com.pocketpass.app.ui.components.FigmaAsset
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.components.IdleMotion
 import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.theme.pocketPalette
@@ -170,6 +171,7 @@ private fun PhoneFriendsRefreshNotice(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("friends_refresh_notice")
+            .controllerTarget("friends_refresh_notice", cornerRadius = 30f) { if (!refreshing) onRetry() }
             .clickable(
                 enabled = !refreshing,
                 interactionSource = remember { MutableInteractionSource() },

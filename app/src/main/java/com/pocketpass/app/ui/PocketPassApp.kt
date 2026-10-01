@@ -28,6 +28,17 @@ internal val MiiRenderSurfaceFromWebView:
         )
     }
 
+internal val MiiRenderSurfaceFillingHeight:
+    @Composable (MiiEditorController, String?, Modifier) -> Unit =
+    { controller, initialCanonicalBase64, modifier ->
+        MiiEditorRenderSurface(
+            editorController = controller,
+            modifier = modifier,
+            initialCanonicalBase64 = initialCanonicalBase64,
+            fitHeight = true,
+        )
+    }
+
 @Composable
 fun TopDisplayApp(
     viewModel: PocketPassViewModel,

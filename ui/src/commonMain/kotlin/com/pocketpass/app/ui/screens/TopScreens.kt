@@ -88,6 +88,7 @@ import com.pocketpass.app.model.ActivityVariant
 import com.pocketpass.app.model.HomeMood
 import com.pocketpass.app.model.PocketPassDestination
 import com.pocketpass.app.model.PocketPassEvent
+import com.pocketpass.app.model.PocketPassRoute
 import com.pocketpass.app.model.PocketPassUiState
 import com.pocketpass.app.model.ProfileViewerSource
 import com.pocketpass.app.model.ProfileViewerUiState
@@ -137,7 +138,8 @@ fun TopScreen(
             if (!threadPresenting) BoardsTop(state)
         } else MessagesTop(state, threadPresenting)
         PocketPassDestination.Friends -> FriendsTop(state, profileViewerPresenting)
-        PocketPassDestination.Settings -> SettingsTop()
+        PocketPassDestination.Settings ->
+            if (state.routes.lastOrNull() == PocketPassRoute.EditInfo) EditInfoTop(state) else SettingsTop()
     }
 }
 
@@ -910,70 +912,13 @@ private fun HomeTop(
                     translationY = (1f - ownProfileReturn) * 24f
                 },
         ) {
-        val avatarShape = RoundedCornerShape(metrics.dp(224.5f))
-        Box(
-            Modifier
-                .designBounds(metrics, 255.5f, 395.5f, 449f, 449f)
-                .pocketShadow(metrics, 224.5f),
-        )
-        DynamicTopAvatar(
-            avatar = profile?.avatar,
-            localPortraitFilePath = state.miiEditor.activePortraitFilePath,
-            fallbackResource = Assets.HomeAvatarPetah,
-            modifier = Modifier
-                .designBounds(metrics, 255.5f, 381.5f, 449f, 449f)
-                .clip(avatarShape)
-                .pocketFrame(
-                    pocketPalette.surface,
-                    metrics.dp(22f),
-                    pocketPalette.tealBorder,
-                    avatarShape,
-                )
-                .padding(metrics.dp(3f))
-                .clip(avatarShape)
-                .background(Color.White)
-                .graphicsLayer {
-                    scaleX = CARD_PORTRAIT_ZOOM
-                    scaleY = CARD_PORTRAIT_ZOOM
-                    transformOrigin = TransformOrigin(0.5f, 1f)
-                },
-        )
-        val nameAutoSize = remember(metrics) {
-            TextAutoSize.StepBased(
-                minFontSize = metrics.sp(64f),
-                maxFontSize = metrics.sp(133.411f),
-                stepSize = metrics.sp(1f),
-            )
-        }
-        Box(
-            modifier = Modifier.designBounds(metrics, 740.5f, 484f, 924f, 174f),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            BasicText(
-                text = displayName,
-                autoSize = nameAutoSize,
-                style = TextStyle(
-                    fontFamily = Rubik,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = metrics.sp(0.7f),
-                    color = pocketPalette.teal,
-                    shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.16f),
-                        offset = Offset(5f, 7f),
-                        blurRadius = 14f,
-                    ),
-                ),
-                maxLines = 1,
-            )
-        }
-
-        ProfileDetailRows(
+        OwnProfileHero(
             metrics = metrics,
+            state = state,
+            displayName = displayName,
             age = age,
             country = country,
             bio = bio.trimEnd(),
-            bodyColor = pocketPalette.tealSoft,
-            accentColor = pocketPalette.ink(Color(0xFF1FC1B3)),
         )
         }
         }
@@ -1919,6 +1864,104 @@ private fun FriendsTop(state: PocketPassUiState, profileViewerPresenting: Boolea
         }
         }
         }
+    }
+}
+
+@Composable
+internal fun OwnProfileHero(
+    metrics: DesignMetrics,
+    state: PocketPassUiState,
+    displayName: String,
+    age: Int?,
+    country: String?,
+    bio: String,
+) {
+    val avatarShape = RoundedCornerShape(metrics.dp(224.5f))
+    Box(
+        Modifier
+            .designBounds(metrics, 255.5f, 395.5f, 449f, 449f)
+            .pocketShadow(metrics, 224.5f),
+    )
+    DynamicTopAvatar(
+        avatar = state.profile?.avatar,
+        localPortraitFilePath = state.miiEditor.activePortraitFilePath,
+        fallbackResource = Assets.HomeAvatarPetah,
+        modifier = Modifier
+            .designBounds(metrics, 255.5f, 381.5f, 449f, 449f)
+            .clip(avatarShape)
+            .pocketFrame(
+                pocketPalette.surface,
+                metrics.dp(22f),
+                pocketPalette.tealBorder,
+                avatarShape,
+            )
+            .padding(metrics.dp(3f))
+            .clip(avatarShape)
+            .background(Color.White)
+            .graphicsLayer {
+                scaleX = CARD_PORTRAIT_ZOOM
+                scaleY = CARD_PORTRAIT_ZOOM
+                transformOrigin = TransformOrigin(0.5f, 1f)
+            },
+    )
+    val nameAutoSize = remember(metrics) {
+        TextAutoSize.StepBased(
+            minFontSize = metrics.sp(64f),
+            maxFontSize = metrics.sp(133.411f),
+            stepSize = metrics.sp(1f),
+        )
+    }
+    Box(
+        modifier = Modifier.designBounds(metrics, 740.5f, 484f, 924f, 174f),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicText(
+            text = displayName,
+            autoSize = nameAutoSize,
+            style = TextStyle(
+                fontFamily = Rubik,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = metrics.sp(0.7f),
+                color = pocketPalette.teal,
+                shadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.16f),
+                    offset = Offset(5f, 7f),
+                    blurRadius = 14f,
+                ),
+            ),
+            maxLines = 1,
+        )
+    }
+
+    ProfileDetailRows(
+        metrics = metrics,
+        age = age,
+        country = country,
+        bio = bio,
+        bodyColor = pocketPalette.tealSoft,
+        accentColor = pocketPalette.ink(Color(0xFF1FC1B3)),
+    )
+}
+
+@Composable
+private fun EditInfoTop(state: PocketPassUiState) {
+    val profile = state.profile
+    val displayName = state.nameEditor.takeIf { it.visible }?.draft?.ifBlank { null }
+        ?: profile?.displayName?.ifBlank { null }.orEmpty()
+    val age = if (state.ageEditor.visible) state.ageEditor.draft.toIntOrNull() else profile?.age
+    val country = state.countryEditor.savingCode?.let(::countryLabel)
+        ?: profile?.locationLabel?.ifBlank { null }
+        ?: profile?.countryCode?.let(::countryLabel)
+    val bio = profile?.bio?.ifBlank { null } ?: "Hello! Nice to meet you!"
+    TopPage(entrance = EntranceMotion.HeroRise) { metrics ->
+        OwnProfileHero(
+            metrics = metrics,
+            state = state,
+            displayName = displayName,
+            age = age,
+            country = country,
+            bio = bio.trimEnd(),
+        )
     }
 }
 

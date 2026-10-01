@@ -1,6 +1,7 @@
 package com.pocketpass.app.ui.phone
 
 import com.pocketpass.app.ui.screens.StepsCounter
+import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.PocketAsset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -669,6 +670,7 @@ private fun ShuffleButton(metrics: DesignMetrics, onClick: () -> Unit) {
                     shape,
                 )
                 .testTag("shuffle_activities")
+                .controllerTarget("shuffle_activities", cornerRadius = 96f) { onClick() }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

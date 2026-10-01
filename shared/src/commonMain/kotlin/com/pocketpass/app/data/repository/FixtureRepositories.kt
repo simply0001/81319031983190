@@ -48,6 +48,8 @@ import com.pocketpass.app.domain.model.PresenceStatus
 import com.pocketpass.app.domain.model.PurchaseShopItemCommand
 import com.pocketpass.app.domain.model.RemoveFriendCommand
 import com.pocketpass.app.domain.model.RenameProfileCommand
+import com.pocketpass.app.domain.model.SetProfileAgeCommand
+import com.pocketpass.app.domain.model.SetProfileCountryCommand
 import com.pocketpass.app.domain.model.RespondToFriendRequestCommand
 import com.pocketpass.app.domain.model.SendMessageCommand
 import com.pocketpass.app.domain.model.SendFriendRequestCommand
@@ -692,6 +694,35 @@ class FixtureProfileRepository(
             updatedAt = command.changedAt,
         )
         profiles.update { it + (command.accountId to updated) }
+        return RepositoryResult.Success(updated)
+    }
+
+    override suspend fun setProfileAge(
+        command: SetProfileAgeCommand,
+    ): RepositoryResult<UserProfile> = updateFixtureProfile(command.accountId) {
+        it.copy(age = command.age, updatedAt = command.changedAt)
+    }
+
+    override suspend fun setProfileCountry(
+        command: SetProfileCountryCommand,
+    ): RepositoryResult<UserProfile> = updateFixtureProfile(command.accountId) {
+        it.copy(countryCode = command.countryCode, updatedAt = command.changedAt)
+    }
+
+    private fun updateFixtureProfile(
+        accountId: UserId,
+        change: (UserProfile) -> UserProfile,
+    ): RepositoryResult<UserProfile> {
+        val existing = profiles.value[accountId]
+            ?: return RepositoryResult.Failure(
+                RepositoryFailure(
+                    kind = RepositoryFailureKind.NotFound,
+                    message = "No fixture profile for ${accountId.value}",
+                    retryable = false,
+                ),
+            )
+        val updated = change(existing)
+        profiles.update { it + (accountId to updated) }
         return RepositoryResult.Success(updated)
     }
 }

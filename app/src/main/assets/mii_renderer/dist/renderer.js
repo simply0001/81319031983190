@@ -42859,6 +42859,7 @@ function createMiiRender(request) {
 var DEFAULT_MII = "BAXGigDvV8wSNID/cJl869TJwxYAAAAAAAAAAAAAAAAAAAAAAAAAAE0AaQBpAAAAAAAAAAAAAAAAAAAACAAAAAAAQAMDAQYEBgIKCAQEAgIMAAAAAP8AAAAACAQACgEAIf///0AABAACFAMTBBcNBAAKBAEJ//8A/wAAAP//";
 var root2 = document.getElementById("mii-render-root");
 var initialCanonical = new URLSearchParams(location.search).get("mii") || DEFAULT_MII;
+var FIT_HEIGHT = new URLSearchParams(location.search).get("fit") === "height";
 var mii = new Mii(initialCanonical);
 var hatSecondaryColor = -1;
 var scene = null;
@@ -42897,6 +42898,8 @@ var ORBIT_SMOOTHING_SECONDS = 0.15;
 var ORBIT_SETTLE_EPSILON = 0.001;
 var ORBIT_DRAG_PIXELS_PER_RADIAN = 360;
 var TOP_DESIGN_WIDTH = 1920;
+var TOP_DESIGN_HEIGHT = 1080;
+var MAX_DRAWING_BUFFER = 4096;
 var LEGACY_RENDERER_LEFT = 513.85;
 var LEGACY_RENDERER_WIDTH = 892.949;
 var WHOLE_HEAD_DISTANCE = 54;
@@ -43000,16 +43003,25 @@ function failure(id, error) {
   emit({ type: "result", id, ok: false, error: message });
 }
 function applyVirtualViewport(activeScene) {
-  const rootWidth = root2.getBoundingClientRect().width || window.innerWidth || TOP_DESIGN_WIDTH;
-  const designScale = rootWidth / TOP_DESIGN_WIDTH;
+  const bounds = root2.getBoundingClientRect();
+  const rootWidth = bounds.width || window.innerWidth || TOP_DESIGN_WIDTH;
+  const rootHeight = bounds.height || window.innerHeight || TOP_DESIGN_HEIGHT;
+  const designScale = FIT_HEIGHT ? rootHeight / TOP_DESIGN_HEIGHT : rootWidth / TOP_DESIGN_WIDTH;
+  const frameWidth = FIT_HEIGHT ? TOP_DESIGN_WIDTH * designScale : rootWidth;
   const viewport = {
-    width: rootWidth,
+    width: frameWidth,
     height: EXTENDED_RENDERER_HEIGHT * designScale,
     widescreen: false
   };
-  activeScene.getCamera().setViewOffset(viewport.width, viewport.height, 0, LEGACY_PROJECTION_UPWARD_PX * designScale, viewport.width / LEGACY_PROJECTION_X_SCALE, viewport.height);
+  if (FIT_HEIGHT) {
+    const deviceScale = window.devicePixelRatio || 1;
+    activeScene.getRenderer().setPixelRatio(Math.min(1, MAX_DRAWING_BUFFER / (Math.max(viewport.width, viewport.height) * deviceScale)));
+    activeScene.getCamera().setViewOffset(viewport.width, viewport.height, 0, (LEGACY_PROJECTION_UPWARD_PX + (1 - LEGACY_PROJECTION_X_SCALE) * EXTENDED_RENDERER_HEIGHT) * designScale, viewport.width, viewport.height * LEGACY_PROJECTION_X_SCALE);
+  } else {
+    activeScene.getCamera().setViewOffset(viewport.width, viewport.height, 0, LEGACY_PROJECTION_UPWARD_PX * designScale, viewport.width / LEGACY_PROJECTION_X_SCALE, viewport.height);
+  }
   const canvas = activeScene.getRendererElement();
-  canvas.style.left = `${VIRTUAL_CANVAS_CENTER_OFFSET_X * designScale}px`;
+  canvas.style.left = `${(rootWidth - frameWidth) / 2 + VIRTUAL_CANVAS_CENTER_OFFSET_X * designScale}px`;
   canvas.style.top = "0px";
   canvas.style.right = "auto";
   canvas.style.bottom = "auto";
@@ -43621,5 +43633,11 @@ async function boot() {
     const message = error instanceof Error ? error.message : String(error);
     emit({ type: "state", state: "error", error: message });
   }
+}
+if (FIT_HEIGHT) {
+  window.addEventListener("resize", () => {
+    if (ready)
+      scene?.resize();
+  });
 }
 boot();

@@ -48,6 +48,9 @@ sealed interface PocketPassRoute : NavKeyMarker {
     data object Social : PocketPassRoute
 
     @Serializable
+    data object EditInfo : PocketPassRoute
+
+    @Serializable
     data object AccountSecurity : PocketPassRoute
 
     @Serializable
@@ -107,6 +110,8 @@ data class PocketPassUiState(
     val homeMoodActive: Boolean = false,
     val bioEditor: BioEditorUiState = BioEditorUiState(),
     val nameEditor: NameEditorUiState = NameEditorUiState(),
+    val ageEditor: AgeEditorUiState = AgeEditorUiState(),
+    val countryEditor: CountryEditorUiState = CountryEditorUiState(),
     val activitySnapshot: ActivitySnapshot? = null,
     val recentInteractions: List<NearbyEncounter> = emptyList(),
     val friends: List<Friend> = emptyList(),
@@ -246,6 +251,7 @@ object PocketPassReducer {
             PocketPassEvent.OpenChatColours -> if (state.routes.lastOrNull() == PocketPassRoute.ChatColours) state
                 else state.copy(routes = state.routes + PocketPassRoute.ChatColours, chatColourSaveError = null)
             PocketPassEvent.OpenSocial -> state.pushRoute(PocketPassRoute.Social)
+            PocketPassEvent.OpenEditInfo -> state.pushRoute(PocketPassRoute.EditInfo)
             PocketPassEvent.OpenAccountSecurity -> state.pushRoute(PocketPassRoute.AccountSecurity)
             PocketPassEvent.OpenContributors -> state.pushRoute(PocketPassRoute.Contributors)
             PocketPassEvent.OpenNotificationSettings -> state.pushRoute(PocketPassRoute.NotificationSettings)
@@ -259,6 +265,10 @@ object PocketPassReducer {
         state.shop.selectedCategoryId != null ->
             state.copy(shop = state.shop.copy(selectedCategoryId = null))
         state.removeFriendPromptVisible -> state.copy(removeFriendPromptVisible = false)
+        state.deleteAccountVisible && !state.deleteAccountInProgress -> state.copy(
+            deleteAccountVisible = false,
+            deleteAccountError = null,
+        )
         state.miiDeleteSlot != null && !state.miiDeleteInProgress -> state.copy(
             miiDeleteSlot = null,
             miiDeleteError = null,
@@ -559,6 +569,8 @@ fun PocketPassUiState.hasDismissableLayer(): Boolean =
         homeMoodPickerExpanded ||
         bioEditor.visible ||
         nameEditor.visible ||
+        ageEditor.visible ||
+        countryEditor.visible ||
         friendsOverlay != FriendsOverlay.None ||
         messageActionMessageId != null ||
         editingMessageId != null ||

@@ -32,6 +32,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.pocketpass.app.ui.controller.ControllerOverlayFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalControllerFocusLayer
+import com.pocketpass.app.ui.controller.controllerFocusBarrier
+import com.pocketpass.app.ui.controller.controllerTarget
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -252,6 +258,11 @@ internal fun PhoneGroupInfoSheet(
     val trimmedDraft = draft.trim()
     val canSave = trimmedDraft.isNotEmpty() && trimmedDraft != conversation.title && !busy
     val subtitle = "${conversation.memberCount} members" + if (isOwner) " · You're the owner" else ""
+    ControllerOverlayFocus(visible)
+    CompositionLocalProvider(
+        LocalControllerFocusLayer provides LocalControllerFocusLayer.current + PHONE_DIALOG_FOCUS_LAYER,
+        LocalControllerFocus provides LocalControllerFocus.current?.takeIf { visible },
+    ) {
     Box(Modifier.fillMaxSize()) {
         AnimatedVisibility(
             visible = visible,
@@ -263,6 +274,7 @@ internal fun PhoneGroupInfoSheet(
                     .fillMaxSize()
                     .background(palette.scrim)
                     .testTag("group_info_scrim")
+                    .controllerFocusBarrier("group_info_scrim", layer = 0)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -498,6 +510,7 @@ internal fun PhoneGroupInfoSheet(
             onConfirm = { dispatch(PocketPassEvent.LeaveGroup) },
         )
     }
+    }
 }
 
 @Composable
@@ -722,6 +735,7 @@ private fun PhonePickerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .controllerTarget(groupMemberTag(member.id), cornerRadius = 40f) { if (enabled) onToggle() }
             .clip(RoundedCornerShape(metrics.dp(40f)))
             .testTag(groupMemberTag(member.id))
             .clickable(

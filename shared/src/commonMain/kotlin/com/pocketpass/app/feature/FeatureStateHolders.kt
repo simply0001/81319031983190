@@ -41,6 +41,8 @@ import com.pocketpass.app.domain.model.SendMessageCommand
 import com.pocketpass.app.domain.model.SendFriendRequestCommand
 import com.pocketpass.app.domain.model.UpdateProfileCommand
 import com.pocketpass.app.domain.model.RenameProfileCommand
+import com.pocketpass.app.domain.model.SetProfileAgeCommand
+import com.pocketpass.app.domain.model.SetProfileCountryCommand
 import com.pocketpass.app.domain.model.PROFILE_NAME_RULE_MESSAGE
 import com.pocketpass.app.domain.model.PROFILE_NAME_TAKEN_MESSAGE
 import com.pocketpass.app.domain.model.filterProfileNameInput
@@ -67,8 +69,11 @@ import com.pocketpass.app.domain.state.RepositoryFailure
 import com.pocketpass.app.domain.state.RepositoryFailureKind
 import com.pocketpass.app.model.ActivityVariant
 import com.pocketpass.app.model.BIO_MAX_LENGTH
+import com.pocketpass.app.model.AgeEditorUiState
 import com.pocketpass.app.model.BioEditorUiState
+import com.pocketpass.app.model.CountryEditorUiState
 import com.pocketpass.app.model.NameEditorUiState
+import com.pocketpass.app.model.PROFILE_AGE_RULE_MESSAGE
 import com.pocketpass.app.model.FriendsOverlay
 import com.pocketpass.app.model.GameTarget
 import com.pocketpass.app.model.HomeMood
@@ -118,6 +123,15 @@ data class HomeProfileFeatureState(
     val moodActive: Boolean = false,
     val bioEditor: BioEditorUiState = BioEditorUiState(),
     val nameEditor: NameEditorUiState = NameEditorUiState(),
+    val ageEditor: AgeEditorUiState = AgeEditorUiState(),
+    val countryEditor: CountryEditorUiState = CountryEditorUiState(),
+)
+
+private data class ProfileEditors(
+    val bio: BioEditorUiState,
+    val name: NameEditorUiState,
+    val age: AgeEditorUiState,
+    val country: CountryEditorUiState,
 )
 
 private data class MoodSelectionState(
@@ -153,6 +167,8 @@ class HomeProfileStateHolder(
     private val bioEditor = MutableStateFlow(BioEditorUiState())
     private val savedBioDraft = MutableStateFlow<com.pocketpass.app.domain.model.BioSaveDraft?>(null)
     private val nameEditor = MutableStateFlow(NameEditorUiState())
+    private val ageEditor = MutableStateFlow(AgeEditorUiState())
+    private val countryEditor = MutableStateFlow(CountryEditorUiState())
     init {
         scope.launch {
             accountId.collectLatest { account ->
@@ -190,8 +206,8 @@ class HomeProfileStateHolder(
         },
         resolvedMood,
         moodPickerExpanded,
-        combine(bioEditor, nameEditor, ::Pair),
-    ) { profile, recentInteractions, mood, expanded, (bio, name) ->
+        combine(bioEditor, nameEditor, ageEditor, countryEditor, ::ProfileEditors),
+    ) { profile, recentInteractions, mood, expanded, editors ->
         HomeProfileFeatureState(
             profile = profile,
             recentInteractions = recentInteractions,
@@ -199,8 +215,10 @@ class HomeProfileStateHolder(
             moodPickerExpanded = expanded,
             moodSelectionCount = mood.selections,
             moodActive = mood.active,
-            bioEditor = bio,
-            nameEditor = name,
+            bioEditor = editors.bio,
+            nameEditor = editors.name,
+            ageEditor = editors.age,
+            countryEditor = editors.country,
         )
     }.stateIn(
         scope = scope,
@@ -346,11 +364,130 @@ class HomeProfileStateHolder(
         }
     }
 
+    fun openAgeEditor() {
+        moodPickerExpanded.value = false
+        val profile = (state.value.profile as? LoadState.Data)?.value
+        ageEditor.value = AgeEditorUiState(
+            visible = true,
+            draft = profile?.age?.toString().orEmpty(),
+        )
+    }
+
+    fun setAgeDraft(value: String) {
+        ageEditor.update { editor ->
+            if (!editor.visible || editor.saving) return@update editor
+            editor.copy(draft = value.filter(Char::isDigit).take(3), error = null)
+        }
+    }
+
+    fun closeAgeEditor(): Boolean {
+        if (!ageEditor.value.visible) return false
+        ageEditor.value = AgeEditorUiState()
+        return true
+    }
+
+    fun saveAge() {
+        val editor = ageEditor.value
+        if (!editor.visible || editor.saving) return
+        if (!editor.valid) {
+            ageEditor.value = editor.copy(
+                error = PROFILE_AGE_RULE_MESSAGE,
+                errorShakeNonce = editor.errorShakeNonce + 1,
+            )
+            return
+        }
+        storeAge(editor.draft.toInt())
+    }
+
+    fun hideAge() {
+        val editor = ageEditor.value
+        if (!editor.visible || editor.saving) return
+        storeAge(null)
+    }
+
+    private fun storeAge(age: Int?) {
+        val account = activeAccountId.value ?: return
+        val repository = profileRepository as? MutableProfileRepository ?: return
+        val profile = (state.value.profile as? LoadState.Data)?.value ?: return
+        if (profile.userId != account) return
+        if (profile.age == age) {
+            ageEditor.value = AgeEditorUiState()
+            return
+        }
+        ageEditor.update { it.copy(draft = age?.toString().orEmpty(), saving = true, error = null) }
+        scope.launch {
+            val result = repository.setProfileAge(
+                SetProfileAgeCommand(accountId = account, age = age, changedAt = Clock.System.now()),
+            )
+            when (result) {
+                is RepositoryResult.Success -> ageEditor.value = AgeEditorUiState()
+                is RepositoryResult.Failure -> ageEditor.update {
+                    it.copy(
+                        saving = false,
+                        error = if (result.error.kind == RepositoryFailureKind.Offline) {
+                            "You're offline. Connect to change your age."
+                        } else {
+                            "Your age could not be changed. Try again."
+                        },
+                        errorShakeNonce = it.errorShakeNonce + 1,
+                    )
+                }
+            }
+        }
+    }
+
+    fun openCountryEditor() {
+        moodPickerExpanded.value = false
+        countryEditor.value = CountryEditorUiState(visible = true)
+    }
+
+    fun closeCountryEditor(): Boolean {
+        if (!countryEditor.value.visible) return false
+        countryEditor.value = CountryEditorUiState()
+        return true
+    }
+
+    fun saveCountry(code: String) {
+        val editor = countryEditor.value
+        if (!editor.visible || editor.savingCode != null) return
+        val country = code.trim().uppercase()
+        if (!country.matches(Regex("^[A-Z]{2}$"))) return
+        val account = activeAccountId.value ?: return
+        val repository = profileRepository as? MutableProfileRepository ?: return
+        val profile = (state.value.profile as? LoadState.Data)?.value ?: return
+        if (profile.userId != account) return
+        if (profile.countryCode == country) {
+            countryEditor.value = CountryEditorUiState()
+            return
+        }
+        countryEditor.value = editor.copy(savingCode = country, error = null)
+        scope.launch {
+            val result = repository.setProfileCountry(
+                SetProfileCountryCommand(accountId = account, countryCode = country, changedAt = Clock.System.now()),
+            )
+            when (result) {
+                is RepositoryResult.Success -> countryEditor.value = CountryEditorUiState()
+                is RepositoryResult.Failure -> countryEditor.update {
+                    it.copy(
+                        savingCode = null,
+                        error = if (result.error.kind == RepositoryFailureKind.Offline) {
+                            "You're offline. Connect to change your country."
+                        } else {
+                            "Your country could not be changed. Try again."
+                        },
+                    )
+                }
+            }
+        }
+    }
+
     fun resetSession() {
         moodSelection.value = MoodSelectionState()
         moodPickerExpanded.value = false
         bioEditor.value = BioEditorUiState()
         nameEditor.value = NameEditorUiState()
+        ageEditor.value = AgeEditorUiState()
+        countryEditor.value = CountryEditorUiState()
         scope.launch { settingsRepository.setHomeMood(null) }
     }
 }

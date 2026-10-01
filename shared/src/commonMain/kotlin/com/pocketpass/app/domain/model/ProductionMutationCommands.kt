@@ -44,6 +44,26 @@ data class RenameProfileCommand(
     }
 }
 
+data class SetProfileAgeCommand(
+    val accountId: UserId,
+    val age: Int?,
+    val changedAt: Instant,
+) {
+    init {
+        require(age == null || age in 13..120) { "A profile age must be between 13 and 120" }
+    }
+}
+
+data class SetProfileCountryCommand(
+    val accountId: UserId,
+    val countryCode: String,
+    val changedAt: Instant,
+) {
+    init {
+        require(countryCode.matches(Regex("^[A-Z]{2}$"))) { "A profile country must be an ISO country code" }
+    }
+}
+
 data class SendFriendRequestCommand(
     val accountId: UserId,
     val addressee: UserProfile,

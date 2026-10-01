@@ -19,7 +19,7 @@
   "pocketPassSources": [
     {
       "path": "src/renderer.ts",
-      "sha256": "22812fa28137491b29250635db51ffcc13f761d5707befdd4d40a70f5d746941"
+      "sha256": "110857b0ace34cbc73d9068b6f7e04f8d90b56b28aa6026c7ec0efa6bf5a23c9"
     },
     {
       "path": "src/RendererFFL.ts",
@@ -44,7 +44,7 @@
   ],
   "bundle": {
     "path": "app/src/main/assets/mii_renderer/dist/renderer.js",
-    "sha256": "9b656dc3d0185ea3b63295e168d8cca9eaf5d4aea4c1cae8e62bdab448b766d6"
+    "sha256": "1cb263ffabda8e5d99e93f49d7e809c76fbd5fbf4696207379e31bf78c5c6b68"
   },
   "upstreamRuntimeAssets": [
     {

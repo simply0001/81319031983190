@@ -5,6 +5,8 @@ import com.pocketpass.app.domain.model.MAX_GROUP_MEMBERS
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.UserProfile
 import com.pocketpass.app.domain.model.isValidProfileName
+import com.pocketpass.app.feature.ACCOUNT_SETUP_AGE_MAX
+import com.pocketpass.app.feature.ACCOUNT_SETUP_AGE_MIN
 import com.pocketpass.app.feature.AccountSecurityEvent
 import com.pocketpass.app.feature.AccountSetupEvent
 import com.pocketpass.app.mii.MiiEditorEvent
@@ -236,6 +238,25 @@ data class NameEditorUiState(
         get() = isValidProfileName(draft)
 }
 
+data class AgeEditorUiState(
+    val visible: Boolean = false,
+    val draft: String = "",
+    val saving: Boolean = false,
+    val error: String? = null,
+    val errorShakeNonce: Int = 0,
+) {
+    val valid: Boolean
+        get() = draft.toIntOrNull() in ACCOUNT_SETUP_AGE_MIN..ACCOUNT_SETUP_AGE_MAX
+}
+
+data class CountryEditorUiState(
+    val visible: Boolean = false,
+    val savingCode: String? = null,
+    val error: String? = null,
+)
+
+const val PROFILE_AGE_RULE_MESSAGE = "Ages must be between $ACCOUNT_SETUP_AGE_MIN and $ACCOUNT_SETUP_AGE_MAX."
+
 data class GroupComposerState(
     val title: String = "",
     val selectedMemberIds: Set<UserId> = emptySet(),
@@ -395,6 +416,15 @@ sealed interface PocketPassEvent {
     data class UpdateNameDraft(val value: String) : PocketPassEvent
     data object SaveName : PocketPassEvent
     data object CloseNameEditor : PocketPassEvent
+    data object OpenEditInfo : PocketPassEvent
+    data object OpenAgeEditor : PocketPassEvent
+    data class UpdateAgeDraft(val value: String) : PocketPassEvent
+    data object SaveAge : PocketPassEvent
+    data object HideAge : PocketPassEvent
+    data object CloseAgeEditor : PocketPassEvent
+    data object OpenCountryEditor : PocketPassEvent
+    data class SaveCountry(val code: String) : PocketPassEvent
+    data object CloseCountryEditor : PocketPassEvent
     data class SetNearby(val enabled: Boolean) : PocketPassEvent
     data object RequestNearbyPermissions : PocketPassEvent
     data class SetSoundLevel(val level: Float) : PocketPassEvent

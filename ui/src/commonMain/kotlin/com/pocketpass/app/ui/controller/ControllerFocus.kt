@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -417,6 +418,11 @@ class ControllerFocus(private val onMoved: (() -> Unit)? = null) {
 
     fun hasTargets(): Boolean = activeEntries().isNotEmpty()
 
+    fun ensureFocus(display: FocusDisplay) {
+        if (activeEntries().any { it.id == focusId }) return
+        firstTarget(display)?.let { focus(it, reveal = false) }
+    }
+
     fun firstTarget(display: FocusDisplay): String? {
         val candidates = topLayerEntries().filter {
             it.focusable && it.parentId == null && it.display == display && it.isRevealed()
@@ -479,6 +485,7 @@ val LocalFocusDisplay = staticCompositionLocalOf { FocusDisplay.Bottom }
 val LocalControllerFocusViewport = staticCompositionLocalOf<ControllerFocusViewport?> { null }
 val LocalControllerFocusGroup = staticCompositionLocalOf<String?> { null }
 val LocalControllerRestFrame = staticCompositionLocalOf<ControllerRestFrame?> { null }
+val LocalControllerFocusLayer = staticCompositionLocalOf { 0 }
 
 fun Modifier.controllerRestFrameOutside(frame: ControllerRestFrame): Modifier =
     onPlaced { frame.placeOutside(it) }
@@ -513,14 +520,15 @@ fun Modifier.controllerTarget(
     val viewport = LocalControllerFocusViewport.current
     val group = LocalControllerFocusGroup.current
     val restFrame = LocalControllerRestFrame.current
+    val focusLayer = layer + LocalControllerFocusLayer.current
     val latestActivate = rememberUpdatedState(onActivate)
     val latestAdjust = rememberUpdatedState(onAdjust)
     val bringIntoView = remember { BringIntoViewRequester() }
     val geometry = remember { TargetGeometry() }
-    DisposableEffect(focus, id, layer, display, cornerRadius, viewport, onAdjust != null, group, parentId) {
+    DisposableEffect(focus, id, focusLayer, display, cornerRadius, viewport, onAdjust != null, group, parentId) {
         focus.register(
             id,
-            layer,
+            focusLayer,
             display,
             cornerRadius,
             viewport = viewport,
@@ -557,8 +565,9 @@ fun Modifier.controllerTarget(
 fun Modifier.controllerFocusBarrier(id: String, layer: Int): Modifier = composed {
     val focus = LocalControllerFocus.current ?: return@composed this
     val display = LocalFocusDisplay.current
-    DisposableEffect(focus, id, layer, display) {
-        focus.register(id, layer, display, focusable = false) {}
+    val focusLayer = layer + LocalControllerFocusLayer.current
+    DisposableEffect(focus, id, focusLayer, display) {
+        focus.register(id, focusLayer, display, focusable = false) {}
         onDispose { focus.unregister(id) }
     }
     this.onGloballyPositioned { coordinates ->
@@ -823,6 +832,27 @@ private fun DrawScope.drawHighlight(
 }
 
 internal const val HIGHLIGHT_MASK_SCALE = 0.25f
+
+@Composable
+fun ControllerOverlayFocus(visible: Boolean) {
+    val focus = LocalControllerFocus.current ?: return
+    val display = LocalFocusDisplay.current
+    val returnTo = remember { arrayOfNulls<String>(1) }
+    remember(focus, visible) {
+        if (visible) returnTo[0] = focus.focusId
+        visible
+    }
+    LaunchedEffect(focus, visible) {
+        if (visible) {
+            withFrameNanos { }
+            withFrameNanos { }
+            focus.ensureFocus(display)
+        } else {
+            returnTo[0]?.let { focus.focus(it, reveal = false) }
+            returnTo[0] = null
+        }
+    }
+}
 
 @Composable
 fun ControllerBackHandler(enabled: Boolean, onBack: () -> Unit) {

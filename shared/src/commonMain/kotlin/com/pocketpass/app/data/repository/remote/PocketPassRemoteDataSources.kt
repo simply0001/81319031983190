@@ -26,6 +26,8 @@ import com.pocketpass.app.domain.model.RemoveGroupMemberCommand
 import com.pocketpass.app.domain.model.RenameGroupConversationCommand
 import com.pocketpass.app.domain.repository.groupChatsUnavailable
 import com.pocketpass.app.domain.model.SetUserBlockCommand
+import com.pocketpass.app.domain.model.SetProfileAgeCommand
+import com.pocketpass.app.domain.model.SetProfileCountryCommand
 import com.pocketpass.app.domain.model.PocketPassNotification
 import com.pocketpass.app.domain.model.AccountSetupCommand
 import com.pocketpass.app.domain.model.UpdateProfileCommand
@@ -80,6 +82,12 @@ interface ProfileRemoteDataSource {
     suspend fun renameProfile(
         command: RenameProfileCommand,
     ): RepositoryResult<UserProfile>
+
+    suspend fun setProfileAge(command: SetProfileAgeCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(RepositoryFailure(RepositoryFailureKind.NotFound, "Profile details are unavailable", retryable = false))
+
+    suspend fun setProfileCountry(command: SetProfileCountryCommand): RepositoryResult<UserProfile> =
+        RepositoryResult.Failure(RepositoryFailure(RepositoryFailureKind.NotFound, "Profile details are unavailable", retryable = false))
 
     suspend fun touchLastSeen(): RepositoryResult<Instant>
 }

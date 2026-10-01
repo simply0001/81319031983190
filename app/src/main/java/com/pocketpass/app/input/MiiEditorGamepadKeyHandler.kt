@@ -60,6 +60,7 @@ fun handleMiiEditorGamepadKeyEvent(
     event: KeyEvent,
     state: PocketPassUiState,
     dispatch: (PocketPassEvent) -> Unit,
+    singleScreen: Boolean = false,
 ): Boolean = when (
     val action = classifyMiiEditorGamepadKey(
         keyCode = event.keyCode,
@@ -75,7 +76,7 @@ fun handleMiiEditorGamepadKeyEvent(
     MiiEditorGamepadKeyAction.Consume -> true
     MiiEditorGamepadKeyAction.Continue -> {
         if (state.miiEditor.canContinue) {
-            dispatch(PocketPassEvent.Mii(MiiEditorEvent.Continue))
+            dispatch(PocketPassEvent.Mii(if (singleScreen) MiiEditorEvent.Save else MiiEditorEvent.Continue))
         }
         true
     }

@@ -97,6 +97,8 @@ import com.pocketpass.app.domain.model.SubmitNearbyEncounterCommand
 import com.pocketpass.app.domain.model.AccountSetupCommand
 import com.pocketpass.app.domain.model.UpdateProfileCommand
 import com.pocketpass.app.domain.model.RenameProfileCommand
+import com.pocketpass.app.domain.model.SetProfileAgeCommand
+import com.pocketpass.app.domain.model.SetProfileCountryCommand
 import com.pocketpass.app.domain.model.UserId
 import com.pocketpass.app.domain.model.LeaderboardEntry
 import com.pocketpass.app.domain.model.LeaderboardScope
@@ -518,6 +520,32 @@ class SupabaseProductionRemoteDataSources(
         client
             .from(PROFILES_TABLE)
             .update(patch) {
+                select()
+                filter { eq("user_id", command.accountId.value) }
+            }
+            .decodeSingle<ProfileDto>()
+            .toDomain(::authenticatedAvatarUrl)
+    }
+
+    override suspend fun setProfileAge(
+        command: SetProfileAgeCommand,
+    ): RepositoryResult<UserProfile> = remoteResult {
+        client
+            .from(PROFILES_TABLE)
+            .update(AgePatchDto(age = command.age)) {
+                select()
+                filter { eq("user_id", command.accountId.value) }
+            }
+            .decodeSingle<ProfileDto>()
+            .toDomain(::authenticatedAvatarUrl)
+    }
+
+    override suspend fun setProfileCountry(
+        command: SetProfileCountryCommand,
+    ): RepositoryResult<UserProfile> = remoteResult {
+        client
+            .from(PROFILES_TABLE)
+            .update(CountryPatchDto(countryCode = command.countryCode)) {
                 select()
                 filter { eq("user_id", command.accountId.value) }
             }
@@ -1831,6 +1859,17 @@ private data class RenameProfilePatchDto(
     val username: String,
     @SerialName("display_name")
     val displayName: String,
+)
+
+@Serializable
+private data class AgePatchDto(
+    val age: Int?,
+)
+
+@Serializable
+private data class CountryPatchDto(
+    @SerialName("country_code")
+    val countryCode: String,
 )
 
 private fun FriendshipDto.otherUserId(accountId: String): String =

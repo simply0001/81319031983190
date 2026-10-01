@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +65,12 @@ import com.pocketpass.app.ui.screens.CreditsPanel
 import com.pocketpass.app.ui.screens.DeletePanel
 import com.pocketpass.app.ui.screens.ConnectedAppsPanel
 import com.pocketpass.app.ui.screens.EditMiiPanel
-import com.pocketpass.app.ui.screens.EditNamePanel
+import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.screens.EditInfoPanel
+import com.pocketpass.app.ui.screens.EditInfoRow
+import com.pocketpass.app.ui.screens.editInfoAge
+import com.pocketpass.app.ui.screens.editInfoCountry
+import com.pocketpass.app.ui.screens.editInfoName
 import com.pocketpass.app.ui.screens.LogoutPanel
 import com.pocketpass.app.ui.screens.NearbyPanel
 import com.pocketpass.app.ui.screens.NearbyToggle
@@ -101,8 +107,10 @@ fun PhoneSettingsTab(
             panes = panes,
             stage = { PhoneStageScroll(metrics) { PhoneSettingsGear(metrics) } },
             deck = {
+                val currentRoute = state.routes.lastOrNull()?.takeUnless { it is PocketPassRoute.Root }
+                val focus = LocalControllerFocus.current
                 AnimatedContent(
-                    targetState = state.routes.lastOrNull()?.takeUnless { it is PocketPassRoute.Root },
+                    targetState = currentRoute,
                     transitionSpec = {
                         val pushing = targetState != null
                         (fadeIn(tween(200)) + slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { if (pushing) it / 5 else -it / 5 })
@@ -110,10 +118,12 @@ fun PhoneSettingsTab(
                     },
                     label = "Settings deck",
                 ) { route ->
-                    if (route == null) {
-                        PhoneSettingsList(metrics, state, dispatch, titled = false)
-                    } else {
-                        PhoneSettingsSubpage(metrics, route, state, dispatch)
+                    CompositionLocalProvider(LocalControllerFocus provides focus.takeIf { route == currentRoute }) {
+                        if (route == null) {
+                            PhoneSettingsList(metrics, state, dispatch, titled = false)
+                        } else {
+                            PhoneSettingsSubpage(metrics, route, state, dispatch)
+                        }
                     }
                 }
             },
@@ -306,7 +316,7 @@ private fun PhoneSettingsSubpage(
             onBack = { dispatch(PocketPassEvent.Back) },
         ) {
             PhoneSubpageRow(metrics, order = 0) {
-                EditNamePanel(metrics, 0f) { dispatch(PocketPassEvent.OpenNameEditor) }
+                EditInfoPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenEditInfo) }
             }
             if (state.miiEditorEnabled) {
                 PhoneSubpageRow(metrics, order = 1) {
@@ -357,7 +367,7 @@ private fun PhoneSettingsSubpage(
             if (state.messagePushSupported) {
                 PhoneToggleRow(
                     metrics = metrics,
-                    icon = Assets.NavMessages,
+                    icon = Assets.SettingsMessagePrivacy,
                     title = "Message Alerts",
                     subtitle = "New direct and group messages",
                     enabled = state.messageAlertsEnabled,
@@ -503,6 +513,30 @@ private fun PhoneSettingsSubpage(
         PocketPassRoute.WidgetMaker -> PhoneWidgetsPage(metrics, state, dispatch)
 
         is PocketPassRoute.WidgetEditor -> PhoneWidgetEditorPage(metrics, state, dispatch, route.designId)
+
+        PocketPassRoute.EditInfo -> PhoneSubpage(
+            metrics = metrics,
+            title = "Edit Info",
+            subtitle = "Your name, age and country.",
+            backTag = "edit_info_back",
+            onBack = { dispatch(PocketPassEvent.Back) },
+        ) {
+            PhoneSubpageRow(metrics, order = 0) {
+                EditInfoRow(metrics, 0f, Assets.SettingsEditName, "Name", state.editInfoName(), "edit_info_name") {
+                    dispatch(PocketPassEvent.OpenNameEditor)
+                }
+            }
+            PhoneSubpageRow(metrics, order = 1) {
+                EditInfoRow(metrics, 0f, Assets.SettingsClock, "Age", state.editInfoAge(), "edit_info_age") {
+                    dispatch(PocketPassEvent.OpenAgeEditor)
+                }
+            }
+            PhoneSubpageRow(metrics, order = 2) {
+                EditInfoRow(metrics, 0f, Assets.SettingsGlobe, "Country", state.editInfoCountry(), "edit_info_country") {
+                    dispatch(PocketPassEvent.OpenCountryEditor)
+                }
+            }
+        }
 
         else -> Unit
     }
