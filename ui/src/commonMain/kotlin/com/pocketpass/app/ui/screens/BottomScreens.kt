@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredSize
@@ -64,6 +65,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -241,6 +243,10 @@ fun BottomScreen(
         )
         PocketPassRoute.Contributors -> ContributorsBottom(dispatch = dispatch)
         PocketPassRoute.NotificationSettings -> NotificationSettingsBottom(
+            state = state,
+            dispatch = dispatch,
+        )
+        PocketPassRoute.BoardNotificationSettings -> BoardNotificationSettingsBottom(
             state = state,
             dispatch = dispatch,
         )
@@ -5411,7 +5417,6 @@ private fun SoundSlider(
         ),
         label = "Sound slider thumb press",
     )
-    val shape = RoundedCornerShape(metrics.dp(52.5f))
     Box(
         modifier = Modifier
             .designBounds(metrics, 52f, y, trackWidth, 138f)
@@ -5443,83 +5448,101 @@ private fun SoundSlider(
             }
             .testTag(tag),
     ) {
-        Box(
-            Modifier
-                .designBounds(metrics, 0f, 16.65f, trackWidth, 105f)
-                .controllerTarget(
-                    tag,
-                    cornerRadius = 52.5f,
-                    onAdjust = { delta ->
-                        latestOnLevelChange.value(
-                            (level + delta * SOUND_STEP).coerceIn(0f, 1f),
-                        )
-                        preview?.let(soundEffects::play)
-                    },
-                ) {}
-                .clip(shape)
-                .pocketFrame(
-                    pocketPalette.surfaceSunken,
-                    metrics.dp(20.152f),
-                    pocketPalette.borderGrey,
-                    shape,
-                ),
-        )
-        Box(
-            Modifier
-                .graphicsLayer {
-                    translationX = 0f
-                    translationY = 16.65f
-                }
-                .layout { measurable, _ ->
-                    val fillWidth = trackWidth * animatedLevel.value.coerceIn(0f, 1f)
-                    val widthPx = if (fillWidth > 41.5f) {
-                        metrics.dp(fillWidth).roundToPx()
-                    } else {
-                        0
-                    }
-                    val heightPx = metrics.dp(105f).roundToPx()
-                    val placeable = measurable.measure(
-                        Constraints.fixed(widthPx, heightPx),
+        PocketSliderFace(
+            metrics = metrics,
+            trackWidth = trackWidth,
+            level = animatedLevel,
+            thumbScale = thumbScale,
+            trackModifier = Modifier.controllerTarget(
+                tag,
+                cornerRadius = 52.5f,
+                onAdjust = { delta ->
+                    latestOnLevelChange.value(
+                        (level + delta * SOUND_STEP).coerceIn(0f, 1f),
                     )
-                    layout(widthPx, heightPx) { placeable.place(0, 0) }
-                }
-                .clip(shape)
-                .pocketFrame(greenButtonBrush(), metrics.dp(20.152f), Color(0xFF4BC252), shape),
-        )
-        Box(
-            Modifier
-                .designBounds(metrics, 83f, 138f) {
-                    Offset(
-                        (trackWidth * animatedLevel.value.coerceIn(0f, 1f) - 41.5f)
-                            .coerceIn(0f, trackWidth - 83f),
-                        7f,
-                    )
-                }
-                .clip(RoundedCornerShape(metrics.dp(41.5f)))
-                .background(Color.Black.copy(alpha = 0.1f)),
-        )
-        Box(
-            Modifier
-                .designBounds(metrics, 83f, 138f) {
-                    Offset(
-                        (trackWidth * animatedLevel.value.coerceIn(0f, 1f) - 41.5f)
-                            .coerceIn(0f, trackWidth - 83f),
-                        0f,
-                    )
-                }
-                .graphicsLayer {
-                    scaleX = thumbScale.value
-                    scaleY = thumbScale.value
-                }
-                .clip(RoundedCornerShape(metrics.dp(41.5f)))
-                .pocketFrame(
-                    Color.White,
-                    metrics.dp(20.152f),
-                    Color(0xFFCECECE),
-                    RoundedCornerShape(metrics.dp(41.5f)),
-                ),
+                    preview?.let(soundEffects::play)
+                },
+            ) {},
         )
     }
+}
+
+@Composable
+internal fun PocketSliderFace(
+    metrics: DesignMetrics,
+    trackWidth: Float,
+    level: State<Float>,
+    thumbScale: State<Float>,
+    trackModifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(metrics.dp(52.5f))
+    Box(
+        Modifier
+            .designBounds(metrics, 0f, 16.65f, trackWidth, 105f)
+            .then(trackModifier)
+            .clip(shape)
+            .pocketFrame(
+                pocketPalette.surfaceSunken,
+                metrics.dp(20.152f),
+                pocketPalette.borderGrey,
+                shape,
+            ),
+    )
+    Box(
+        Modifier
+            .graphicsLayer {
+                translationX = 0f
+                translationY = 16.65f
+            }
+            .layout { measurable, _ ->
+                val fillWidth = trackWidth * level.value.coerceIn(0f, 1f)
+                val widthPx = if (fillWidth > 41.5f) {
+                    metrics.dp(fillWidth).roundToPx()
+                } else {
+                    0
+                }
+                val heightPx = metrics.dp(105f).roundToPx()
+                val placeable = measurable.measure(
+                    Constraints.fixed(widthPx, heightPx),
+                )
+                layout(widthPx, heightPx) { placeable.place(0, 0) }
+            }
+            .clip(shape)
+            .pocketFrame(greenButtonBrush(), metrics.dp(20.152f), Color(0xFF4BC252), shape),
+    )
+    Box(
+        Modifier
+            .designBounds(metrics, 83f, 138f) {
+                Offset(
+                    (trackWidth * level.value.coerceIn(0f, 1f) - 41.5f)
+                        .coerceIn(0f, trackWidth - 83f),
+                    7f,
+                )
+            }
+            .clip(RoundedCornerShape(metrics.dp(41.5f)))
+            .background(Color.Black.copy(alpha = 0.1f)),
+    )
+    Box(
+        Modifier
+            .designBounds(metrics, 83f, 138f) {
+                Offset(
+                    (trackWidth * level.value.coerceIn(0f, 1f) - 41.5f)
+                        .coerceIn(0f, trackWidth - 83f),
+                    0f,
+                )
+            }
+            .graphicsLayer {
+                scaleX = thumbScale.value
+                scaleY = thumbScale.value
+            }
+            .clip(RoundedCornerShape(metrics.dp(41.5f)))
+            .pocketFrame(
+                Color.White,
+                metrics.dp(20.152f),
+                Color(0xFFCECECE),
+                RoundedCornerShape(metrics.dp(41.5f)),
+            ),
+    )
 }
 
 @Composable
@@ -5926,28 +5949,29 @@ private fun NotificationSettingsBottom(
             subtitle = "Which events send alerts.",
             backTag = "notification_settings_back",
         ) { dispatch(PocketPassEvent.Back) }
-        val rows = buildList {
-            if (state.messagePushSupported) add(NotificationSettingsRow(
-                Assets.SettingsMessagePrivacy, "Message Alerts", "New direct and group messages",
-                "message_alerts_toggle", state.messageAlertsEnabled,
-                PocketPassEvent.SetMessageAlertsEnabled(!state.messageAlertsEnabled),
-            ))
-            add(NotificationSettingsRow(
+        val messageRow = NotificationSettingsRow(
+            Assets.SettingsMessagePrivacy, "Message Alerts", "New direct and group messages",
+            "message_alerts_toggle", state.messageAlertsEnabled,
+            PocketPassEvent.SetMessageAlertsEnabled(!state.messageAlertsEnabled),
+        ).takeIf { state.messagePushSupported }
+        val showBoards = state.showsBoardAlertSettings()
+        val laterRows = listOf(
+            NotificationSettingsRow(
                 Assets.SettingsEncounterAlerts, "Encounter Alerts", "Notify when you pass someone",
                 "encounter_alerts_toggle", state.encounterAlertsEnabled,
                 PocketPassEvent.SetEncounterAlertsEnabled(!state.encounterAlertsEnabled),
-            ))
-            add(NotificationSettingsRow(
-                Assets.SettingsRepairAlerts, "Repair Alerts", "Warn if Nearby stops working",
-                "repair_alerts_toggle", state.nearbyRepairAlertsEnabled,
-                PocketPassEvent.SetNearbyRepairAlertsEnabled(!state.nearbyRepairAlertsEnabled),
-            ))
-            add(NotificationSettingsRow(
+            ),
+            NotificationSettingsRow(
                 Assets.SettingsVersion, "Update Alerts", "Tell me about new versions",
                 "update_alerts_toggle", state.updateAlertsEnabled,
                 PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled),
-            ))
-        }
+            ),
+        )
+        val stack = SettingsStack()
+        val messageY = messageRow?.let { stack.place(SETTINGS_ROW_HEIGHT) }
+        val boardAlertsY = if (showBoards) stack.place(BOARD_ALERTS_PANEL_HEIGHT) else null
+        val boardListY = if (showBoards) stack.place(SETTINGS_ROW_HEIGHT) else null
+        val laterY = laterRows.map { stack.place(SETTINGS_ROW_HEIGHT) }
         val scroll = rememberScrollState()
         val belowHeader = remember(metrics) { BelowSubpageHeaderShape(metrics) }
         val focusViewport = rememberBelowSubpageHeaderFocusViewport(metrics)
@@ -5959,23 +5983,50 @@ private fun NotificationSettingsBottom(
             CompositionLocalProvider(LocalControllerFocusViewport provides focusViewport) {
                 Box(Modifier.padding(top = metrics.dp(SUBPAGE_CONTENT_TOP))
                     .requiredWidth(metrics.dp(1240f + 2f * metrics.overscanX))
-                    .requiredHeight(metrics.dp(SETTINGS_PANEL_GAP + rows.size * (SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP)))) {
-                    rows.forEachIndexed { index, row ->
-                        val y = SETTINGS_PANEL_GAP + index * (SETTINGS_ROW_HEIGHT + SETTINGS_PANEL_GAP)
-                        SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + y, height = SETTINGS_ROW_HEIGHT, order = index + 1) {
-                            PocketPanel(
-                                metrics = metrics, x = 50f, y = y, width = 1140f, height = SETTINGS_ROW_HEIGHT,
-                                borderColor = pocketPalette.borderGrey, borderWidth = 20.152f,
-                                radius = 110f, fillBrush = greyPanelBrush(), tag = row.tag,
-                                onClick = { dispatch(row.event) },
-                            ) {
-                                SettingsHeading(metrics = metrics, icon = row.icon, title = row.title, subtitle = row.subtitle)
-                                NearbyToggle(metrics = metrics, enabled = row.enabled)
-                            }
+                    .requiredHeight(metrics.dp(stack.totalHeight))) {
+                    var order = 1
+                    if (messageRow != null && messageY != null) NotificationToggleRow(metrics, messageRow, messageY, order++, dispatch)
+                    if (boardAlertsY != null) {
+                        SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + boardAlertsY, height = BOARD_ALERTS_PANEL_HEIGHT, order = order++) {
+                            BoardAlertsPanel(
+                                metrics = metrics,
+                                y = boardAlertsY,
+                                enabled = state.boards.pushEnabled,
+                                level = state.boards.alertLevel,
+                                onToggle = { dispatch(PocketPassEvent.SetBoardAlertsEnabled(!state.boards.pushEnabled)) },
+                                onLevel = { dispatch(PocketPassEvent.SetBoardAlertLevel(it)) },
+                            )
                         }
                     }
+                    if (boardListY != null) {
+                        SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + boardListY, height = SETTINGS_ROW_HEIGHT, order = order++) {
+                            BoardNotificationsPanel(metrics, boardListY) { dispatch(PocketPassEvent.OpenBoardNotificationSettings) }
+                        }
+                    }
+                    laterRows.forEachIndexed { index, row -> NotificationToggleRow(metrics, row, laterY[index], order++, dispatch) }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun NotificationToggleRow(
+    metrics: DesignMetrics,
+    row: NotificationSettingsRow,
+    y: Float,
+    order: Int,
+    dispatch: (PocketPassEvent) -> Unit,
+) {
+    SubpagePanelPop(y = SUBPAGE_CONTENT_TOP + y, height = SETTINGS_ROW_HEIGHT, order = order) {
+        PocketPanel(
+            metrics = metrics, x = 50f, y = y, width = 1140f, height = SETTINGS_ROW_HEIGHT,
+            borderColor = pocketPalette.borderGrey, borderWidth = 20.152f,
+            radius = 110f, fillBrush = greyPanelBrush(), tag = row.tag,
+            onClick = { dispatch(row.event) },
+        ) {
+            SettingsHeading(metrics = metrics, icon = row.icon, title = row.title, subtitle = row.subtitle)
+            NearbyToggle(metrics = metrics, enabled = row.enabled)
         }
     }
 }
@@ -7658,6 +7709,7 @@ internal fun SubpageHeader(
             fontWeight = FontWeight.Bold,
             fontSize = metrics.sp(88f),
             maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = metrics.sp(56f), maxFontSize = metrics.sp(88f), stepSize = metrics.sp(2f)),
         )
         Box(
             modifier = Modifier

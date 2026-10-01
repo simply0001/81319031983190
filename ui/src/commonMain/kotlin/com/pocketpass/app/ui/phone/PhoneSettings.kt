@@ -26,6 +26,7 @@ import com.pocketpass.app.ui.components.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,13 @@ import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.PocketPanel
 import com.pocketpass.app.ui.components.rememberGearRotation
 import com.pocketpass.app.ui.screens.AccessibilityPanel
+import com.pocketpass.app.ui.screens.BOARD_ALERTS_PANEL_HEIGHT
+import com.pocketpass.app.ui.screens.BoardAlertsPanel
+import com.pocketpass.app.ui.screens.BoardNotificationRow
+import com.pocketpass.app.ui.screens.BoardNotificationsMessagePanel
+import com.pocketpass.app.ui.screens.BoardNotificationsPanel
+import com.pocketpass.app.ui.screens.boardNotificationsMessage
+import com.pocketpass.app.ui.screens.showsBoardAlertSettings
 import com.pocketpass.app.ui.screens.AccountPanel
 import com.pocketpass.app.ui.screens.AppUpdateStatusPanel
 import com.pocketpass.app.ui.screens.accountSecuritySubtitle
@@ -66,6 +74,7 @@ import com.pocketpass.app.ui.screens.DeletePanel
 import com.pocketpass.app.ui.screens.ConnectedAppsPanel
 import com.pocketpass.app.ui.screens.EditMiiPanel
 import com.pocketpass.app.ui.controller.LocalControllerFocus
+import com.pocketpass.app.ui.controller.LocalFocusDisplay
 import com.pocketpass.app.ui.screens.EditInfoPanel
 import com.pocketpass.app.ui.screens.EditInfoRow
 import com.pocketpass.app.ui.screens.editInfoAge
@@ -375,6 +384,21 @@ private fun PhoneSettingsSubpage(
                     order = 0,
                 ) { dispatch(PocketPassEvent.SetMessageAlertsEnabled(!state.messageAlertsEnabled)) }
             }
+            if (state.showsBoardAlertSettings()) {
+                PhoneSubpageRow(metrics, order = 0, height = BOARD_ALERTS_PANEL_HEIGHT) {
+                    BoardAlertsPanel(
+                        metrics = metrics,
+                        y = 0f,
+                        enabled = state.boards.pushEnabled,
+                        level = state.boards.alertLevel,
+                        onToggle = { dispatch(PocketPassEvent.SetBoardAlertsEnabled(!state.boards.pushEnabled)) },
+                        onLevel = { dispatch(PocketPassEvent.SetBoardAlertLevel(it)) },
+                    )
+                }
+                PhoneSubpageRow(metrics, order = 0) {
+                    BoardNotificationsPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenBoardNotificationSettings) }
+                }
+            }
             PhoneToggleRow(
                 metrics = metrics,
                 icon = Assets.SettingsEncounterAlerts,
@@ -386,22 +410,42 @@ private fun PhoneSettingsSubpage(
             ) { dispatch(PocketPassEvent.SetEncounterAlertsEnabled(!state.encounterAlertsEnabled)) }
             PhoneToggleRow(
                 metrics = metrics,
-                icon = Assets.SettingsRepairAlerts,
-                title = "Repair Alerts",
-                subtitle = "Warn if Nearby stops working",
-                enabled = state.nearbyRepairAlertsEnabled,
-                tag = "repair_alerts_toggle",
-                order = 1,
-            ) { dispatch(PocketPassEvent.SetNearbyRepairAlertsEnabled(!state.nearbyRepairAlertsEnabled)) }
-            PhoneToggleRow(
-                metrics = metrics,
                 icon = Assets.SettingsVersion,
                 title = "Update Alerts",
                 subtitle = "Tell me about new versions",
                 enabled = state.updateAlertsEnabled,
                 tag = "update_alerts_toggle",
-                order = 2,
+                order = 1,
             ) { dispatch(PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled)) }
+        }
+
+        PocketPassRoute.BoardNotificationSettings -> PhoneSubpage(
+            metrics = metrics,
+            title = "Board Notifications",
+            subtitle = "Alerts for each board.",
+            backTag = "board_notification_settings_back",
+            onBack = { dispatch(PocketPassEvent.Back) },
+        ) {
+            val message = boardNotificationsMessage(state)
+            val boards = state.boards.notificationBoards.orEmpty()
+            val focus = LocalControllerFocus.current
+            val display = LocalFocusDisplay.current
+            LaunchedEffect(focus, message, boards.size) {
+                withFrameNanos { }
+                withFrameNanos { }
+                focus?.ensureFocus(display)
+            }
+            if (message != null) {
+                PhoneSubpageRow(metrics, order = 0) { BoardNotificationsMessagePanel(metrics, 0f, message) }
+            } else {
+                boards.forEachIndexed { index, board ->
+                    PhoneSubpageRow(metrics, order = index.coerceAtMost(6)) {
+                        BoardNotificationRow(metrics, 0f, board, state.boards.pushEnabled) {
+                            dispatch(PocketPassEvent.SetBoardPushEnabled(board.id, !board.pushEnabled))
+                        }
+                    }
+                }
+            }
         }
 
         PocketPassRoute.AppSettings -> PhoneSubpage(

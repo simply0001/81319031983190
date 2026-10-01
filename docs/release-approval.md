@@ -216,3 +216,20 @@ hashes (`index.html` `0463a235013f0e74`, `privacy.html` `81b487cb81b56818`,
 `site.css` `dfb98598087e48ff`). The previous files are in
 `/opt/pocketpass/deploy-backups/website-docs-look-2026-09-30/`; `backdrop.js`
 remains on the server, unused. This does not cover later deployments or releases.
+
+On 1 October 2026, the user approved the Boards alerts database update and the
+developer docs deploy ("Deploy to developer docs and database update"). Before
+the change, `backup.sh` made `pocketpass-20261001T180653Z.tar.gz.age` (SHA-256
+`8a7655779097e031`), copied to `PocketPass-backups\production-backups\`. A
+rolled-back dry run applied the migration and passed the catalog checks;
+`public_api_boards`, `account_bans` and `api_hardening` pgTAP gave the same
+results before and after (29, 55 and 36 passing). `migrate.sh` then applied
+`20261001000100_board_mentions_and_alert_levels` (checksum `f5ff976ae7761691`):
+@mentions, per-member alert kinds, the `push_level` alert setting and push data
+with the kind, actor and board name. `health.sh`, `validate-auth-production.sh`
+and `validate-public-api-production.sh` passed, and the three pgTAP files pass
+on the live database. `developer/docs.html` now lists the `mentions` note field
+and the inbox kinds (live SHA-256 `c6bc10bfb815fc65`). The previous docs and
+function definitions are in `/opt/pocketpass/deploy-backups/board-alerts-20261001/`.
+No release, APK or update feed changed. This does not cover later deployments or
+releases.

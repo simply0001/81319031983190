@@ -165,13 +165,14 @@ class PocketPassNavigationTest {
         scrollSettingsTo("sound_slider").performTouchInput { click() }
         compose.runOnIdle { assertTrue(state.soundLevel > 0.48f) }
 
-        scrollSettingsTo("theme_dark").performClick()
-        compose.runOnIdle { assertEquals(ThemeMode.Dark, state.themeMode) }
-
         scrollSettingsTo("delete_account").performClick()
         compose.runOnIdle { assertTrue(state.deleteAccountVisible) }
         compose.onNodeWithTag("delete_account_cancel").performClick()
         compose.runOnIdle { assertFalse(state.deleteAccountVisible) }
+
+        scrollSettingsTo("settings_app").performClick()
+        compose.onNodeWithTag("theme_dark").performClick()
+        compose.runOnIdle { assertEquals(ThemeMode.Dark, state.themeMode) }
     }
 
     private fun showBottom(initial: PocketPassUiState) {
@@ -248,4 +249,5 @@ private fun signedIn(destination: PocketPassDestination) = PocketPassUiState(
     profile = FixtureData.currentProfile,
     friends = FixtureData.friends,
     conversations = FixtureData.conversations,
+    boardsVisible = false,
 )

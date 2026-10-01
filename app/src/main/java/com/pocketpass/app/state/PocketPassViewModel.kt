@@ -49,6 +49,7 @@ private fun AppContainer.asStoreContainer(): PocketPassStoreContainer {
         override val pretendoImportEnabled get() = container.pretendoImportEnabled
         override val encounterLedSupported get() = container.encounterLedSupported
         override val messagePushSupported get() = container.messagePush.supported
+        override val boardPushSupported get() = container.messagePush.supported
         override val activeAccountId get() = container.activeAccountId
         override val accountBan get() = container.accountBan.state
         override val repositories get() = container.repositories

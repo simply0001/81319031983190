@@ -8,6 +8,10 @@ export async function loadWorkerRoleChecks(db) {
   await db.exec('reset check_function_bodies');
 }
 
+export async function loadBoardAlertLevels(db) {
+  await db.exec(await migration('20261001000100_board_mentions_and_alert_levels.sql'));
+}
+
 export async function setupApiDatabase(db) {
   await db.exec(await readFile(new URL('./fixture.sql', import.meta.url), 'utf8'));
   await db.exec(`
@@ -75,4 +79,5 @@ export async function setupApiDatabase(db) {
     before insert or update of addressee_id,status on public.friend_requests
     for each row execute function private.enforce_friend_request_message_privacy()`);
   await loadWorkerRoleChecks(db);
+  await loadBoardAlertLevels(db);
 }

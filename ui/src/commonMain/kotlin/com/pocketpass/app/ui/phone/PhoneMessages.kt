@@ -25,7 +25,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import com.pocketpass.app.ui.components.Text
@@ -41,13 +43,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.pocketpass.app.domain.model.ConversationSummary
 import com.pocketpass.app.domain.model.Message
@@ -58,6 +63,8 @@ import com.pocketpass.app.ui.Assets
 import com.pocketpass.app.ui.DesignMetrics
 import com.pocketpass.app.ui.Rubik
 import com.pocketpass.app.ui.components.AvatarCollage
+import com.pocketpass.app.ui.components.EntranceMotion
+import com.pocketpass.app.ui.components.MotionLayer
 import com.pocketpass.app.ui.components.FigmaAsset
 import com.pocketpass.app.ui.controller.controllerTarget
 import com.pocketpass.app.ui.components.pocketFrame
@@ -91,7 +98,7 @@ fun PhoneMessagesTab(
     if (!state.boardsVisible) {
         if (panes == null) PhoneConversationList(metrics, state, dispatch)
         else PhonePanes(metrics = metrics, panes = panes,
-            stage = { com.pocketpass.app.ui.screens.BoardConversationPreview(metrics, state) },
+            stage = { PhoneStageScroll(metrics) { PhoneMessagesBadge(metrics, state.messageBadgeText) } },
             deck = { PhoneConversationList(metrics, state, dispatch) })
         return
     }
@@ -224,6 +231,51 @@ private fun PhoneConversationNotice(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+internal fun PhoneMessagesBadge(metrics: DesignMetrics, count: String) {
+    val autoSize = remember(metrics) {
+        TextAutoSize.StepBased(
+            minFontSize = metrics.sp(48f),
+            maxFontSize = metrics.sp(331.378f),
+            stepSize = metrics.sp(1f),
+        )
+    }
+    MotionLayer(entrance = EntranceMotion.BoardOpen) {
+        Box(Modifier.requiredSize(metrics.dp(632.327f), metrics.dp(597.997f))) {
+            Box(
+                Modifier
+                    .offset(x = metrics.dp(31.379f), y = metrics.dp(34.064f))
+                    .requiredSize(metrics.dp(569.569f), metrics.dp(529.868f))
+                    .graphicsLayer { rotationZ = -7.31f },
+            ) {
+                FigmaAsset(
+                    resource = Assets.MessagesBadge,
+                    modifier = Modifier.requiredSize(metrics.dp(569.569f), metrics.dp(552.167f)),
+                )
+                Box(
+                    modifier = Modifier
+                        .offset(x = metrics.dp(142.5f), y = metrics.dp(12.4f))
+                        .requiredSize(metrics.dp(284.622f), metrics.dp(420.847f))
+                        .graphicsLayer { rotationZ = -0.4f },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val base = TextStyle(fontFamily = Rubik, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+                    BasicText(
+                        text = count,
+                        autoSize = autoSize,
+                        style = base.copy(
+                            color = pocketPalette.ink(Color(0xFF2F6CA5)),
+                            drawStyle = Stroke(width = 18f, join = androidx.compose.ui.graphics.StrokeJoin.Round),
+                        ),
+                        maxLines = 1,
+                    )
+                    BasicText(text = count, autoSize = autoSize, style = base.copy(color = Color.White), maxLines = 1)
+                }
+            }
+        }
     }
 }
 

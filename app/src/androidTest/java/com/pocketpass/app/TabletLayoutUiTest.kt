@@ -46,6 +46,7 @@ class TabletLayoutUiTest {
         leaderboard = LeaderboardUiState(entries = FixtureData.leaderboard),
         achievements = AchievementsUiState(achievements = FixtureData.achievements),
         themeMode = ThemeMode.Light,
+        boardsVisible = false,
     )
 
     private fun show() {
@@ -187,14 +188,14 @@ class TabletLayoutUiTest {
         compose.runOnIdle { state = fixture().copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Activities)), shop = fixture().shop.copy(visible = true, buyPromptItemId = FixtureData.shopCatalog.first().items.first().id)) }
         capture("purchase-confirmation")
         compose.runOnIdle { state = fixture().copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Messages))) }
-        compose.runOnIdle { state = state.copy(boards = state.boards.copy(screen = com.pocketpass.app.boards.BoardsScreen.Chats)) }
+        compose.runOnIdle { state = state.copy(boardsVisible = true, boards = state.boards.copy(screen = com.pocketpass.app.boards.BoardsScreen.Chats)) }
         compose.mainClock.autoAdvance = false
         settle()
         compose.onNodeWithTag("messages_new_group").performClick()
         capture("new-group")
         withinScreen("group_create")
-        val members = compose.onNodeWithTag("group_members_viewport").fetchSemanticsNode().boundsInRoot
-        val create = compose.onNodeWithTag("group_create").fetchSemanticsNode().boundsInRoot
+        val members = compose.onNodeWithTag("group_members_viewport", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val create = compose.onNodeWithTag("group_create", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("Friend cards overlap Create Group", members.bottom <= create.top)
         compose.runOnIdle { state = fixture().copy(profileViewer = ProfileViewerUiState(selectedUserId = FixtureData.SpobUserId.value, source = ProfileViewerSource.RecentInteraction, profile = FixtureData.spobProfile)) }
         capture("profile")
@@ -244,7 +245,7 @@ class TabletLayoutUiTest {
     }
 
     @Test fun boardFormStaysReachableAboveKeyboard() {
-        state = fixture().copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Messages)),
+        state = fixture().copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Messages)), boardsVisible = true,
             boards = com.pocketpass.app.boards.BoardsUiState(enabled = true, screen = com.pocketpass.app.boards.BoardsScreen.Propose))
         show()
         compose.onAllNodes(hasSetTextAction()).onFirst().performClick().performTextInput("Sketch club")

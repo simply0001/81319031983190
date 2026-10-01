@@ -119,7 +119,7 @@ private fun PhoneShell(
     val backdrop = phoneBackdrop(state, pocketPalette)
     ControllerRouteFocus(state.rootDestination, state.routes.size)
     Box(Modifier.fillMaxSize()) {
-        if(state.rootDestination == PocketPassDestination.Messages) BoardBackdrop(metrics)
+        if(state.rootDestination == PocketPassDestination.Messages && state.boardsVisible) BoardBackdrop(metrics)
         else PhoneBackdrop(metrics, backdrop.top, backdrop.bottom)
         when (layout) {
             PhoneLayout.Compact -> PhoneCompactShell(metrics, state, dispatch)
@@ -154,7 +154,7 @@ private fun PhoneCompactShell(
     val insets = LocalPhoneInsets.current
     val destination = state.rootDestination
     val backdrop = phoneBackdrop(state, pocketPalette)
-    val showsTabBar = destination != PocketPassDestination.Messages
+    val showsTabBar = destination != PocketPassDestination.Messages || !state.boardsVisible
     val tabBarClearance = if (showsTabBar) PHONE_TAB_BAR_HEIGHT + insets.bottom else 0f
     val aboveTabBar = remember(metrics, tabBarClearance) { AboveTabBarShape(metrics, tabBarClearance) }
     Box(Modifier.fillMaxSize()) {
@@ -246,7 +246,7 @@ private fun PhoneWideShell(
                     }
                 }
             }
-            if(destination != PocketPassDestination.Messages) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
+            if(destination != PocketPassDestination.Messages || !state.boardsVisible) PhoneTopFade(metrics, backdrop.top, Modifier.align(Alignment.TopCenter))
             PhonePageLayer(metrics, null, visible = destination == PocketPassDestination.Activities && state.games.activeGame != null, fromEnd = false, focusLayer = PHONE_GAME_FOCUS_LAYER) {
                 PhoneGamePage(metrics, state, dispatch)
             }

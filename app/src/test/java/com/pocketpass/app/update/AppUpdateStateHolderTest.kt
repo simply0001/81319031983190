@@ -33,7 +33,6 @@ class AppUpdateStateHolderTest {
         override suspend fun setHomeMood(mood: com.pocketpass.app.model.HomeMood?) = Unit
         override suspend fun setEncounterLedEnabled(enabled: Boolean) = Unit
         override suspend fun setEncounterAlertsEnabled(enabled: Boolean) = Unit
-        override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setUpdateAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setMessageAlertsEnabled(enabled: Boolean) = Unit
         override suspend fun setStepRewardsEnabled(enabled: Boolean) = Unit

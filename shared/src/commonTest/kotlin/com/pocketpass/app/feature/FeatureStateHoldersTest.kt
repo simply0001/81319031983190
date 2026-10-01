@@ -1350,7 +1350,6 @@ class FeatureStateHoldersTest {
         holder.setMoodEmojisEnabled(false)
         holder.setEncounterLedEnabled(false)
         holder.setEncounterAlertsEnabled(false)
-        holder.setNearbyRepairAlertsEnabled(false)
         repository.setStepRewardsEnabled(true)
         runCurrent()
 
@@ -1362,7 +1361,6 @@ class FeatureStateHoldersTest {
                 moodEmojisEnabled = false,
                 encounterLedEnabled = false,
                 encounterAlertsEnabled = false,
-                nearbyRepairAlertsEnabled = false,
                 stepRewardsEnabled = true,
             ),
             holder.settings.value,
@@ -1719,12 +1717,6 @@ class FeatureStateHoldersTest {
         override suspend fun setEncounterAlertsEnabled(enabled: Boolean) {
             mutableSettings.value = mutableSettings.value.copy(
                 encounterAlertsEnabled = enabled,
-            )
-        }
-
-        override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) {
-            mutableSettings.value = mutableSettings.value.copy(
-                nearbyRepairAlertsEnabled = enabled,
             )
         }
 

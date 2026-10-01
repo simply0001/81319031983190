@@ -17,6 +17,7 @@ import kotlin.io.encoding.Base64
 
 internal const val BOARDS_POLL_MILLIS = 120_000L
 internal const val BOARDS_SETTINGS_POLL_MILLIS = 600_000L
+internal const val BOARD_MENTION_SUGGESTION_DELAY_MILLIS = 200L
 private val screensWithoutBackgroundRefresh = setOf(BoardsScreen.Chooser, BoardsScreen.Chats, BoardsScreen.Compose, BoardsScreen.Propose)
 
 class BoardsStateHolder(
@@ -37,6 +38,8 @@ class BoardsStateHolder(
     private var settingsStale = false
     private var loadedPage: String? = null
     private var mutationJob: Job? = null
+    private var mentionJob: Job? = null
+    private var notificationBoardsJob: Job? = null
     private var failedMutation: BoardAction.Mutate? = null
     private data class PendingImage(val board: String, val kind: String, val bytes: ByteArray, val id: String = newBoardId())
     private var pendingImage: PendingImage? = null
@@ -130,6 +133,7 @@ class BoardsStateHolder(
             val enabled = config["enabled"]?.jsonPrimitive?.booleanOrNull == true
             mutable.update { s -> if (account.value?.value != user) s else s.copy(enabled = enabled,
                 pushEnabled = config["push_enabled"]?.jsonPrimitive?.booleanOrNull != false,
+                alertLevel = BoardAlertLevel.fromWire(config["push_level"]?.jsonPrimitive?.contentOrNull),
                 requestsOpen = config["requests_open"]?.jsonPrimitive?.booleanOrNull != false,
                 posts = if (enabled) s.posts else emptyList(), focused = if (enabled) s.focused else null,
                 revealed = if (enabled) s.revealed else emptySet(),
@@ -139,6 +143,109 @@ class BoardsStateHolder(
                 pinnedPostId = if(enabled) s.pinnedPostId else null) }
         } catch (e: CancellationException) { throw e } catch (_: Exception) {
             if (account.value?.value == user) settingsStale = true
+        }
+    }
+
+    fun setPushEnabled(enabled: Boolean) {
+        val user = account.value?.value ?: return
+        val repo = repository ?: return
+        val previous = mutable.value.pushEnabled
+        if (previous == enabled) return
+        mutable.update { it.copy(pushEnabled = enabled) }
+        scope.launch {
+            try {
+                repo.mutate(user, "push_preference", JsonObject(boardArgs("enabled" to enabled.boardValue())), newBoardId())
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (account.value?.value == user) mutable.update { it.copy(pushEnabled = previous) }
+            }
+            refreshSettings(user)
+        }
+    }
+
+    fun setAlertLevel(level: BoardAlertLevel) {
+        val user = account.value?.value ?: return
+        val repo = repository ?: return
+        val previous = mutable.value.alertLevel
+        if (previous == level) return
+        mutable.update { it.copy(alertLevel = level) }
+        scope.launch {
+            try {
+                repo.mutate(user, "push_level", JsonObject(boardArgs("level" to level.wire.boardValue())), newBoardId())
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (account.value?.value == user) mutable.update { it.copy(alertLevel = previous) }
+            }
+            refreshSettings(user)
+        }
+    }
+
+    fun loadNotificationBoards() {
+        val user = account.value?.value ?: return
+        val repo = repository ?: return
+        notificationBoardsJob?.cancel()
+        mutable.update { it.copy(notificationBoardsFailed = false) }
+        notificationBoardsJob = scope.launch {
+            try {
+                val joined = mutableListOf<Board>()
+                var cursor: JsonObject? = null
+                do {
+                    val page = repo.query(user, "directory", boardArgs("scope" to "joined".boardValue(),
+                        "limit" to JsonPrimitive(100), "cursor" to cursor)).jsonObject
+                    joined += page.getValue("items").boardDecode<List<Board>>()
+                    cursor = page["cursor"] as? JsonObject
+                } while (cursor != null)
+                if (account.value?.value == user) mutable.update { s -> s.copy(
+                    notificationBoards = joined.filterNot(Board::archived).distinctBy(Board::id).sortedBy { it.name.lowercase() },
+                    notificationBoardsFailed = false) }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (account.value?.value == user) mutable.update { it.copy(notificationBoardsFailed = true) }
+            }
+        }
+    }
+
+    fun setBoardPushEnabled(boardId: String, enabled: Boolean) {
+        val user = account.value?.value ?: return
+        val repo = repository ?: return
+        val current = mutable.value
+        val previous = (current.notificationBoards?.firstOrNull { it.id == boardId }
+            ?: current.boards.firstOrNull { it.id == boardId } ?: current.board?.takeIf { it.id == boardId })?.pushEnabled ?: return
+        if (previous == enabled) return
+        fun show(value: Boolean) = mutable.update { s -> s.copy(
+            notificationBoards = s.notificationBoards?.map { if (it.id == boardId) it.copy(pushEnabled = value) else it },
+            boards = s.boards.map { if (it.id == boardId) it.copy(pushEnabled = value) else it },
+            board = s.board?.let { if (it.id == boardId) it.copy(pushEnabled = value) else it }) }
+        show(enabled)
+        scope.launch {
+            try {
+                repo.mutate(user, "preferences", JsonObject(boardArgs("board_id" to boardId.boardValue(),
+                    "push_enabled" to enabled.boardValue())), newBoardId())
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (account.value?.value == user) show(previous)
+            }
+        }
+    }
+
+    private fun suggestMentions() {
+        mentionJob?.cancel()
+        val user = account.value?.value
+        val repo = repository
+        val draft = state.value.draft
+        val query = draft?.content?.takeIf { it.brandingKind == null }?.let { trailingMentionQuery(it.body, it.mentions) }
+        if (user == null || repo == null || draft == null || query == null) {
+            if (state.value.mentionCandidates.isNotEmpty()) mutable.update { it.copy(mentionCandidates = emptyList()) }
+            return
+        }
+        mentionJob = scope.launch {
+            delay(BOARD_MENTION_SUGGESTION_DELAY_MILLIS)
+            val found = try {
+                repo.query(user, "mention_candidates", boardArgs("board_id" to draft.boardId.boardValue(),
+                    "search" to query.boardValue())).boardDecode<List<BoardMentionCandidate>>()
+            } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+            mutable.update { s ->
+                val content = s.draft?.content
+                if (account.value?.value != user || s.draft?.id != draft.id || content == null ||
+                    trailingMentionQuery(content.body, content.mentions) != query) s
+                else s.copy(mentionCandidates = found.filter { candidate -> content.mentions.none { it.userId == candidate.userId } })
+            }
         }
     }
 
@@ -211,7 +318,20 @@ class BoardsStateHolder(
                 }
             }
             is BoardAction.DiscardDraft -> discardDraft(action.draft)
-            is BoardAction.Text -> editDraft { it.copy(body = action.text.take(if (it.threadId == null) 1000 else 500)) }
+            is BoardAction.Text -> {
+                editDraft { content ->
+                    val body = action.text.take(if (content.threadId == null) 1000 else 500)
+                    content.copy(body = body, mentions = pruneBoardMentions(body, content.mentions))
+                }
+                suggestMentions()
+            }
+            is BoardAction.PickMention -> {
+                mentionJob?.cancel()
+                val content = state.value.draft?.content
+                val next = content?.withMention(action.candidate, if (content.threadId == null) 1000 else 500)
+                if (next != null) editDraft { next }
+                mutable.update { it.copy(mentionCandidates = emptyList()) }
+            }
             is BoardAction.Spoiler -> editDraft { it.copy(spoiler = action.enabled) }
             is BoardAction.Tool -> mutable.update { it.copy(pen = action.pen ?: it.pen, ink = action.color ?: it.ink, penSize = action.size ?: it.penSize) }
             is BoardAction.Stroke -> { drawingChange { it.add(action.stroke) }; mutable.update { it.copy(activeStroke = null) } }

@@ -2,7 +2,7 @@
 
 StreetPass-style social app for Android dual-screen handhelds (AYN Thor first), phones, tablets and iOS. Kotlin Multiplatform + Compose Multiplatform client, self-hosted Supabase backend on one Oracle VM.
 
-This file is the single shared brief for every coding agent on this repo (OpenAI Codex reads it directly; Claude Code loads it through `CLAUDE.md`). It merges Codex's thread history, Claude Code's project memory and the docs as of 2026-09-26. When you learn something durable, update this file instead of a private memory, date the entry, never add secrets, and keep it under 32 KB (Codex truncates beyond that).
+This file is the shared brief for every coding agent here (OpenAI Codex reads it directly; Claude Code loads it through `CLAUDE.md`). It merges Codex's history, Claude Code's memory and the docs as of 2026-09-26. Put durable lessons here, not in a private memory: date them, never add secrets, and keep this file under 32 KB (Codex truncates beyond that).
 
 ## Owner rules
 
@@ -26,8 +26,9 @@ This file is the single shared brief for every coding agent on this repo (OpenAI
   - URL `https://api.pocketpass.xyz`
   - a non-empty publishable key
   - package `com.pocketpass.app`, signed with the same certificate as the previous production APK
-- Never install a fixture or debug build on the Thor. A custom `GRADLE_USER_HOME` skips `~/.gradle/gradle.properties` and silently produces a fixture build; that happened on 2026-09-23.
-- After installing, confirm `firstInstallTime` is still 2026-09-02 13:43:54. Never uninstall. `connectedDebugAndroidTest` uninstalls the app, so it runs on emulators only.
+- Never install a fixture or debug build over the real app on the Thor. A custom `GRADLE_USER_HOME` skips `~/.gradle/gradle.properties` and silently produces a fixture build; that happened on 2026-09-23.
+- After installing, confirm `firstInstallTime` is still 2026-09-02 13:43:54. Never uninstall the real app; `connectedDebugAndroidTest` does, so never run it on the Thor.
+- UI tests may run on the Thor (owner, 2026-10-01) as a side-by-side copy: build with `-I scripts/thor-uitest.init.gradle` (app id `com.pocketpass.app.uitest`), install without `-g`, instrument `com.pocketpass.app.uitest.test`, then uninstall both.
 - The owner often tests himself. "Just install, no need to test" means exactly that; otherwise do what the current request asks. The physical screen is the truth: don't "fix" things that only look wrong in adb captures.
 - Keep emulator windows visible when the owner wants to watch.
 - Never probe with real users' accounts or emails. Use disposable test accounts and delete them afterwards.
@@ -88,8 +89,8 @@ Earlier releases:
 | 0.1.7-alpha | 20 | 09-09 |
 
 ### Backend
-Migrations are applied through `20260928000400_oauth_profile_username` (auth user metadata is kept to the PocketPass username, so the OpenID `profile` scope exposes nothing else) (bans applied 2026-09-28; the privacy and delete-account pages describe ban records). Realtime v2.102.3 refuses a private channel join without broadcast read, even for presence-only channels; that migration lets connected apps join `friend-presence:` channels. `20260928000200_api_hardening` (2026-09-28): bans close connected apps, per-app counters are sharded, `/v1` errors all use the envelope (Caddy rewrites PostgREST's unmarked 400/401/404; API errors carry `X-PocketPass-Error: api`), Kong's `/v1` per-IP limit is 1,000,000/min, and the privacy API covers Block Invites. The 09-26 changes:
-Applied on 2026-09-27 after a dry run and a fresh backup: `20260927000100_worker_rpc_service_role_checks` (the push and branding worker RPCs refuse anyone but `service_role`; `health.sh` checks their grants), `20260927000200_drop_unused_rpcs` and `20260927000300_piip_wording`. Backups now keep privileges.
+Migrations are applied through `20261001000100` (Boards alerts, 2026-10-01). `20260928000400_oauth_profile_username`: auth metadata keeps only the username, so OpenID `profile` exposes nothing else, and connected apps can join `friend-presence:` channels (Realtime v2.102.3 needs broadcast read even for presence). Bans applied 2026-09-28; the privacy and delete-account pages describe ban records. `20260928000200_api_hardening`: bans close connected apps, per-app counters are sharded, all `/v1` errors use the envelope (Caddy rewrites PostgREST's 400/401/404; header `X-PocketPass-Error: api`), Kong's `/v1` per-IP limit is 1,000,000/min, and the privacy API covers Block Invites. The 09-26 changes:
+Applied 2026-09-27 (dry run, fresh backup): `20260927000100_worker_rpc_service_role_checks` (push and branding worker RPCs refuse all but `service_role`; `health.sh` checks grants), `20260927000200_drop_unused_rpcs`, `20260927000300_piip_wording`. Backups keep privileges.
 - `20260925000100_split_social_privacy` and `20260926000100_email_privacy`;
 - Resend SMTP moved to implicit TLS on port 465;
 - privacy notice live at `pocketpass.xyz/privacy`;
@@ -118,8 +119,9 @@ Not released; the owner deferred it and wants TestFlight first.
 - Older pgTAP files assume an empty database.
 - `kofi_supporters.test.sql` has 6 failures on production: counts that assume an empty database, plus the permission catalog (8 expected, 19 real).
 - `WidgetBindingStoreTest` has 3 failures on Windows.
+- On the Thor, 3 `TabletLayoutUiTest` cases fail: no soft keyboard with the controller attached, and App Settings scrolls under the tab bar.
 - `PuzzleSwapFocusUiTest` compiles but has never run.
-- `:app:lintRelease` stops on 2 `MissingPermission` errors at `notify()` in `push/BoardNotifications.kt` and `push/MessageNotifications.kt`. Both calls are guarded by `allowed()`; the errors predate the 2026-09-27 dependency update.
+- `:app:lintRelease` stops on 2 `MissingPermission` errors at `notify()` in `push/BoardNotifications.kt` and `push/MessageNotifications.kt`; both are guarded by `allowed()` and predate 2026-09-27.
 - There is no local Postgres.
 
 ### Thor quirks
@@ -131,21 +133,21 @@ Not released; the owner deferred it and wants TestFlight first.
 - Declutter the consent/permission review, move it to the top screen, and flag dangerous permissions (09-21).
 - Before any store release: update the privacy policy and declare `READ_STEPS`.
 - Moving Kong to Envoy is not started.
-- Realtime uses protocol V2 (the supabase-kt 3.8 default) from 2026-09-27, checked on the Thor with a server-sent notification event. The server (Realtime v2.102.3) serves V1 and V2 clients side by side and needed no update.
+- Realtime uses protocol V2 (supabase-kt 3.8 default) since 2026-09-27, checked on the Thor. The server (Realtime v2.102.3) serves V1 and V2 side by side.
 - The public API cannot read or set Block Invites: `set_invite_privacy` refuses OAuth tokens, and `privacy.get`/`privacy.set` cover Block Messages only.
 
 ### Video (`video/pocketpass-presentation`, Remotion + Cavalry, untracked)
-- Current review: presentation v9 (1:41.2, 60 fps, true colours, rewritten captions without choppy full stops, 2026-09-27) = the Remotion `PocketPassOpeningV6` opening + the 60 fps Cavalry body (`cavalry-v6/PocketPass`, rendered as PNGs and packed losslessly), built by `scripts/assemble-presentation-v9.py`. The refined animated background is shared by both halves (`src/opening-v6/background-motion.ts`). See the project README for the rebuild steps.
+- Current review: v9 (1:41.2, 60 fps, 2026-09-27): Remotion `PocketPassOpeningV6` + the Cavalry body (`cavalry-v6/PocketPass`, lossless PNGs), built by `scripts/assemble-presentation-v9.py`; shared background `src/opening-v6/background-motion.ts`. Steps: project README.
 - The accepted base is Cavalry v2 (1:34).
-- Cavalry's MP4 export encodes BT.601 but labels BT.709, so every Cavalry MP4 here shows reds too hot and greens too dark (v3 included). Render finals from Cavalry as PNG sequences; to read an old Cavalry MP4 in true colours, decode with `scale=in_color_matrix=bt601`.
-- Retiming a Cavalry scene means editing the `.cv` JSON: double `keyframe.timeOffset`, time markers and the composition range. Footage `time` is read as frames at the composition rate, so recorded clips need a `/2` time expression. Thousands of `api.keyframe` calls stall Cavalry; write keyframes into the JSON instead.
-- Cavalry has no command-line runner on this licence (the CLI renderer is Enterprise-only). Drive it with computer use: the JavaScript Editor runs `out/cavalry-check/next.js`, and scripts report back by writing files.
+- Cavalry MP4s encode BT.601 but label BT.709 (reds too hot, greens too dark, v3 included). Render finals as PNG sequences; read old MP4s with `scale=in_color_matrix=bt601`.
+- Retime a Cavalry scene in the `.cv` JSON: double `keyframe.timeOffset`, time markers and the composition range. Footage `time` counts frames at the composition rate, so recorded clips need `/2`. Write keyframes into the JSON; thousands of `api.keyframe` calls stall Cavalry.
+- Cavalry has no CLI on this licence (Enterprise-only). Drive it with computer use: the JavaScript Editor runs `out/cavalry-check/next.js`; scripts report back by writing files.
 - Rules: real UI only, no fades or full-page slides, Cocoon-style continuous background, upright Thor PNGs.
 
 ### Docs
 - `docs/` holds feature notes and dated logs. `docs/2026-09-22-handoff.md` is the detailed log for 22 to 26 September; this file wins where they differ.
 - The docs were brought up to date on 2026-09-26, and the corrected developer docs (Block Invites wording) were deployed the same day.
-- The developer docs' raw protocol archive ("Original protocol and walkthrough examples") was removed on 2026-09-27; the reference text now names endpoints inline. `public-api/build-examples.py` regenerates the examples block, but `workflow-examples.json` still has the pre-Block Invites wording for `example-blocking`, so a regeneration would revert that one block.
+- The developer docs' protocol archive was removed 2026-09-27. `public-api/build-examples.py` regenerates examples, but `workflow-examples.json` has pre-Block Invites wording for `example-blocking`; regenerating would revert it.
 - iOS still defaults to 0.1.8 (build 21) in `ios-app/project.yml` and `APP_STORE.md`. Pick the version at the first TestFlight upload.
 
 ## Repos
@@ -189,8 +191,8 @@ Not released; the owner deferred it and wants TestFlight first.
   - `DisplayRoles.BOTTOM_PRIMARY_DEVICES` (Anbernic RG DS) swaps roles.
   - `PocketPassLauncherActivity` relaunches on the top screen.
   - On 4:3 panels, full-width cards (`PocketPanel` x 50 / w 1140) stretch, and their children must use `anchoredBounds`.
-- **State.** `PocketPassStore` (shared) owns `PocketPassUiState` and routes `dispatch(PocketPassEvent)` to the pure `PocketPassReducer` or to feature holders. `routes: List<PocketPassRoute>` is a hand-rolled back stack; navigation3 is unused apart from `NavKeyMarker`, which must stay `api()`. Android wraps the store in `PocketPassViewModel`; iOS wraps it in `PhoneEntry.kt`.
-- **Data.** Room is the UI source of truth; DataStore holds preferences only. Offline writes go through an outbox with client operation UUIDs, drained by WorkManager (Android) or BGTaskScheduler (iOS). Realtime is only an invalidation signal: the app reconciles from REST.
+- **State.** `PocketPassStore` (shared) owns `PocketPassUiState` and sends `dispatch(PocketPassEvent)` to the pure `PocketPassReducer` or feature holders. `routes` is a hand-rolled back stack; navigation3 is unused except `NavKeyMarker`, which must stay `api()`. Android wraps the store in `PocketPassViewModel`, iOS in `PhoneEntry.kt`.
+- **Data.** Room is the UI source of truth; DataStore holds only preferences. Offline writes use an outbox with client operation UUIDs, drained by WorkManager or BGTaskScheduler (iOS). Realtime only invalidates; the app reconciles from REST.
   - Fixture mode is on when `!BACKEND_ENABLED` or the key is blank.
 - **Backend.**
   - Stack: Oracle VM (OCI eu-stockholm-1), Supabase v0.8.0 pinned `241bb11c`, Postgres 17, Kong, Caddy, `board-media` (Python), `message-push` (compose profile `push`). No Edge Functions.
@@ -238,8 +240,10 @@ Not released; the owner deferred it and wants TestFlight first.
   - Private tables behind `boards_query` / `boards_mutate`. The settings table is a singleton, so updates need `WHERE singleton = true`.
   - Emergency switch: dashboard → Feature controls. Never drop tables or roll back Room.
   - Retention cron runs 03:23 UTC. Music: `bgm_boards`.
+  - Alerts (`20261001000100`, applied 2026-10-01): one kind per member per event: `mention`, `reply` (to their note or reply), `yeah`, `note`, else `activity`. `board_preferences.push_level` (`all`/`personal`/`mentions`) filters pushes in `board_push_eligible`; claims add `kind`/`actor_name`/`board_name`. @ picks come from `boards_mention_candidates`; mentions live in `board_post_mentions`.
+  - Settings > Notifications has Board Alerts (switch + slider) and Board Notifications (each board's `push_enabled`). Show Boards off hides them, sends `p_board_enabled=false` and restores the old Messages shell.
 - **Privacy.** Block Messages rejects new DMs. Block Invites rejects group/board invites and friend requests. Triggers enforce both at the write boundary; the API returns 403 `FRIEND_REQUESTS_BLOCKED`. Show Boards is local only.
-- **Bans** (`20260927000400_account_bans`, permission `bans`). A PostgREST pre-request guard (`PGRST_DB_PRE_REQUEST`) refuses a banned account with 403 `ACCOUNT_BANNED` except `get_my_account_ban`, which the app's ban screen reads. `has_block_between`/`board_blocked` treat banned accounts as blocked by everyone; nothing is deleted, so lifting restores. The `before-user-created` Auth hook refuses the same email, Discord ID, or (username accounts only) a network the banned account used; signals are HMAC hashes. See the README "Account bans".
+- **Bans** (`20260927000400_account_bans`, permission `bans`). A PostgREST pre-request guard (`PGRST_DB_PRE_REQUEST`) answers a banned account with 403 `ACCOUNT_BANNED`, except `get_my_account_ban` (the ban screen). `has_block_between`/`board_blocked` treat banned accounts as blocked by all; nothing is deleted, so lifting restores. The `before-user-created` hook refuses the same email, Discord ID or (username accounts) network; signals are HMAC hashes. README: "Account bans".
   - Email is visible only to the owner, permissioned admins, and apps granted the `email` scope.
 - **Chat.** Account-wide `chat_bubble_colour` presets. Images and GIFs up to 10 MiB. Push goes through Firebase `pocketpass-e005c` as data-only FCM; iOS alerts are generic.
   - Emoji are only the Sudofont DS glyphs, plus the added crying face (`ui/.../components/Sudofont.kt`).
@@ -355,5 +359,5 @@ Not released; the owner deferred it and wants TestFlight first.
   - Crash reports: Settings → Privacy & Security → Analytics Data; `lastExceptionBacktrace` names the function.
 - **Glance widgets.** `Res` lives in `:ui`, so bitmap renderers go there. A Glance column holds at most 10 children.
 - **Controller focus.** Horizontal card rows scroll themselves to the focused card via `snapshotFlow`. Check Up/Down/L/R order closely; the owner reports focus bugs often.
-  - Single screen (2026-10-01): `PhoneApp` provides focus once `GamepadPresence` sees a gamepad or its key. Pages/dialogs add `LocalControllerFocusLayer` offsets (routes 100, dialogs 1000) behind barriers; `ControllerOverlayFocus`/`ControllerRouteFocus` hand focus over. As on the Thor, page back headers aren't targets; dialog close buttons are. No iOS gamepad input yet.
+  - Single screen (2026-10-01): `PhoneApp` provides focus once `GamepadPresence` sees a gamepad or its key. Pages/dialogs add `LocalControllerFocusLayer` offsets (routes 100, dialogs 1000) behind barriers; `ControllerOverlayFocus`/`ControllerRouteFocus` hand focus over. Page back headers aren't targets; dialog close buttons are. No iOS gamepad input yet.
 - **Single-screen Piip editor.** `ui/mii/MiiEditorSingleScreen.kt` + `MiiSingleScreenLayout.kt`: preview on top when upright, Thor-style panel on the right when width ≥ 1.2× height. Y saves.

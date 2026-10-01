@@ -20,7 +20,7 @@ fun backgroundMusicTrack(state: PocketPassUiState): BackgroundMusicTrack? {
     if (!allowed) return null
     return when {
         state.miiEditor.isEditorVisible -> BackgroundMusicTrack.MiiMaker
-        state.rootDestination == PocketPassDestination.Messages -> BackgroundMusicTrack.Boards
+        state.rootDestination == PocketPassDestination.Messages && state.boardsVisible -> BackgroundMusicTrack.Boards
         else -> BackgroundMusicTrack.Home
     }
 }

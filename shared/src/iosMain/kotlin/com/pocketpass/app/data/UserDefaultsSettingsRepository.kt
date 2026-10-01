@@ -50,7 +50,6 @@ class UserDefaultsSettingsRepository(
             },
             encounterLedEnabled = bool("encounterLedEnabled", base.encounterLedEnabled),
             encounterAlertsEnabled = bool("encounterAlertsEnabled", base.encounterAlertsEnabled),
-            nearbyRepairAlertsEnabled = bool("nearbyRepairAlertsEnabled", base.nearbyRepairAlertsEnabled),
             updateAlertsEnabled = bool("updateAlertsEnabled", base.updateAlertsEnabled),
             messageAlertsEnabled = bool("messageAlertsEnabled", base.messageAlertsEnabled),
             stepRewardsEnabled = bool("stepRewardsEnabled", base.stepRewardsEnabled),
@@ -83,7 +82,6 @@ class UserDefaultsSettingsRepository(
             ?: defaults.removeObjectForKey(key("homeMood"))
         defaults.setBool(settings.encounterLedEnabled, key("encounterLedEnabled"))
         defaults.setBool(settings.encounterAlertsEnabled, key("encounterAlertsEnabled"))
-        defaults.setBool(settings.nearbyRepairAlertsEnabled, key("nearbyRepairAlertsEnabled"))
         defaults.setBool(settings.updateAlertsEnabled, key("updateAlertsEnabled"))
         defaults.setBool(settings.messageAlertsEnabled, key("messageAlertsEnabled"))
         defaults.setBool(settings.stepRewardsEnabled, key("stepRewardsEnabled"))
@@ -122,9 +120,6 @@ class UserDefaultsSettingsRepository(
 
     override suspend fun setEncounterAlertsEnabled(enabled: Boolean) =
         mutate { it.copy(encounterAlertsEnabled = enabled) }
-
-    override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) =
-        mutate { it.copy(nearbyRepairAlertsEnabled = enabled) }
 
     override suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
         mutate { it.copy(updateAlertsEnabled = enabled) }

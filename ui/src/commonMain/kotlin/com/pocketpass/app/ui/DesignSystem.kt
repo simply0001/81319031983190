@@ -370,7 +370,6 @@ object Assets {
     val SettingsEncounterLed = figma("settings_encounter_led.svg")
     val SettingsSteps = figma("settings_steps.svg")
     val SettingsEncounterAlerts = figma("settings_encounter_alerts.svg")
-    val SettingsRepairAlerts = figma("settings_repair_alerts.svg")
     val SettingsVersion = figma("settings_version.svg")
     val SettingsLogout = figma("settings_logout.svg")
     val SettingsConnectedApps = figma("settings_connected_apps.svg")

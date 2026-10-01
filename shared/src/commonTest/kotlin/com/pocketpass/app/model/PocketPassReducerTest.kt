@@ -133,6 +133,30 @@ class PocketPassReducerTest {
     }
 
     @Test
+    fun messagesWithBoardsHiddenBehavesLikeAnyOtherTab() {
+        val boards = PocketPassReducer.reduce(PocketPassUiState(), PocketPassEvent.SelectDestination(PocketPassDestination.Messages))
+        assertTrue(boards.hasDismissableLayer())
+        assertTrue(boards.blocksShoulderTabs())
+        assertEquals(PocketPassDestination.Home, PocketPassReducer.reduce(boards, PocketPassEvent.Back).rootDestination)
+
+        val messages = boards.copy(boardsVisible = false)
+        assertFalse(messages.hasDismissableLayer())
+        assertFalse(messages.blocksShoulderTabs())
+        assertEquals(messages.routes, PocketPassReducer.reduce(messages, PocketPassEvent.Back).routes)
+    }
+
+    @Test
+    fun boardNotificationsOpenFromNotificationsAndBackReturns() {
+        val notifications = PocketPassReducer.reduce(
+            PocketPassReducer.reduce(PocketPassUiState(), PocketPassEvent.SelectDestination(PocketPassDestination.Settings)),
+            PocketPassEvent.OpenNotificationSettings,
+        )
+        val boards = PocketPassReducer.reduce(notifications, PocketPassEvent.OpenBoardNotificationSettings)
+        assertEquals(PocketPassRoute.BoardNotificationSettings, boards.routes.last())
+        assertEquals(notifications.routes, PocketPassReducer.reduce(boards, PocketPassEvent.Back).routes)
+    }
+
+    @Test
     fun backClosesTheDeleteAccountPromptUnlessItIsDeleting() {
         val settings = PocketPassReducer.reduce(
             PocketPassUiState(),

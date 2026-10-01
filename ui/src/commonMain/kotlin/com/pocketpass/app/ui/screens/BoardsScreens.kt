@@ -78,6 +78,21 @@ internal fun BoardsBottom(state: PocketPassUiState, dispatch: (PocketPassEvent) 
                 Column(Modifier.fillMaxWidth().padding(top = metrics.dp(BOARDS_THOR_TOP)).background(pocketPalette.surface).padding(metrics.dp(40f)), verticalArrangement = Arrangement.spacedBy(metrics.dp(14f))) {
                     BoardLabel(metrics, current.label, 44f, true)
                     BoardLabel(metrics, text.takeLast(180).ifEmpty { "Start typing…" }, maxLines = 2)
+                    val draftContent = state.boards.draft?.content
+                    val mentionChips = if (current.mentions && draftContent != null &&
+                        trailingMentionQuery(text, draftContent.mentions) != null) state.boards.mentionCandidates else emptyList()
+                    if (mentionChips.isNotEmpty()) {
+                        CompositionLocalProvider(LocalBoardFocusLayer provides 30) {
+                            BoardMentionChips(metrics, mentionChips) { candidate ->
+                                val content = state.boards.draft?.content ?: return@BoardMentionChips
+                                val next = content.copy(body = text).withMention(candidate, if (content.threadId == null) 1000 else 500)
+                                if (next != null) {
+                                    text = next.body
+                                    dispatch(PocketPassEvent.Boards(BoardAction.PickMention(candidate)))
+                                }
+                            }
+                        }
+                    }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(metrics.dp(18f))) {
                         CompositionLocalProvider(LocalBoardFocusLayer provides 30) {
                         BoardButton(metrics, if(current.onSubmit != null) "Search" else "Done", "board_keyboard_done") { current.onSubmit?.invoke(); field = null }
@@ -102,7 +117,7 @@ internal fun BoardsBottom(state: PocketPassUiState, dispatch: (PocketPassEvent) 
 }
 
 private data class BoardFieldEditor(val value: String, val label: String, val multiline: Boolean, val change: (String)->Unit,
-    val onSubmit: (() -> Unit)? = null)
+    val onSubmit: (() -> Unit)? = null, val mentions: Boolean = false)
 private val LocalBoardFieldEditor = staticCompositionLocalOf<((BoardFieldEditor)->Unit)?> { null }
 internal val LocalBoardCompactComposer = staticCompositionLocalOf { false }
 
@@ -260,9 +275,21 @@ internal fun BoardNotice.summary(): String {
         "removed" -> "a removed note"
         "note" -> "a note"
         else -> null
-    } ?: return "Activity in this board"
+    } ?: return when (kind) {
+        "mention" -> "Mentioned you"
+        "reply" -> "Replied to you"
+        "yeah" -> "Gave you a Yeah"
+        "note" -> "New note"
+        else -> "Activity in this board"
+    }
     val author = threadAuthorName?.takeIf(String::isNotBlank)
-    return if (author == null) "Activity on $target" else "Activity on $author’s note: $target"
+    return when (kind) {
+        "mention" -> "Mentioned you in $target"
+        "reply" -> "Replied to you in $target"
+        "yeah" -> "Gave you a Yeah in $target"
+        "note" -> "New note: $target"
+        else -> if (author == null) "Activity on $target" else "Activity on $author’s note: $target"
+    }
 }
 
 @Composable
@@ -362,11 +389,6 @@ private fun BoardDirectoryOptions(m: DesignMetrics, s: BoardsUiState, send: (Boa
         if(s.requestsOpen) {
             BoardDivider(m)
             BoardNavigationRow(m, "Request a board", "Start your own community", "boards_propose") { send(BoardAction.Propose) }
-        }
-    }
-    BoardCard(m) {
-        BoardToggle(m, "Push notifications", "Updates from boards you have joined", s.pushEnabled, "boards_global_push", !s.busy) {
-            send(BoardAction.Mutate("push_preference", boardArgs("enabled" to (!s.pushEnabled).boardValue())))
         }
     }
     s.proposals.forEach { element ->
@@ -584,7 +606,7 @@ private fun BoardPostCard(m: DesignMetrics, post: BoardPost, state: PocketPassUi
                 post.drawing?.let { drawing -> BoardPaper(m, Modifier.fillMaxWidth()) {
                     BoardDrawingCanvas(drawing, modifier = Modifier.fillMaxWidth().aspectRatio(4f/3f), paper = post.stationery?.artwork)
                 } }
-                if(post.body.isNotBlank()) BoardLabel(m, post.body, 38f)
+                if(post.body.isNotBlank()) BoardBodyLabel(m, post.body, post.mentions, 38f, openProfile)
                 if(post.editedAt != null && post.createdAt.isBlank()) BoardLabel(m, "Edited", 28f)
             }
         }
@@ -656,11 +678,11 @@ internal fun BoardLabel(m: DesignMetrics, value: String, size: Float = 40f, bold
 @Composable
 internal fun BoardField(m: DesignMetrics, value: String, change: (String)->Unit, placeholder: String, multiline: Boolean = false, enabled: Boolean = true,
     tag: String? = null, neighbors: Map<FocusDirection, String> = emptyMap(),
-    onSubmit: (() -> Unit)? = null, trailingContent: (@Composable () -> Unit)? = null) {
+    onSubmit: (() -> Unit)? = null, trailingContent: (@Composable () -> Unit)? = null, mentions: Boolean = false) {
     val fieldTag = tag ?: remember { "board_field_${newBoardId()}" }
     val editor = LocalBoardFieldEditor.current
     if(editor != null) {
-        val edit = { editor(BoardFieldEditor(value, placeholder, multiline, change, onSubmit)) }
+        val edit = { editor(BoardFieldEditor(value, placeholder, multiline, change, onSubmit, mentions)) }
         Row(Modifier.fillMaxWidth().heightIn(min = m.dp(if(multiline) 180f else 118f))
             .pocketFrame(SolidColor(pocketPalette.surface), m.dp(5f), pocketPalette.tealBorder, RoundedCornerShape(m.dp(45f)))
             .testTag(fieldTag).boardControllerTarget(fieldTag, radius = 45f, enabled = enabled, neighbors = neighbors, onActivate = edit)

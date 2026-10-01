@@ -472,7 +472,10 @@ sealed interface PocketPassEvent {
     data class SetMoodEmojisEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetEncounterLedEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetEncounterAlertsEnabled(val enabled: Boolean) : PocketPassEvent
-    data class SetNearbyRepairAlertsEnabled(val enabled: Boolean) : PocketPassEvent
+    data class SetBoardAlertsEnabled(val enabled: Boolean) : PocketPassEvent
+    data class SetBoardAlertLevel(val level: com.pocketpass.app.boards.BoardAlertLevel) : PocketPassEvent
+    data class SetBoardPushEnabled(val boardId: String, val enabled: Boolean) : PocketPassEvent
+    data object OpenBoardNotificationSettings : PocketPassEvent
     data class SetUpdateAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetMessageAlertsEnabled(val enabled: Boolean) : PocketPassEvent
     data class SetStepRewardsEnabled(val enabled: Boolean) : PocketPassEvent

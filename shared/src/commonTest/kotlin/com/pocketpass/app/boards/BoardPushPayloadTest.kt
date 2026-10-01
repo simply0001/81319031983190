@@ -20,4 +20,20 @@ class BoardPushPayloadTest {
             assertNull(BoardPushPayload.parse(data() + (key to value)))
         assertEquals(null, BoardPushPayload.parse(data() + ("thread_id" to ""))?.destination?.threadId)
     }
+    @Test fun alertsSayWhoDidWhatInWhichBoard() {
+        fun text(kind: String, count: String = "1", actor: String = "Petah") =
+            requireNotNull(BoardPushPayload.parse(data() + mapOf("kind" to kind, "actor_name" to actor, "board_name" to "Pixel Art", "event_count" to count)))
+        assertEquals("Pixel Art", text("mention").title)
+        assertEquals("Petah mentioned you", text("mention").text)
+        assertEquals("Petah replied to your note", text("reply").text)
+        assertEquals("3 replies to your note, latest from Petah", text("reply", "3").text)
+        assertEquals("Petah gave your note a Yeah", text("yeah").text)
+        assertEquals("New note from Petah", text("note").text)
+        assertEquals("New activity from Petah", text("activity").text)
+        assertEquals("2 new updates, latest from Petah", text("activity", "2").text)
+        assertEquals("There is new activity in your boards.", text("mention", actor = " ").text)
+        val old = requireNotNull(BoardPushPayload.parse(data()))
+        assertEquals("PocketPass Boards", old.title)
+        assertEquals("There is new activity in your boards.", old.text)
+    }
 }

@@ -2726,9 +2726,6 @@ class SettingsStateHolder(
     suspend fun setEncounterAlertsEnabled(enabled: Boolean) =
         repository.setEncounterAlertsEnabled(enabled)
 
-    suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) =
-        repository.setNearbyRepairAlertsEnabled(enabled)
-
     suspend fun setUpdateAlertsEnabled(enabled: Boolean) =
         repository.setUpdateAlertsEnabled(enabled)
 

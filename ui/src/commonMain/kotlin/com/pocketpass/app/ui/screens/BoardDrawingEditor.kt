@@ -138,7 +138,9 @@ internal fun BoardComposer(m: DesignMetrics, s: BoardsUiState, send: (BoardActio
     }
     if(branding != null) BoardLabel(m, "Board $branding", 34f)
     if(branding == null) {
-        BoardField(m, draft.content.body, { send(BoardAction.Text(it)) }, if(draw || draft.content.drawing != null) "Add a caption…" else "What's on your mind?", true, !locked)
+        BoardField(m, draft.content.body, { send(BoardAction.Text(it)) }, if(draw || draft.content.drawing != null) "Add a caption…" else "What's on your mind?", true, !locked, mentions = true)
+        val mentionChips = if (!locked && !LocalBoardKeyboardOpen.current && trailingMentionQuery(draft.content.body, draft.content.mentions) != null) s.mentionCandidates else emptyList()
+        if (mentionChips.isNotEmpty()) BoardMentionChips(m, mentionChips) { send(BoardAction.PickMention(it)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             BoardLabel(m, "${draft.content.body.length}/${if(draft.content.threadId == null) 1000 else 500}", 28f, color = pocketPalette.textSecondary)
         }

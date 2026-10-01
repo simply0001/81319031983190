@@ -53,11 +53,12 @@ class MessagePushManager(
         scope.launch {
             combine(
                 session.filter { it !is SessionState.Initializing }.map { it.accountIdOrNull()?.value }.distinctUntilChanged(),
-                settings.settings.map { it.messageAlertsEnabled }.distinctUntilChanged(),
+                settings.settings.map { it.messageAlertsEnabled to it.boardsVisible }.distinctUntilChanged(),
                 foreground,
-            ) { account, enabled, visible -> Triple(account, enabled, visible) }
+            ) { account, alerts, visible -> Triple(account, alerts, visible) }
                 .distinctUntilChanged()
-                .collect { (account, enabled, visible) ->
+                .collect { (account, alerts, visible) ->
+                    val (enabled, boardsShown) = alerts
                     synchronized(lock) {
                         if (account == null) signingOut = false
                         val allowedAccount = account.takeUnless { signingOut }
@@ -66,7 +67,8 @@ class MessagePushManager(
                             MessageNotifications.cancelAll(context)
                             BoardNotifications.cancelAll(context)
                         }
-                        preferences.edit().putBoolean("enabled", enabled && allowedAccount != null).commit()
+                        preferences.edit().putBoolean("enabled", enabled && allowedAccount != null).putBoolean("boards", boardsShown).commit()
+                        if (!boardsShown) BoardNotifications.cancelAll(context)
                     }
                     if (visible) {
                         MessageNotifications.cancelAll(context)
@@ -86,7 +88,7 @@ class MessagePushManager(
         if (!supported) return
         com.pocketpass.app.boards.BoardPushPayload.parse(data)?.let { board ->
             synchronized(lock) {
-                if (signingOut) return
+                if (signingOut || !preferences.getBoolean("boards", true)) return
                 val key = "board_seen:${board.notificationId}"
                 val account = preferences.getString("account", null)
                 val binding = preferences.getString("binding", null)
@@ -128,7 +130,7 @@ class MessagePushManager(
         }
         if (synchronized(lock) { signingOut }) return true
         val enabled = settings.settings.first().messageAlertsEnabled && MessageNotifications.allowed(context)
-        val boardsEnabled = BoardNotifications.allowed(context)
+        val boardsEnabled = settings.settings.first().boardsVisible && BoardNotifications.allowed(context)
         firebase.isAutoInitEnabled = enabled || boardsEnabled
         if (!enabled && !boardsEnabled && preferences.getString("binding", null) == null) return true
         val token = withTimeout(30_000) { firebase.token.awaitPush() }

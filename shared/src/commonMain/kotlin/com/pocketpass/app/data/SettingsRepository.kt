@@ -19,7 +19,6 @@ data class LocalSettings(
     val homeMood: HomeMood? = null,
     val encounterLedEnabled: Boolean = true,
     val encounterAlertsEnabled: Boolean = true,
-    val nearbyRepairAlertsEnabled: Boolean = true,
     val updateAlertsEnabled: Boolean = true,
     val messageAlertsEnabled: Boolean = true,
     val stepRewardsEnabled: Boolean = false,
@@ -57,8 +56,6 @@ interface SettingsRepository {
     suspend fun setEncounterLedEnabled(enabled: Boolean)
 
     suspend fun setEncounterAlertsEnabled(enabled: Boolean)
-
-    suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean)
 
     suspend fun setUpdateAlertsEnabled(enabled: Boolean)
 

@@ -16,6 +16,107 @@ class BoardRepositoryTest {
     private val board = "99290000-0000-4000-8000-000000000010"
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun alertLevelLoadsFromSettingsAndRollsBackWhenSavingFails() = runTest {
+        var level = "personal"
+        var fail = false
+        val writes = mutableListOf<Pair<String, JsonObject>>()
+        val api = object : BoardApi {
+            override suspend fun query(accountId: String, operation: String, args: JsonObject): JsonElement = when (operation) {
+                "settings" -> boardArgs("enabled" to true.boardValue(), "push_level" to level.boardValue())
+                else -> JsonObject(emptyMap())
+            }
+            override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String): JsonObject {
+                writes += operation to args
+                if (fail) throw BoardFailure("Offline", true)
+                level = args.text("level") ?: level
+                return boardArgs("ok" to true.boardValue())
+            }
+        }
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(false))
+        runCurrent()
+        assertEquals(BoardAlertLevel.Personal, holder.state.value.alertLevel)
+        holder.setAlertLevel(BoardAlertLevel.Mentions); runCurrent()
+        assertEquals(BoardAlertLevel.Mentions, holder.state.value.alertLevel)
+        assertEquals("push_level" to boardArgs("level" to "mentions".boardValue()), writes.last())
+        fail = true
+        holder.setAlertLevel(BoardAlertLevel.All)
+        assertEquals(BoardAlertLevel.All, holder.state.value.alertLevel)
+        runCurrent()
+        assertEquals(BoardAlertLevel.Mentions, holder.state.value.alertLevel)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun typingAnAtSignSuggestsMembersAndPickingOneInsertsThem() = runTest {
+        val reading = ReadingBoardApi(board, account)
+        val searches = mutableListOf<String>()
+        val api = object : BoardApi by reading {
+            override suspend fun query(accountId: String, operation: String, args: JsonObject): JsonElement =
+                if (operation == "mention_candidates") {
+                    searches += args.text("search").orEmpty()
+                    listOf(BoardMentionCandidate("p1", "Petah Griffin")).boardEncode()
+                } else reading.query(accountId, operation, args)
+        }
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(true))
+        runCurrent()
+        holder.dispatch(BoardAction.OpenDestination(board)); runCurrent()
+        holder.dispatch(BoardAction.Compose()); runCurrent()
+        holder.dispatch(BoardAction.Text("Hi @pe")); runCurrent()
+        assertTrue(holder.state.value.mentionCandidates.isEmpty())
+        advanceTimeBy(BOARD_MENTION_SUGGESTION_DELAY_MILLIS + 1); runCurrent()
+        assertEquals(listOf("pe"), searches)
+        holder.dispatch(BoardAction.PickMention(holder.state.value.mentionCandidates.single())); runCurrent()
+        val content = holder.state.value.draft!!.content
+        assertEquals("Hi @Petah Griffin ", content.body)
+        assertEquals(listOf(BoardMention("p1", "Petah Griffin")), content.mentions)
+        assertTrue(holder.state.value.mentionCandidates.isEmpty())
+        holder.dispatch(BoardAction.Text("Hi @Petah Griffin thanks")); runCurrent()
+        advanceTimeBy(BOARD_MENTION_SUGGESTION_DELAY_MILLIS + 1); runCurrent()
+        assertEquals(listOf("pe"), searches)
+        holder.dispatch(BoardAction.Text("Hi @Petah Griff")); runCurrent()
+        assertTrue(holder.state.value.draft!!.content.mentions.isEmpty())
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun boardNotificationListPagesJoinedBoardsAndRollsBackAFailedSwitch() = runTest {
+        val joined = listOf("Zebra", "apple", "Moon").mapIndexed { index, name ->
+            Board("99290000-0000-4000-8000-00000000002$index", account, name, role = "member")
+        } + Board("99290000-0000-4000-8000-000000000029", account, "Old", role = "member", archived = true)
+        val pages = mutableListOf<JsonObject>()
+        val writes = mutableListOf<JsonObject>()
+        var fail = false
+        val api = object : BoardApi {
+            override suspend fun query(accountId: String, operation: String, args: JsonObject): JsonElement = when (operation) {
+                "settings" -> boardArgs("enabled" to true.boardValue())
+                "directory" -> {
+                    pages += args
+                    val offset = (args["cursor"] as? JsonObject)?.get("offset")?.jsonPrimitive?.int ?: 0
+                    boardArgs("items" to joined.drop(offset).take(2).boardEncode(),
+                        "cursor" to boardArgs("offset" to JsonPrimitive(offset + 2)).takeIf { offset + 2 < joined.size })
+                }
+                else -> JsonObject(emptyMap())
+            }
+            override suspend fun mutate(accountId: String, operation: String, args: JsonObject, operationId: String): JsonObject {
+                writes += args
+                if (fail) throw BoardFailure("Offline", true)
+                return boardArgs("ok" to true.boardValue())
+            }
+        }
+        val holder = BoardsStateHolder(RoomBoardRepository(api, MemoryBoardDao()), MutableStateFlow(UserId(account)), backgroundScope, MutableStateFlow(false))
+        runCurrent()
+        holder.loadNotificationBoards(); runCurrent()
+        assertEquals(listOf("apple", "Moon", "Zebra"), holder.state.value.notificationBoards?.map { it.name })
+        assertEquals(2, pages.size)
+        assertTrue(pages.all { it.text("scope") == "joined" && it["limit"]?.jsonPrimitive?.int == 100 })
+        val moon = holder.state.value.notificationBoards!!.first { it.name == "Moon" }
+        holder.setBoardPushEnabled(moon.id, false); runCurrent()
+        assertFalse(holder.state.value.notificationBoards!!.first { it.id == moon.id }.pushEnabled)
+        assertEquals(boardArgs("board_id" to moon.id.boardValue(), "push_enabled" to false.boardValue()), writes.last())
+        fail = true
+        holder.setBoardPushEnabled(moon.id, true); runCurrent()
+        assertFalse(holder.state.value.notificationBoards!!.first { it.id == moon.id }.pushEnabled)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test fun timedRefreshKeepsRevealedSpoilersAndTheFocusedReply() = runTest {
         val api = ReadingBoardApi(board, account)
         val repo = RoomBoardRepository(api, MemoryBoardDao())

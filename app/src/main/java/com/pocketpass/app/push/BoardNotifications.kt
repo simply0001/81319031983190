@@ -38,7 +38,7 @@ object BoardNotifications {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pending = PendingIntent.getActivity(context,0,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context,CHANNEL_ID).setSmallIcon(R.drawable.ic_message_notification)
-            .setContentTitle("PocketPass Boards").setContentText("There is new activity in your boards.")
+            .setContentTitle(payload.title).setContentText(payload.text)
             .setContentIntent(pending).setCategory(NotificationCompat.CATEGORY_SOCIAL).setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).setAutoCancel(true).build()
         runCatching { NotificationManagerCompat.from(context).notify("$PREFIX${payload.recipientId}:${target.threadId ?: target.boardId}",0,notification) }

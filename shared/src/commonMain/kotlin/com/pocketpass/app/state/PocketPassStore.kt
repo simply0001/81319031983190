@@ -715,9 +715,10 @@ class PocketPassStore(
                 container.settings.setEncounterAlertsEnabled(event.enabled)
             }
 
-            is PocketPassEvent.SetNearbyRepairAlertsEnabled -> scope.launch {
-                container.settings.setNearbyRepairAlertsEnabled(event.enabled)
-            }
+            is PocketPassEvent.SetBoardAlertsEnabled -> boards.setPushEnabled(event.enabled)
+            is PocketPassEvent.SetBoardAlertLevel -> boards.setAlertLevel(event.level)
+            is PocketPassEvent.SetBoardPushEnabled -> boards.setBoardPushEnabled(event.boardId, event.enabled)
+            PocketPassEvent.OpenBoardNotificationSettings -> boards.loadNotificationBoards()
 
             is PocketPassEvent.SetUpdateAlertsEnabled -> scope.launch {
                 container.setUpdateAlertsEnabled(event.enabled)
@@ -1095,10 +1096,10 @@ class PocketPassStore(
                         moodEmojisEnabled = settings.moodEmojisEnabled,
                         encounterLedEnabled = settings.encounterLedEnabled,
                         encounterAlertsEnabled = settings.encounterAlertsEnabled,
-                        nearbyRepairAlertsEnabled = settings.nearbyRepairAlertsEnabled,
                         updateAlertsEnabled = settings.updateAlertsEnabled,
                         messageAlertsEnabled = settings.messageAlertsEnabled,
                         messagePushSupported = container.messagePushSupported,
+                        boardPushSupported = container.boardPushSupported,
                         stepRewardsEnabled = settings.stepRewardsEnabled,
                     )
                 }

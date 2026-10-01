@@ -392,7 +392,7 @@ class NearbyLifecycleController(
                 isRepair = true,
                 error = "Allow PocketPass notifications so encounter alerts can appear.",
             )
-        } else if (latestSettings.nearbyRepairAlertsEnabled) {
+        } else {
             NearbyNotifications.postRepair(context)
         }
     }

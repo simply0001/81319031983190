@@ -32,8 +32,6 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         val homeMood = stringPreferencesKey("home_mood")
         val encounterLedEnabled = booleanPreferencesKey("encounter_led_enabled")
         val encounterAlertsEnabled = booleanPreferencesKey("encounter_alerts_enabled")
-        val nearbyRepairAlertsEnabled =
-            booleanPreferencesKey("nearby_repair_alerts_enabled")
         val updateAlertsEnabled = booleanPreferencesKey("update_alerts_enabled")
         val messageAlertsEnabled = booleanPreferencesKey("message_alerts_enabled")
         val stepRewardsEnabled = booleanPreferencesKey("step_rewards_enabled")
@@ -76,8 +74,6 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
                 encounterLedEnabled = preferences[Keys.encounterLedEnabled] ?: true,
                 encounterAlertsEnabled =
                     preferences[Keys.encounterAlertsEnabled] ?: true,
-                nearbyRepairAlertsEnabled =
-                    preferences[Keys.nearbyRepairAlertsEnabled] ?: true,
                 updateAlertsEnabled = preferences[Keys.updateAlertsEnabled] ?: true,
                 messageAlertsEnabled = preferences[Keys.messageAlertsEnabled] ?: true,
                 stepRewardsEnabled = preferences[Keys.stepRewardsEnabled] ?: false,
@@ -155,12 +151,6 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.pocketPassDataStore.edit { it[Keys.encounterAlertsEnabled] = enabled }
     }
 
-    override suspend fun setNearbyRepairAlertsEnabled(enabled: Boolean) {
-        context.pocketPassDataStore.edit {
-            it[Keys.nearbyRepairAlertsEnabled] = enabled
-        }
-    }
-
     override suspend fun setUpdateAlertsEnabled(enabled: Boolean) {
         context.pocketPassDataStore.edit {
             it[Keys.updateAlertsEnabled] = enabled
@@ -233,7 +223,6 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             preferences.remove(Keys.homeMood)
             preferences[Keys.encounterLedEnabled] = true
             preferences[Keys.encounterAlertsEnabled] = true
-            preferences[Keys.nearbyRepairAlertsEnabled] = true
             preferences[Keys.updateAlertsEnabled] = true
             preferences[Keys.messageAlertsEnabled] = true
             preferences[Keys.stepRewardsEnabled] = false

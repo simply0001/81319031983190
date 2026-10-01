@@ -43,6 +43,7 @@ interface PocketPassStoreContainer {
     val pretendoImportEnabled: Boolean
     val encounterLedSupported: Boolean
     val messagePushSupported: Boolean get() = false
+    val boardPushSupported: Boolean get() = false
     val activeAccountId: StateFlow<UserId?>
     val accountBan: StateFlow<AccountBanNotice?>
     val appForeground: StateFlow<Boolean> get() = AlwaysForeground

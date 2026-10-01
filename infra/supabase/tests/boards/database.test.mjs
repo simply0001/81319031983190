@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { loadWorkerRoleChecks, setupApiDatabase } from './api-fixture.mjs';
+import { loadBoardAlertLevels, loadWorkerRoleChecks, setupApiDatabase } from './api-fixture.mjs';
 
 const db = new PGlite();
 const id = n => `99290000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -89,6 +89,7 @@ before(async()=>{
   await db.exec('alter table private.board_upload_tickets add column client_id uuid');
   await db.exec('create function private.api_has_scope(text) returns boolean language sql as $$select false$$');
   await loadWorkerRoleChecks(db);
+  await loadBoardAlertLevels(db);
   }
   for(const user of [owner,member,outsider,staff,moderator,other]) await db.query('insert into public.profiles(user_id) values($1)',[user]);
   await db.query('insert into private.admin_users(user_id,is_owner) values($1,true)',[staff]);
@@ -547,4 +548,116 @@ test('Board inbox describes the note safely and keeps its thread destination',is
   const report=(await scalar('select public.boards_inbox(null,30)')).items.find(x=>x.kind==='report');
   assert.equal(report.latest_actor_name,null);
   assert.equal(report.subject,null);
+}));
+
+const named = async pairs => { for(const [who,name] of pairs) await db.query('update public.profiles set display_name=$1 where user_id=$2',[name,who]); };
+const eventKinds = async(who,thread) => (await db.query('select kind,event_count from private.board_events where recipient_id=$1 and thread_id=$2 order by kind',[who,thread])).rows;
+const alertBoard = async() => {
+  const bid=await board();await join(bid);await join(bid,other);
+  await named([[owner,'Ada'],[member,'Petah Griffin'],[other,'Sam'],[outsider,'Olive']]);
+  await as(member);
+  await scalar('select public.register_board_push_device($1,$2,false,true)',[randomUUID(),'fcm-test-token']);
+  await as(owner);
+  const note=await mutate('publish',{board_id:bid,body:'Hello @petah griffin and @Olive',mentions:[
+    {user_id:member,name:'Petah Griffin'},{user_id:outsider,name:'Olive'},{user_id:owner,name:'Ada'},{user_id:other,name:'Sam'},{user_id:'not-a-uuid'}]});
+  await as(member);
+  const reply=await mutate('publish',{board_id:bid,thread_id:note.id,body:'Thanks'});
+  await as(other);
+  await mutate('publish',{board_id:bid,thread_id:note.id,reply_to:reply.id,body:'Agreed'});
+  await mutate('react',{board_id:bid,post_id:reply.id,yeah:true});
+  await as(owner);
+  const second=await mutate('publish',{board_id:bid,body:'Another note'});
+  return {bid,note,reply,second};
+};
+const claimedKinds = async() => {
+  await db.exec("update private.board_push_queue set available_at=now()-interval '1 second'");
+  await asWorker();
+  const jobs=await scalar('select public.claim_board_push_batch()');
+  return {jobs,kinds:jobs.map(job=>job.data.kind).sort()};
+};
+
+test('mentions keep only members named in the note and every member gets the alert kind meant for them',isolated(async()=>{
+  const {note,second}=await alertBoard();
+  await as(member);
+  assert.deepEqual((await query('post',{post_id:note.id})).mentions,[{user_id:member,name:'Petah Griffin'}]);
+  assert.deepEqual(await eventKinds(member,note.id),[{kind:'mention',event_count:1},{kind:'reply',event_count:1},{kind:'yeah',event_count:1}]);
+  assert.deepEqual(await eventKinds(owner,note.id),[{kind:'activity',event_count:1},{kind:'reply',event_count:2}]);
+  assert.deepEqual(await eventKinds(other,note.id),[{kind:'activity',event_count:2}]);
+  assert.deepEqual(await eventKinds(member,second.id),[{kind:'note',event_count:1}]);
+  const inbox=(await scalar('select public.boards_inbox(null,30)')).items;
+  assert.equal(inbox.find(item=>item.kind==='mention').latest_actor_name,'Ada');
+  assert.equal(inbox.find(item=>item.kind==='yeah').latest_actor_name,'Sam');
+}));
+
+test('the alert level decides which board alerts reach the phone',isolated(async()=>{
+  await alertBoard();
+  assert.equal((await query('settings')).push_level,'all');
+  const all=await claimedKinds();
+  assert.deepEqual(all.kinds,['mention','note','reply','yeah']);
+  const mention=all.jobs.find(job=>job.data.kind==='mention');
+  assert.equal(mention.data.actor_name,'Ada');
+  assert.equal(mention.data.board_name,'Test board');
+  assert.equal(JSON.stringify(all.jobs).includes('Hello'),false);
+}));
+
+test('the Replies & Yeahs level skips other people\'s activity and new notes',isolated(async()=>{
+  await alertBoard();
+  await as(member);await mutate('push_level',{level:'personal'});
+  assert.equal((await query('settings')).push_level,'personal');
+  assert.deepEqual((await claimedKinds()).kinds,['mention','reply','yeah']);
+}));
+
+test('the Mentions level only sends mentions and unknown levels are refused',isolated(async()=>{
+  await alertBoard();
+  await as(member);
+  await reject(()=>mutate('push_level',{level:'loud'}),/Choose all, personal or mentions/);
+  await mutate('push_level',{level:'mentions'});
+  assert.deepEqual((await claimedKinds()).kinds,['mention']);
+  await as(member);await mutate('push_preference',{enabled:false});
+  assert.equal((await query('settings')).push_level,'mentions');
+  assert.equal((await query('settings')).push_enabled,false);
+}));
+
+test('a board switched off sends nothing, mentions included',isolated(async()=>{
+  const {bid}=await alertBoard();
+  await as(member);await mutate('preferences',{board_id:bid,push_enabled:false});
+  assert.deepEqual((await claimedKinds()).kinds,[]);
+}));
+
+test('editing drops mentions whose name is gone, spoilers hide them and removal clears them',isolated(async()=>{
+  const bid=await board();await join(bid);
+  await named([[member,'Petah']]);
+  await as(owner);
+  const note=await mutate('publish',{board_id:bid,body:'Hi @Petah',mentions:[{user_id:member,name:'Petah'}]});
+  assert.equal((await query('post',{post_id:note.id})).mentions.length,1);
+  await mutate('edit',{board_id:bid,post_id:note.id,body:'Hi everyone'});
+  assert.deepEqual((await query('post',{post_id:note.id})).mentions,[]);
+  const secret=await mutate('publish',{board_id:bid,body:'Psst @Petah',spoiler:true,mentions:[{user_id:member,name:'Petah'}]});
+  assert.deepEqual((await query('post',{post_id:secret.id})).mentions,[]);
+  assert.equal((await query('post',{post_id:secret.id,reveal:true})).mentions.length,1);
+  await mutate('delete_post',{board_id:bid,post_id:secret.id});
+  assert.equal(await scalar('select count(*)::int from private.board_post_mentions where post_id=$1',[secret.id]),0);
+  await db.query('insert into public.user_blocks(blocker_id,blocked_id) values($1,$2)',[member,owner]);
+  const blocked=await mutate('publish',{board_id:bid,body:'Hi @Petah',mentions:[member]});
+  assert.equal(await scalar('select count(*)::int from private.board_post_mentions where post_id=$1',[blocked.id]),0);
+}));
+
+test('mention suggestions list matching members, never yourself, blocked people or outsiders',isolated(async()=>{
+  const bid=await board();await join(bid);await join(bid,other);
+  await named([[owner,'Ada'],[member,'Petah Griffin'],[other,'Pat'],[outsider,'Penny']]);
+  await as(owner);
+  const names=async search=>(await scalar('select public.boards_mention_candidates($1,$2)',[bid,search])).map(item=>item.display_name);
+  assert.deepEqual(await names('p'),['Pat','Petah Griffin']);
+  assert.deepEqual(await names('GRI'),['Petah Griffin']);
+  assert.deepEqual(await names('a'),[]);
+  assert.deepEqual(await names('%'),[]);
+  await db.query('insert into public.user_blocks(blocker_id,blocked_id) values($1,$2)',[other,owner]);
+  assert.deepEqual(await names('p'),['Petah Griffin']);
+  await db.exec('set local role authenticated');
+  assert.deepEqual(await names('pe'),['Petah Griffin']);
+  await reject(()=>db.exec('select * from private.board_post_mentions'),/permission denied/);
+  await db.exec('reset role');
+  const hidden=await board('private');
+  await as(outsider);
+  await reject(()=>scalar('select public.boards_mention_candidates($1,$2)',[hidden,'p']),/Board unavailable/);
 }));

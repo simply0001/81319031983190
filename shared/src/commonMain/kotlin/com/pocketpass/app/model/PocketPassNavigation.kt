@@ -60,6 +60,9 @@ sealed interface PocketPassRoute : NavKeyMarker {
     data object NotificationSettings : PocketPassRoute
 
     @Serializable
+    data object BoardNotificationSettings : PocketPassRoute
+
+    @Serializable
     data object AppUpdate : PocketPassRoute
 
     @Serializable
@@ -96,10 +99,10 @@ data class PocketPassUiState(
     val encounterLedEnabled: Boolean = true,
     val encounterLedSupported: Boolean = false,
     val encounterAlertsEnabled: Boolean = true,
-    val nearbyRepairAlertsEnabled: Boolean = true,
     val updateAlertsEnabled: Boolean = true,
     val messageAlertsEnabled: Boolean = true,
     val messagePushSupported: Boolean = false,
+    val boardPushSupported: Boolean = false,
     val stepRewardsEnabled: Boolean = false,
     val stepRewards: StepRewardsState = StepRewardsState(),
     val accountSetup: AccountSetupUiState = AccountSetupUiState(),
@@ -255,6 +258,7 @@ object PocketPassReducer {
             PocketPassEvent.OpenAccountSecurity -> state.pushRoute(PocketPassRoute.AccountSecurity)
             PocketPassEvent.OpenContributors -> state.pushRoute(PocketPassRoute.Contributors)
             PocketPassEvent.OpenNotificationSettings -> state.pushRoute(PocketPassRoute.NotificationSettings)
+            PocketPassEvent.OpenBoardNotificationSettings -> state.pushRoute(PocketPassRoute.BoardNotificationSettings)
             PocketPassEvent.OpenAppUpdate -> state.pushRoute(PocketPassRoute.AppUpdate)
             else -> null
         }
@@ -283,7 +287,7 @@ object PocketPassReducer {
             state.copy(widgetMaker = state.widgetMaker.copy(deletePromptVisible = false))
         state.widgetMaker.renameDraft != null ->
             state.copy(widgetMaker = state.widgetMaker.copy(renameDraft = null))
-        state.routes.size <= 1 && state.rootDestination == PocketPassDestination.Messages ->
+        state.routes.size <= 1 && state.rootDestination == PocketPassDestination.Messages && state.boardsVisible ->
             state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Home)))
         state.routes.size <= 1 -> state
         else -> state.copy(
@@ -421,9 +425,6 @@ object PocketPassReducer {
             is PocketPassEvent.SetEncounterAlertsEnabled -> state.copy(
                 encounterAlertsEnabled = event.enabled,
             )
-            is PocketPassEvent.SetNearbyRepairAlertsEnabled -> state.copy(
-                nearbyRepairAlertsEnabled = event.enabled,
-            )
             is PocketPassEvent.SetUpdateAlertsEnabled -> state.copy(
                 updateAlertsEnabled = event.enabled,
             )
@@ -547,7 +548,7 @@ fun PocketPassUiState.blocksShoulderTabs(): Boolean {
 
 fun PocketPassUiState.hasDismissableLayer(): Boolean =
     accountBan != null ||
-    (rootDestination == PocketPassDestination.Messages) ||
+    (rootDestination == PocketPassDestination.Messages && boardsVisible) ||
     (accountSetup.resolved && accountSetup.required) ||
         profileViewer.visible ||
         shop.visible ||

@@ -56,6 +56,13 @@ class BoardsUiTest {
             is BoardAction.Compose -> state = state.copy(boards = state.boards.copy(screen = BoardsScreen.Compose,
                 draft = LocalBoardDraft(boardId = board.id, content = BoardDraftContent())))
             is BoardAction.Tool -> state = state.copy(boards = state.boards.copy(pen = a.pen ?: state.boards.pen, ink = a.color ?: state.boards.ink, penSize = a.size ?: state.boards.penSize))
+            is BoardAction.Text -> state.boards.draft?.let { draft ->
+                state = state.copy(boards = state.boards.copy(draft = draft.copy(content = draft.content.copy(body = a.text))))
+            }
+            is BoardAction.PickMention -> state.boards.draft?.let { draft ->
+                state = state.copy(boards = state.boards.copy(mentionCandidates = emptyList(),
+                    draft = draft.copy(content = draft.content.withMention(a.candidate, 1000) ?: draft.content)))
+            }
             else -> Unit
         }
     }
@@ -74,6 +81,48 @@ class BoardsUiTest {
             }
         }
         compose.mainClock.advanceTimeBy(2000)
+    }
+    @Test fun typingAtOnThePocketKeyboardSuggestsMembers() {
+        val petah = BoardMentionCandidate("petah", "Petah Griffin")
+        state = state.copy(boards = state.boards.copy(screen = BoardsScreen.Compose, mentionCandidates = listOf(petah),
+            draft = LocalBoardDraft(boardId = board.id, content = BoardDraftContent(body = "Hi @pe"))))
+        show(false)
+        compose.onNodeWithText("Hi @pe").performScrollTo().performClick()
+        compose.onNodeWithTag("pocket_keyboard", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("board_mention_petah").assertIsDisplayed()
+        capture("boards-dual-mention-suggestions")
+        compose.onNodeWithTag("board_mention_petah").performClick()
+        compose.runOnIdle {
+            assertEquals(BoardAction.PickMention(petah), events.last())
+            assertEquals("Hi @Petah Griffin ", state.boards.draft!!.content.body)
+            assertEquals(listOf(BoardMention("petah", "Petah Griffin")), state.boards.draft!!.content.mentions)
+        }
+        compose.onNodeWithTag("board_mention_petah").assertDoesNotExist()
+        compose.onNodeWithTag("key_s", useUnmergedTree = true).performClick()
+        compose.runOnIdle { assertEquals("Hi @Petah Griffin s", state.boards.draft!!.content.body) }
+    }
+    @Test fun phoneComposerSuggestsMembersUnderTheField() {
+        val petah = BoardMentionCandidate("petah", "Petah Griffin")
+        state = state.copy(boards = state.boards.copy(screen = BoardsScreen.Compose, mentionCandidates = listOf(petah),
+            draft = LocalBoardDraft(boardId = board.id, content = BoardDraftContent(body = "Hi @pe"))))
+        show(true)
+        compose.onNodeWithTag("board_mention_petah").performScrollTo().assertIsDisplayed()
+        capture("boards-phone-mention-suggestions")
+        compose.onNodeWithTag("board_mention_petah").performClick()
+        compose.runOnIdle { assertEquals("Hi @Petah Griffin ", state.boards.draft!!.content.body) }
+    }
+    @Test fun mentionsInNotesStandOutAndOpenTheProfile() {
+        val post = BoardPost("mention_note", board.id, authorName = "A friend", body = "Thanks @Petah Griffin",
+            mentions = listOf(BoardMention(FixtureData.SpobUserId.value, "Petah Griffin")))
+        state = state.copy(boards = state.boards.copy(screen = BoardsScreen.Board, posts = listOf(post)))
+        show(true)
+        compose.onNodeWithTag("board_post_mention_note").performScrollTo()
+        compose.onNodeWithText("Thanks @Petah Griffin", useUnmergedTree = true).assertIsDisplayed()
+            .performTouchInput { click(androidx.compose.ui.geometry.Offset(width * .8f, height / 2f)) }
+        compose.runOnIdle {
+            assertEquals(PocketPassEvent.OpenUserProfile(FixtureData.SpobUserId.value, ProfileViewerSource.Board), appEvents.last())
+        }
+        capture("boards-phone-mention-note")
     }
     @Test fun chooserAndSpoilersUseTheSameControlsOnPhone() {
         show(true)
@@ -386,7 +435,6 @@ class BoardsUiTest {
         capture("boards-dual-directory")
         compose.onNodeWithTag("boards_options").performClick()
         compose.onNodeWithTag("boards_drafts").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("boards_global_push").performScrollTo().assertIsDisplayed()
         capture("boards-dual-options")
     }
 

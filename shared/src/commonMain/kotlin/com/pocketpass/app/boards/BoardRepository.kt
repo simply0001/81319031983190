@@ -69,6 +69,7 @@ class SupabaseBoardApi(private val client: SupabaseClient) : BoardApi {
         val result = when (operation) {
             "inbox" -> rpc(accountId, "boards_inbox", boardArgs("p_cursor" to args["cursor"], "p_limit" to args["limit"]))
             "friend_code" -> rpc(accountId, "resolve_friend_code", boardArgs("p_code" to args["code"]))
+            "mention_candidates" -> rpc(accountId, "boards_mention_candidates", boardArgs("p_board_id" to args["board_id"], "p_search" to args["search"]))
             else -> rpc(accountId, "boards_query", boardArgs("p_operation" to operation.boardValue(), "p_args" to args))
         }
         fun withAvatar(element: JsonElement, field: String = "author_avatar"): JsonElement {
@@ -86,6 +87,7 @@ class SupabaseBoardApi(private val client: SupabaseClient) : BoardApi {
             "members" -> JsonObject(result.jsonObject.mapValues { (key, value) ->
                 if(key == "items") JsonArray(value.jsonArray.map { withAvatar(it, "avatar_path") }) else value
             })
+            "mention_candidates" -> JsonArray(result.jsonArray.map { withAvatar(it, "avatar_path") })
             else -> result
         }
     }

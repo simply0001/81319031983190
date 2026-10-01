@@ -172,7 +172,7 @@ fun TopDisplayContent(
                     var profileViewerPresenting by remember { mutableStateOf(false) }
                     var threadPresenting by remember { mutableStateOf(false) }
                     var composerPresenting by remember { mutableStateOf(false) }
-                    TopDestinationBackground(metrics, state.rootDestination)
+                    TopDestinationBackground(metrics, state.rootDestination, state.boardsVisible)
                     TopScreen(
                         destination = state.rootDestination,
                         state = state,
@@ -289,7 +289,7 @@ fun BottomDisplayContent(
                         },
                     )
                 } else if (state.sessionState.showsPocketPassApp()) {
-                    BottomDestinationBackground(metrics, state.rootDestination)
+                    BottomDestinationBackground(metrics, state.rootDestination, state.boardsVisible)
                     BottomRouteStack(
                         routes = state.routes,
                         root = { RootBottomContent(metrics, state, dispatch) },
@@ -422,8 +422,9 @@ internal fun PocketPassUiState.requiresMiiGate(): Boolean {
 private fun TopDestinationBackground(
     metrics: DesignMetrics,
     destination: com.pocketpass.app.model.PocketPassDestination,
+    boardsVisible: Boolean,
 ) {
-    if(destination == com.pocketpass.app.model.PocketPassDestination.Messages) {
+    if(destination == com.pocketpass.app.model.PocketPassDestination.Messages && boardsVisible) {
         com.pocketpass.app.ui.screens.BoardBackdrop(metrics)
         return
     }
@@ -443,8 +444,9 @@ private fun TopDestinationBackground(
 private fun BottomDestinationBackground(
     metrics: DesignMetrics,
     destination: com.pocketpass.app.model.PocketPassDestination,
+    boardsVisible: Boolean,
 ) {
-    if(destination == com.pocketpass.app.model.PocketPassDestination.Messages) {
+    if(destination == com.pocketpass.app.model.PocketPassDestination.Messages && boardsVisible) {
         com.pocketpass.app.ui.screens.BoardBackdrop(metrics)
         return
     }
@@ -506,7 +508,7 @@ private fun RootBottomContent(
             AchievementsBottomOverlay(metrics, shown)
         }
     }
-    if (state.rootDestination != com.pocketpass.app.model.PocketPassDestination.Messages) {
+    if (state.rootDestination != com.pocketpass.app.model.PocketPassDestination.Messages || !state.boardsVisible) {
         BottomTabBar(
             metrics = metrics,
             current = state.rootDestination,

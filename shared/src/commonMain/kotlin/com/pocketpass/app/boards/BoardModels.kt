@@ -1,6 +1,8 @@
 package com.pocketpass.app.boards
 
 import com.pocketpass.app.domain.model.ClientOperationId
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -60,7 +62,26 @@ data class BoardPost(
     @SerialName("yeah_count") val yeahCount: Int = 0,
     val yeah: Boolean = false,
     @SerialName("reply_count") val replyCount: Int = 0,
+    val mentions: List<BoardMention> = emptyList(),
 )
+
+@Serializable
+data class BoardMention(@SerialName("user_id") val userId: String, val name: String)
+
+@Serializable
+data class BoardMentionCandidate(
+    @SerialName("user_id") val userId: String,
+    @SerialName("display_name") val displayName: String,
+    @SerialName("avatar_path") val avatarPath: String? = null,
+)
+
+enum class BoardAlertLevel(val wire: String) {
+    All("all"), Personal("personal"), Mentions("mentions");
+
+    companion object {
+        fun fromWire(value: String?): BoardAlertLevel = entries.firstOrNull { it.wire == value } ?: All
+    }
+}
 
 @Serializable
 data class BoardDrawing(val version: Int = 1, val width: Int = 800, val height: Int = 600, val strokes: List<BoardStroke> = emptyList()) {
@@ -130,6 +151,7 @@ data class BoardNotice(val id: String, @SerialName("board_id") val boardId: Stri
     @SerialName("thread_author_name") val threadAuthorName: String? = null,
     @SerialName("latest_actor_name") val latestActorName: String? = null)
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class BoardDraftContent(
     @SerialName("branding_kind") val brandingKind: String? = null,
@@ -137,6 +159,7 @@ data class BoardDraftContent(
     @SerialName("stationery_id") val stationeryId: String = "plain",
     @SerialName("thread_id") val threadId: String? = null,
     @SerialName("reply_to") val replyTo: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val mentions: List<BoardMention> = emptyList(),
 )
 
 @Serializable
@@ -165,6 +188,10 @@ data class BoardInviteStatus(val boardId: String, val userId: String, val sendin
 data class BoardsUiState(
     val inviteStatus: BoardInviteStatus? = null,
     val pushEnabled: Boolean = true,
+    val alertLevel: BoardAlertLevel = BoardAlertLevel.All,
+    val notificationBoards: List<Board>? = null,
+    val notificationBoardsFailed: Boolean = false,
+    val mentionCandidates: List<BoardMentionCandidate> = emptyList(),
     val assets: Map<String, ByteArray> = emptyMap(),
     val reviewing: Boolean = false,
     val proposals: JsonArray = JsonArray(emptyList()),
@@ -211,6 +238,7 @@ sealed interface BoardAction {
     data class ResumeDraft(val draft: LocalBoardDraft) : BoardAction
     data class DiscardDraft(val draft: LocalBoardDraft) : BoardAction
     data class Text(val text: String) : BoardAction
+    data class PickMention(val candidate: BoardMentionCandidate) : BoardAction
     data class Spoiler(val enabled: Boolean) : BoardAction
     data class Tool(val pen: String? = null, val color: String? = null, val size: Float? = null) : BoardAction
     data class Stroke(val stroke: BoardStroke) : BoardAction

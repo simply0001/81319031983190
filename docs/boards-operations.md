@@ -61,7 +61,7 @@ Items can be free, token-priced or achievement-linked. Active supporters can use
 
 Deploy migrations in checksum order, admin files, `board-media`, the updated `message-push`, then validate and recreate Caddy for `/boards/media`. Boards has been enabled in production since 19 September; use the emergency switch above to turn it off. Applied migrations are immutable; fixes use new migrations.
 
-The push worker handles independent chat and board queues. Board alerts group by thread, exclude the actor, and recheck membership, blocks, mutes, preferences and the feature switch. Payloads contain routing IDs and generic text, without board titles or note content. Android has a separate Boards notification channel. Older registrations remain chat-only until upgraded.
+The push worker handles independent chat and board queues. Board alerts group by thread and kind, exclude the actor, and recheck membership, blocks, mutes, preferences, the alert level and the feature switch. Since `20261001000100`, Android payloads also carry the alert kind, the latest actor's display name and the board name, so alerts can say "Petah mentioned you"; they never carry note content. iOS alerts stay generic. Android has a separate Boards notification channel. Older registrations remain chat-only until upgraded.
 
 Shared iOS metadata compilation is checked on this Windows host. Native Xcode signing/distribution remains deferred. Real handset push receipt and Thor visual acceptance remain device checks for the user; no screenshots were taken on the Thor during this implementation.
 
