@@ -1100,6 +1100,7 @@ class PocketPassStore(
                         messageAlertsEnabled = settings.messageAlertsEnabled,
                         messagePushSupported = container.messagePushSupported,
                         boardPushSupported = container.boardPushSupported,
+                        appUpdatesSupported = container.appUpdatesSupported,
                         stepRewardsEnabled = settings.stepRewardsEnabled,
                     )
                 }

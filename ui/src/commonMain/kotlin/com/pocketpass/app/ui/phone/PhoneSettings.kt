@@ -197,7 +197,12 @@ private fun PhoneSettingsList(
             SocialPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenSocial) }
         }
         slot(SETTINGS_ROW_HEIGHT) {
-            VersionPanel(metrics, 0f, state.appUpdate) { dispatch(PocketPassEvent.OpenAppUpdate) }
+            VersionPanel(
+                metrics = metrics,
+                y = 0f,
+                appUpdate = state.appUpdate,
+                onClick = { dispatch(PocketPassEvent.OpenAppUpdate) }.takeIf { state.appUpdatesSupported },
+            )
         }
         slot(SETTINGS_ROW_HEIGHT) {
             AccountPanel(metrics, 0f) { dispatch(PocketPassEvent.OpenAccountSecurity) }
@@ -408,15 +413,17 @@ private fun PhoneSettingsSubpage(
                 tag = "encounter_alerts_toggle",
                 order = 0,
             ) { dispatch(PocketPassEvent.SetEncounterAlertsEnabled(!state.encounterAlertsEnabled)) }
-            PhoneToggleRow(
-                metrics = metrics,
-                icon = Assets.SettingsVersion,
-                title = "Update Alerts",
-                subtitle = "Tell me about new versions",
-                enabled = state.updateAlertsEnabled,
-                tag = "update_alerts_toggle",
-                order = 1,
-            ) { dispatch(PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled)) }
+            if (state.appUpdatesSupported) {
+                PhoneToggleRow(
+                    metrics = metrics,
+                    icon = Assets.SettingsVersion,
+                    title = "Update Alerts",
+                    subtitle = "Tell me about new versions",
+                    enabled = state.updateAlertsEnabled,
+                    tag = "update_alerts_toggle",
+                    order = 1,
+                ) { dispatch(PocketPassEvent.SetUpdateAlertsEnabled(!state.updateAlertsEnabled)) }
+            }
         }
 
         PocketPassRoute.BoardNotificationSettings -> PhoneSubpage(

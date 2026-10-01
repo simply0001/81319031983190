@@ -103,6 +103,7 @@ data class PocketPassUiState(
     val messageAlertsEnabled: Boolean = true,
     val messagePushSupported: Boolean = false,
     val boardPushSupported: Boolean = false,
+    val appUpdatesSupported: Boolean = true,
     val stepRewardsEnabled: Boolean = false,
     val stepRewards: StepRewardsState = StepRewardsState(),
     val accountSetup: AccountSetupUiState = AccountSetupUiState(),

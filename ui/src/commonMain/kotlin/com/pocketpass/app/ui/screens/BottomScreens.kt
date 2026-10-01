@@ -7407,7 +7407,7 @@ internal fun VersionPanel(
     metrics: DesignMetrics,
     y: Float,
     appUpdate: AppUpdateUiState,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
 ) {
     PocketPanel(
         metrics = metrics,

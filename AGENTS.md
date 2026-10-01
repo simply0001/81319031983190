@@ -2,7 +2,7 @@
 
 StreetPass-style social app for Android dual-screen handhelds (AYN Thor first), phones, tablets and iOS. Kotlin Multiplatform + Compose Multiplatform client, self-hosted Supabase backend on one Oracle VM.
 
-This file is the shared brief for every coding agent here (OpenAI Codex reads it directly; Claude Code loads it through `CLAUDE.md`). It merges Codex's history, Claude Code's memory and the docs as of 2026-09-26. Put durable lessons here, not in a private memory: date them, never add secrets, and keep this file under 32 KB (Codex truncates beyond that).
+This file is the shared brief for every coding agent here (OpenAI Codex reads it directly; Claude Code loads it through `CLAUDE.md`). Put durable lessons here, not in a private memory: date them, never add secrets, and keep this file under 32 KB (Codex truncates beyond that).
 
 ## Owner rules
 
@@ -73,15 +73,12 @@ This file is the shared brief for every coding agent here (OpenAI Codex reads it
 ## Current state (2026-09-26)
 
 ### Android
-Published: **0.2.1-beta, versionCode 27** (2026-09-26, floor `minSupportedVersionCode` 23). Both feeds serve 27. It added:
-- a Show Boards toggle;
-- separate Block Messages and Block Invites;
-- Health Connect steps;
-- confirmation sounds.
+Published: **0.2.2-beta, versionCode 28** (2026-10-01, floor 23): single-screen Piip editor and gamepads, Edit Info, Board alert levels, @mentions, 12-hour clock.
 
 Earlier releases:
 | Version | versionCode | Notes |
 | --- | --- | --- |
+| 0.2.1-beta | 27 | 09-26; Show Boards, Block Invites, Health Connect |
 | 0.2.0-beta | 26 | 09-23; a rename of 0.1.11-alpha (25) |
 | 0.1.10-alpha | 24 | tag exists, no GitHub release |
 | 0.1.9-alpha | 23 | forced in-place APK replacement |
@@ -89,7 +86,7 @@ Earlier releases:
 | 0.1.7-alpha | 20 | 09-09 |
 
 ### Backend
-Migrations are applied through `20261001000100` (Boards alerts, 2026-10-01). `20260928000400_oauth_profile_username`: auth metadata keeps only the username, so OpenID `profile` exposes nothing else, and connected apps can join `friend-presence:` channels (Realtime v2.102.3 needs broadcast read even for presence). Bans applied 2026-09-28; the privacy and delete-account pages describe ban records. `20260928000200_api_hardening`: bans close connected apps, per-app counters are sharded, all `/v1` errors use the envelope (Caddy rewrites PostgREST's 400/401/404; header `X-PocketPass-Error: api`), Kong's `/v1` per-IP limit is 1,000,000/min, and the privacy API covers Block Invites. The 09-26 changes:
+Migrations are applied through `20261001000200` (Boards alerts; admin token history). `20260928000400_oauth_profile_username`: auth metadata keeps only the username, so OpenID `profile` exposes nothing else, and connected apps can join `friend-presence:` channels (Realtime v2.102.3 needs broadcast read even for presence). Bans applied 2026-09-28; the privacy and delete-account pages describe ban records. `20260928000200_api_hardening`: bans close connected apps, per-app counters are sharded, all `/v1` errors use the envelope (Caddy rewrites PostgREST's 400/401/404; header `X-PocketPass-Error: api`), Kong's `/v1` per-IP limit is 1,000,000/min, and the privacy API covers Block Invites. The 09-26 changes:
 Applied 2026-09-27 (dry run, fresh backup): `20260927000100_worker_rpc_service_role_checks` (push and branding worker RPCs refuse all but `service_role`; `health.sh` checks grants), `20260927000200_drop_unused_rpcs`, `20260927000300_piip_wording`. Backups keep privileges.
 - `20260925000100_split_social_privacy` and `20260926000100_email_privacy`;
 - Resend SMTP moved to implicit TLS on port 465;
@@ -99,11 +96,11 @@ Applied 2026-09-27 (dry run, fresh backup): `20260927000100_worker_rpc_service_r
 The pre-hotfix backup is in `PocketPass-backups\production-backups\`.
 
 ### iOS
-Not released; the owner deferred it and wants TestFlight first.
-- Sideload IPAs come from mirror CI.
-- The APNs key is in Firebase.
+Not released; TestFlight comes first.
+- Sideload IPAs come from mirror CI; the APNs key is in Firebase.
+- No updater on iOS (2026-10-01): `appUpdatesSupported=false` hides Update Alerts and the App Update page.
 - The Distribution certificate and the encrypted signing package are in `PocketPass-backups\backend\apple-signing\`.
-- Missing: App Store Connect provisioning profiles for `xyz.pocketpass.PocketPass` and `.widget` (App Group `group.xyz.pocketpass`).
+- App Store profiles (app and `.widget`, with the App Group) are in `apple-signing` and mirror secrets (10-01). Uploading needs an App Store Connect API key.
 - Never tested on an iPhone: street-pass with the Thor, APNs delivery, widgets under Sideloadly signing, and the third-party OAuth callback.
 
 ### Unverified
@@ -146,7 +143,7 @@ Not released; the owner deferred it and wants TestFlight first.
 
 ### Docs
 - `docs/` holds feature notes and dated logs. `docs/2026-09-22-handoff.md` is the detailed log for 22 to 26 September; this file wins where they differ.
-- The docs were brought up to date on 2026-09-26, and the corrected developer docs (Block Invites wording) were deployed the same day.
+- Developer docs last deployed 2026-10-01 (Boards alerts).
 - The developer docs' protocol archive was removed 2026-09-27. `public-api/build-examples.py` regenerates examples, but `workflow-examples.json` has pre-Block Invites wording for `example-blocking`; regenerating would revert it.
 - iOS still defaults to 0.1.8 (build 21) in `ios-app/project.yml` and `APP_STORE.md`. Pick the version at the first TestFlight upload.
 

@@ -201,6 +201,7 @@ class IosAppContainer(
     override val pretendoImportEnabled = true
     override val encounterLedSupported = false
     override val messagePushSupported = backend != null && com.pocketpass.app.push.IosMessagePushBridge.handler != null
+    override val appUpdatesSupported = false
 
     private val miiPersistence = IosFileMiiEditorPersistence()
     private val miiPublishQueue = IosFileMiiProfilePublishQueue()
@@ -453,7 +454,7 @@ class IosAppContainer(
             appForeground = foregroundState,
             networkState = networkMonitor.state,
             observeSelfTyping = { messages.observeSelfTyping(it) },
-            onAppUpdateSignal = {},
+            onAppUpdateSignal = null,
             onNearbyEncounterNotification = { _, _ -> },
             onAccountBanned = accountBanHolder::requestCheck,
         )

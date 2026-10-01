@@ -14,7 +14,11 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.pocketpass.app.ui.phone.PhoneRoot
 import com.pocketpass.app.ui.phone.PhoneSurface
 import com.pocketpass.app.ui.PocketPassTheme
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -53,6 +57,7 @@ class MessageNotificationUiTest {
         boards: BoardsUiState = BoardsUiState(enabled = boardsEnabled),
         route: PocketPassRoute = PocketPassRoute.NotificationSettings,
         phone: Boolean = false,
+        appUpdates: Boolean = true,
     ) {
         state = PocketPassUiState(
             routes = listOf(PocketPassRoute.Root(PocketPassDestination.Settings), route),
@@ -60,6 +65,7 @@ class MessageNotificationUiTest {
             accountSetup = AccountSetupUiState(resolved = true),
             messagePushSupported = supported,
             boardPushSupported = supported,
+            appUpdatesSupported = appUpdates,
             boardsVisible = boardsVisible,
             boards = boards,
         )
@@ -112,6 +118,29 @@ class MessageNotificationUiTest {
         compose.runOnIdle { assertFalse(state.messageAlertsEnabled) }
         compose.onNodeWithTag("update_alerts_toggle").performScrollTo().assertIsDisplayed().performClick()
         compose.runOnIdle { assertFalse(state.updateAlertsEnabled) }
+    }
+
+    @Test fun phonesWithoutAppUpdatesHideUpdateAlertsAndTheUpdatePage() {
+        show(true, phone = true, appUpdates = false)
+        compose.mainClock.advanceTimeBy(2000)
+        compose.onNodeWithTag("encounter_alerts_toggle").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("update_alerts_toggle").assertDoesNotExist()
+        compose.runOnIdle { state = state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Settings))) }
+        compose.mainClock.advanceTimeBy(2000)
+        compose.onNodeWithTag("settings_version").assertExists().assertHasNoClickAction()
+    }
+
+    @Test fun phonesWithAppUpdatesKeepUpdateAlertsAndTheUpdatePage() {
+        show(true, phone = true)
+        compose.mainClock.advanceTimeBy(2000)
+        compose.onNodeWithTag("update_alerts_toggle").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { state = state.copy(routes = listOf(PocketPassRoute.Root(PocketPassDestination.Settings))) }
+        compose.mainClock.advanceTimeBy(2000)
+        compose.onNodeWithTag("settings_version").assertHasClickAction().performSemanticsAction(SemanticsActions.OnClick)
+        compose.runOnIdle {
+            assertTrue(PocketPassEvent.OpenAppUpdate in events)
+            assertEquals(PocketPassRoute.AppUpdate, state.routes.last())
+        }
     }
 
     @Test fun boardAlertsLiveInNotificationsAndRepairAlertsAreGone() {

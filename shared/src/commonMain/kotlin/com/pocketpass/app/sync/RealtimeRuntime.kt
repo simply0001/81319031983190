@@ -74,7 +74,7 @@ class RealtimeRuntime(
     private val appForeground: StateFlow<Boolean>,
     private val networkState: StateFlow<RealtimeNetworkState>,
     private val observeSelfTyping: (ConversationId) -> Flow<Boolean>,
-    private val onAppUpdateSignal: () -> Unit,
+    private val onAppUpdateSignal: (() -> Unit)?,
     private val onNearbyEncounterNotification: (displayName: String, notificationKey: String) -> Unit,
     private val onAccountBanned: () -> Unit,
 ) {
@@ -151,7 +151,7 @@ class RealtimeRuntime(
                         }
                         launch { collectRealtimeTokenBalance(accountId) }
                         launch { collectRealtimeEncounterStats(accountId) }
-                        launch { collectRealtimeAppUpdates() }
+                        onAppUpdateSignal?.let { signal -> launch { collectRealtimeAppUpdates(signal) } }
                     }
                 }
         }
@@ -352,13 +352,13 @@ class RealtimeRuntime(
             .sorted()
             .joinToString(separator = ":")
 
-    private suspend fun collectRealtimeAppUpdates() {
+    private suspend fun collectRealtimeAppUpdates(onSignal: () -> Unit) {
         var retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
         while (currentCoroutineContext().isActive) {
             try {
                 realtime
                     .appUpdateSignals()
-                    .collect { onAppUpdateSignal() }
+                    .collect { onSignal() }
                 retryDelayMillis = INITIAL_REALTIME_RETRY_MILLIS
             } catch (cancelled: CancellationException) {
                 throw cancelled
