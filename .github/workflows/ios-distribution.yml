@@ -119,15 +119,14 @@ jobs:
           security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
       - name: Build and validate the signed archive and IPA
         run: bash ios-app/scripts/archive.sh
-      - name: Save package for review and TestFlight upload
+      - name: Save package for a manual upload
+        if: ${{ !inputs.upload }}
         uses: actions/upload-artifact@v4
         with:
           name: PocketPass-TestFlight-${{ inputs.version }}-${{ inputs.build }}
-          path: |
-            ios-app/build/TestFlight-*/
-            ios-app/build/PocketPass-*.xcarchive/dSYMs/
+          path: ios-app/build/TestFlight-*/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
       - name: Upload to TestFlight
         if: inputs.upload
         env:
@@ -148,7 +147,11 @@ jobs:
           chmod 600 "$keys/AuthKey_$ASC_KEY_ID.p8"
           xcrun altool --upload-app --type ios \
             --file "ios-app/build/TestFlight-$APP_VERSION-$APP_BUILD/PocketPass.ipa" \
-            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/altool.log"
+          if ! grep -q "UPLOAD SUCCEEDED" "$RUNNER_TEMP/altool.log"; then
+            echo "App Store Connect did not accept the upload" >&2
+            exit 1
+          fi
       - name: Remove signing material
         if: always()
         run: |
