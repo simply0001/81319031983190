@@ -100,7 +100,7 @@ Not released; TestFlight comes first.
 - Sideload IPAs come from mirror CI; the APNs key is in Firebase.
 - No updater on iOS (2026-10-01): `appUpdatesSupported=false` hides Update Alerts and the App Update page.
 - The Distribution certificate and the encrypted signing package are in `PocketPass-backups\backend\apple-signing\`.
-- App Store profiles (app and `.widget`, with the App Group) are in `apple-signing` and mirror secrets (10-01). Uploading needs an App Store Connect API key.
+- App Store profiles (app and `.widget`, with the App Group) are in `apple-signing` and mirror secrets (10-01). The upload key (`ASC_*`, Admin) is in `backend\app-store-connect-api\`.
 - Never tested on an iPhone: street-pass with the Thor, APNs delivery, widgets under Sideloadly signing, and the third-party OAuth callback.
 
 ### Unverified
