@@ -233,3 +233,11 @@ and the inbox kinds (live SHA-256 `c6bc10bfb815fc65`). The previous docs and
 function definitions are in `/opt/pocketpass/deploy-backups/board-alerts-20261001/`.
 No release, APK or update feed changed. This does not cover later deployments or
 releases.
+
+On 1 October 2026, the user approved publishing a new Android release with
+their release notes ("make a new version in the public releases with these
+release notes"), plus pushing to both GitHub repositories and a new iOS build.
+This is 0.2.2-beta, versionCode 28, floor `minSupportedVersionCode` 23, notes in
+`releases/0.2.2-beta.md`. Its only backend prerequisite,
+`20261001000100_board_mentions_and_alert_levels`, was already applied that day.
+This does not cover later deployments or releases.
