@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketpass.app.BuildConfig
 import com.pocketpass.app.audio.LocalSoundEffects
@@ -45,6 +47,7 @@ fun TopDisplayApp(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     CompositionLocalProvider(
+        LocalLayoutDirection provides LayoutDirection.Ltr,
         LocalSoundEffects provides viewModel.soundEffects,
         LocalAppVersionName provides BuildConfig.VERSION_NAME,
         LocalControllerFocus provides viewModel.controllerFocus,
@@ -68,6 +71,7 @@ fun BottomDisplayApp(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     CompositionLocalProvider(
+        LocalLayoutDirection provides LayoutDirection.Ltr,
         LocalSoundEffects provides viewModel.soundEffects,
         LocalAppVersionName provides BuildConfig.VERSION_NAME,
         LocalControllerFocus provides viewModel.controllerFocus,

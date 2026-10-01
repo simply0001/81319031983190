@@ -93,7 +93,6 @@ Applied 2026-09-27 (dry run, fresh backup): `20260927000100_worker_rpc_service_r
 - privacy notice live at `pocketpass.xyz/privacy`;
 - Kong allows public `POST /auth/v1/signup` only for `@users.pocketpass.xyz`.
 
-The pre-hotfix backup is in `PocketPass-backups\production-backups\`.
 
 ### iOS
 Not released; TestFlight comes first.
@@ -144,7 +143,7 @@ Not released; TestFlight comes first.
 ### Docs
 - `docs/` holds feature notes and dated logs. `docs/2026-09-22-handoff.md` is the detailed log for 22 to 26 September; this file wins where they differ.
 - Developer docs last deployed 2026-10-01 (Boards alerts).
-- The developer docs' protocol archive was removed 2026-09-27. `public-api/build-examples.py` regenerates examples, but `workflow-examples.json` has pre-Block Invites wording for `example-blocking`; regenerating would revert it.
+- `public-api/build-examples.py` regenerates examples, but `workflow-examples.json` has pre-Block Invites wording for `example-blocking`; regenerating would revert it.
 - iOS still defaults to 0.1.8 (build 21) in `ios-app/project.yml` and `APP_STORE.md`. Pick the version at the first TestFlight upload.
 
 ## Repos
@@ -188,6 +187,7 @@ Not released; TestFlight comes first.
   - `DisplayRoles.BOTTOM_PRIMARY_DEVICES` (Anbernic RG DS) swaps roles.
   - `PocketPassLauncherActivity` relaunches on the top screen.
   - On 4:3 panels, full-width cards (`PocketPanel` x 50 / w 1140) stretch, and their children must use `anchoredBounds`.
+  - `PocketPassTheme` forces left-to-right (10-01); `designBounds` broke on RTL phones. Test: `RightToLeftLayoutUiTest`.
 - **State.** `PocketPassStore` (shared) owns `PocketPassUiState` and sends `dispatch(PocketPassEvent)` to the pure `PocketPassReducer` or feature holders. `routes` is a hand-rolled back stack; navigation3 is unused except `NavKeyMarker`, which must stay `api()`. Android wraps the store in `PocketPassViewModel`, iOS in `PhoneEntry.kt`.
 - **Data.** Room is the UI source of truth; DataStore holds only preferences. Offline writes use an outbox with client operation UUIDs, drained by WorkManager or BGTaskScheduler (iOS). Realtime only invalidates; the app reconciles from REST.
   - Fixture mode is on when `!BACKEND_ENABLED` or the key is blank.
