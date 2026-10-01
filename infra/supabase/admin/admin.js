@@ -856,7 +856,68 @@
     historyPanel.querySelector(".ban-history").append(table(banColumns(false), bans, { empty: "No bans." }));
   };
 
-  const renderUser = (data, bans) => {
+  const TOKEN_SOURCES = {
+    steps: "Steps",
+    encounter: "Nearby encounters",
+    bingo: "Bingo",
+    staff: "Staff changes",
+    shop: "Shop",
+    puzzle: "Puzzle pieces",
+    stationery: "Board stationery",
+  };
+
+  const tokenDetail = (row) => {
+    const detail = row.detail || {};
+    switch (row.source) {
+      case "steps":
+        return `${fmtNumber(detail.steps)} steps on ${detail.day}`;
+      case "encounter": {
+        const partner = detail.partner_name || (detail.partner_username ? `@${detail.partner_username}` : null) || shortId(detail.partner_id);
+        return el("span", {}, ["Passed ", detail.partner_id ? userLink(detail.partner_id, partner) : partner]);
+      }
+      case "bingo":
+        return `Week ${detail.week}: ${detail.lines} ${detail.lines === 1 ? "line" : "lines"}${detail.blackout ? " and blackout" : ""}`;
+      case "staff":
+        return `${detail.reason || "No reason"} (by ${detail.admin_name || (detail.admin_username ? `@${detail.admin_username}` : shortId(detail.admin_id))})`;
+      case "puzzle":
+        return `Piece ${Number(detail.piece) + 1} of ${detail.puzzle}`;
+      default:
+        return detail.item || "—";
+    }
+  };
+
+  const renderTokenHistory = (fragment, history) => {
+    const panel = fragment.querySelector(".token-history-panel");
+    if (!history) {
+      panel.querySelector(".token-history").append(el("span", { class: "hint", text: "You do not have the Tokens permission." }));
+      return;
+    }
+    const totals = history.totals || {};
+    const facts = panel.querySelector(".token-totals");
+    const fact = (label, value) => facts.append(el("dt", { text: label }), el("dd", { text: value }));
+    const signed = (value) => `${value > 0 ? "+" : ""}${fmtNumber(value)}`;
+    Object.entries(TOKEN_SOURCES).forEach(([key, label]) => {
+      if (totals[key]) fact(label, signed(totals[key]));
+    });
+    const listed = Object.values(totals).reduce((sum, value) => sum + Number(value || 0), 0);
+    const other = Number(history.balance || 0) - listed;
+    if (other) fact("Not itemised", signed(other));
+    fact("Balance", fmtNumber(history.balance));
+    const entries = history.entries || [];
+    if (history.entry_count > entries.length) {
+      panel.querySelector(".token-history-note").textContent = `Showing the newest ${entries.length} of ${fmtNumber(history.entry_count)} entries.`;
+    } else if (other) {
+      panel.querySelector(".token-history-note").textContent = "Not itemised covers tokens with no record left, such as rewards from passing accounts that were later deleted.";
+    }
+    panel.querySelector(".token-history").append(table([
+      { label: "When", render: (row) => fmtDate(row.at) },
+      { label: "Source", render: (row) => TOKEN_SOURCES[row.source] || row.source },
+      { label: "Details", render: tokenDetail },
+      { label: "Tokens", numeric: true, render: (row) => el("span", { class: `badge ${row.amount > 0 ? "badge-good" : "badge-bad"}`, text: signed(row.amount) }) },
+    ], entries, { empty: "No token activity yet." }));
+  };
+
+  const renderUser = (data, bans, history) => {
     const root = $("user-detail");
     clear(root);
     const fragment = $("tpl-user-detail").content.cloneNode(true);
@@ -930,6 +991,7 @@
     });
     if (!data.profile || !can("tokens")) tokenForm.querySelector("button[type=submit]").disabled = true;
     if (!can("tokens")) tokenForm.append(el("span", { class: "hint", text: "You do not have the Tokens permission." }));
+    renderTokenHistory(fragment, history);
 
     const supporterUntil = data.supporter_until ? new Date(data.supporter_until) : null;
     const supporterActive = Boolean(supporterUntil && supporterUntil.getTime() > Date.now());
@@ -1083,12 +1145,13 @@
 
   const loadUser = async () => {
     if (!state.user.id) return;
-    const [data, bans] = await Promise.all([
+    const [data, bans, history] = await Promise.all([
       rpc("admin_get_user", { p_user_id: state.user.id }),
       can("bans") ? rpc("admin_get_user_bans", { p_user_id: state.user.id }) : Promise.resolve(null),
+      can("tokens") ? rpc("admin_get_user_token_history", { p_user_id: state.user.id, p_limit: 200 }) : Promise.resolve(null),
     ]);
     state.user.data = data;
-    renderUser(data, bans);
+    renderUser(data, bans, history);
   };
 
   let pending = 0;

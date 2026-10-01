@@ -241,3 +241,15 @@ This is 0.2.2-beta, versionCode 28, floor `minSupportedVersionCode` 23, notes in
 `releases/0.2.2-beta.md`. Its only backend prerequisite,
 `20261001000100_board_mentions_and_alert_levels`, was already applied that day.
 This does not cover later deployments or releases.
+
+On 1 October 2026, the user approved deploying the admin token history ("yes
+deploy both"). `backup.sh` made `pocketpass-20261001T193016Z.tar.gz.age`
+(SHA-256 `0bef368e4569e0cf`), copied to `PocketPass-backups\production-backups\`.
+A rolled-back dry run with the new `admin_token_history` pgTAP file passed 12 of
+12, then `migrate.sh` applied `20261001000200_admin_token_history` (checksum
+`eef327803f6fef50`). The admin console's `admin.js` (`50b6a20af3f4dc4f`) and
+`index.html` (`4e277df819d5a78d`) add a Token history panel to the user page.
+`health.sh` and both validate scripts passed, and the pgTAP file passes on the
+live database. The previous admin files are in
+`/opt/pocketpass/deploy-backups/admin-token-history-20261001/`. This does not
+cover later deployments or releases.
